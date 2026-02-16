@@ -4,6 +4,9 @@ Synchroniczne połączenie → odczyt → rozłączenie.
 Nie uruchamia live view — tylko krótkie zapytania PTP.
 Używany przez: initializer, main_window (przy zmianie widoku).
 """
+import os
+os.environ['LANGUAGE'] = 'C'
+
 import logging
 import time
 import gphoto2 as gp

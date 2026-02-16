@@ -1,0 +1,121 @@
+Aparat: Canon EOS RP
+
+============================================================
+SZUKAM WIDGETÓW FLASH/SYNC/SPEEDLITE
+============================================================
+    ★ main/actions/syncdatetimeutc [TOGGLE]
+      label: 'Synchronize camera date and time with PC (UTC)'
+      value: '0'
+
+    ★ main/actions/syncdatetime [TOGGLE]
+      label: 'Synchronize camera date and time with PC'
+      value: '0'
+
+    ★ main/actions/popupflash [TOGGLE]
+      label: 'Popup Flash'
+      value: '2'
+
+    ★ main/settings/strobofiring [RADIO]
+      label: 'Strobo Firing'
+      value: '1'
+      choices: ['0', '1']
+
+    ★ main/settings/flashcharged [TEXT]
+      label: 'Flash Charging State'
+      value: '0'
+
+============================================================
+BEZPOŚREDNI DOSTĘP DO ZNANYCH WIDGETÓW
+============================================================
+  ✓ strobofiring: value='1', choices=['0', '1']
+  ✓ eosremoterelease: value='None', choices=['None', 'Press Half', 'Press Full', 'Release Half', 'Release Full', 'Immediate', 'Press 1', 'Press 2', 'Press 3', 'Release 1', 'Release 2', 'Release 3']
+
+============================================================
+PEŁNA LISTA WIDGETÓW (flat)
+============================================================
+  main/actions/syncdatetimeutc = '0'
+  main/actions/syncdatetime = '0'
+  main/actions/uilock = '2'
+  main/actions/popupflash = '2'
+  main/actions/autofocusdrive = '0'
+  main/actions/manualfocusdrive = 'None'
+  main/actions/cancelautofocus = '0'
+  main/actions/eoszoom = '0'
+  main/actions/eoszoomposition = '0,0'
+  main/actions/viewfinder = '0'
+  main/actions/eosremoterelease = 'None'
+  main/actions/eosmoviemode = '2'
+  main/actions/opcode = '0x1001,0xparam1,0xparam2'
+  main/settings/datetimeutc = '1771179022'
+  main/settings/datetime = '1771179022'
+  main/settings/output = 'TFT'
+  main/settings/movierecordtarget = 'SDRAM'
+  main/settings/evfmode = '1'
+  main/settings/ownername = ''
+  main/settings/artist = ''
+  main/settings/copyright = ''
+  main/settings/nickname = 'EOSRP'
+  main/settings/customfuncex = '20,1,6,14,1,102,1,0,'
+  main/settings/focusarea = '2827638615'
+  main/settings/strobofiring = '1'
+  main/settings/flashcharged = '0'
+  main/settings/oneshotrawon = '0'
+  main/settings/autopoweroff = '0'
+  main/settings/depthoffield = '0'
+  main/settings/capturetarget = 'Internal RAM'
+  main/settings/capture = '0'
+  main/settings/remotemode = '0'
+  main/settings/eventmode = '0'
+  main/settings/testolc = '2'
+  main/status/serialnumber = '92532eba25194e009102af5a6f88022f'
+  main/status/manufacturer = 'Canon.Inc'
+  main/status/cameramodel = 'Canon EOS RP'
+  main/status/deviceversion = '3-1.6.3'
+  main/status/vendorextension = ''
+  main/status/model = '2147484723'
+  main/status/batterylevel = '100%'
+  main/status/batterylevel = '100%'
+  main/status/mirrorlockstatus = '0'
+  main/status/mirrordownstatus = '0'
+  main/status/lensname = 'EF16-35mm f/2.8L II USM'
+  main/status/eosserialnumber = '643021003493'
+  main/status/availableshots = '26908'
+  main/status/eosmovieswitch = '0'
+  main/imgsettings/imageformat = 'RAW + L'
+  main/imgsettings/imageformatsd = 'RAW + L'
+  main/imgsettings/imageformatcf = 'RAW + L'
+  main/imgsettings/iso = '200'
+  main/imgsettings/whitebalance = 'Auto'
+  main/imgsettings/colortemperature = '4100'
+  main/imgsettings/whitebalanceadjusta = '0'
+  main/imgsettings/whitebalanceadjustb = '0'
+  main/imgsettings/whitebalancexa = '0'
+  main/imgsettings/whitebalancexb = '0'
+  main/imgsettings/colorspace = 'sRGB'
+  main/capturesettings/zoomspeed = '0'
+  main/capturesettings/exposurecompensation = '1.6'
+  main/capturesettings/focusmode = 'AI Servo'
+  main/capturesettings/continuousaf = 'On'
+  main/capturesettings/aspectratio = '3:2'
+  main/capturesettings/afmethod = 'LiveFace'
+  main/capturesettings/storageid = '00020001'
+  main/capturesettings/highisonr = 'Off'
+  main/capturesettings/autoexposuremode = 'Fv'
+  main/capturesettings/autoexposuremodedial = 'Fv'
+  main/capturesettings/drivemode = 'Single'
+  main/capturesettings/picturestyle = 'Fine detail'
+  main/capturesettings/aperture = 'Unknown value 00ff'
+  main/capturesettings/shutterspeed = 'bulb'
+  main/capturesettings/meteringmode = 'Evaluative'
+  main/capturesettings/liveviewsize = 'val 1'
+  main/capturesettings/bracketmode = 'Unknown value 0000'
+  main/capturesettings/aeb = 'off'
+  main/capturesettings/alomode = 'x3'
+  main/capturesettings/movieservoaf = 'Off'
+  main/other/d402 = 'Canon EOS RP'
+  main/other/d407 = '1'
+  main/other/d406 = 'Unknown Initiator'
+  main/other/d303 = '1'
+  main/other/5001 = '100'
+
+GOTOWE.

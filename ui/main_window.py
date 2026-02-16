@@ -1,7 +1,8 @@
 # --- PyQt6 ---
 from PyQt6.QtWidgets import (
     QMainWindow, QStackedWidget, QMenuBar, QStatusBar,
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QMessageBox, QApplication
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QMessageBox, QApplication,
+    QFileDialog  # Dodano QFileDialog
 )
 from PyQt6.QtGui import QAction, QKeySequence, QShortcut, QKeyEvent, QPixmap, QImage, QPainter
 from PyQt6.QtCore import Qt, QTranslator, QSettings, QSize
@@ -137,6 +138,14 @@ class MainWindow(QMainWindow):
         # FILE MENU
         file_menu = menu_bar.addMenu(self.tr("File"))
         
+        # Preferences submenu
+        pref_menu = file_menu.addMenu(self.tr("Preferences"))
+        set_folder_action = QAction(self.tr("Set Session Folder"), self)
+        set_folder_action.triggered.connect(self.set_session_folder_pref)
+        pref_menu.addAction(set_folder_action)
+        
+        file_menu.addSeparator()
+
         exit_action = QAction(self.tr("Exit"), self)
         exit_action.setShortcut(QKeySequence("Ctrl+Q"))
         exit_action.triggered.connect(self.close)
@@ -158,6 +167,19 @@ class MainWindow(QMainWindow):
             QMenu::item { padding: 5px 30px 5px 20px; }
             QMenu::item:selected { background-color: #3d3d3d; }
         """)
+
+    def get_session_base_path(self):
+        """Pobiera ścieżkę bazową sesji z QSettings lub zwraca domyślną."""
+        default = os.path.join(os.path.expanduser("~"), "Obrazy", "sessions")
+        return self.settings.value("session_base_path", default)
+
+    def set_session_folder_pref(self):
+        """Otwiera okno wyboru folderu i zapisuje nową ścieżkę w ustawieniach."""
+        current = self.get_session_base_path()
+        folder = QFileDialog.getExistingDirectory(self, self.tr("Select Base Session Folder"), current)
+        if folder:
+            self.settings.setValue("session_base_path", folder)
+            self.status_bar.showMessage(self.tr("Session folder updated"), 3000)
 
     def change_view(self, name):
         prev = self._current_view_name

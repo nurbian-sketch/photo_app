@@ -116,6 +116,9 @@ class DarkroomView(QWidget):
 
         self.setup_ui()
 
+        # AUTOMATYCZNE ŁADOWANIE OSTATNIEJ SESJI PRZY STARCIE
+        QTimer.singleShot(500, self.open_last_session)
+
 
     def setup_ui(self):
         # === Panel miniatur po lewej ===
@@ -146,25 +149,38 @@ class DarkroomView(QWidget):
         scroll.setWidget(self.image_label)
         right_layout.addWidget(scroll)
 
-        # Przyciski z ograniczoną szerokością
-        btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(10)
+        # --- NOWY UKŁAD PRZYCISKÓW ---
+        controls_layout = QVBoxLayout()
 
+        # Grupa 1: Handle Files
+        files_layout = QHBoxLayout()
         self.btn_open = QPushButton(self.tr("Open Folder"))
-        self.btn_delete = QPushButton(self.tr("Delete Image(s)"))
+        self.btn_last_session = QPushButton(self.tr("Last Session"))
+        self.btn_sd_card = QPushButton(self.tr("SD Card")) # TODO
+        
+        for btn in [self.btn_open, self.btn_last_session, self.btn_sd_card]:
+            btn.setMinimumHeight(35)
+            btn.setMaximumWidth(180)
+            files_layout.addWidget(btn)
+        files_layout.addStretch()
+
+        # Grupa 2: View Options
+        view_layout = QHBoxLayout()
         self.btn_toggle_size = QPushButton(self.tr("Large Thumbs"))
+        self.btn_delete = QPushButton(self.tr("Delete Image(s)"))
+        self.btn_raw_preview = QPushButton(self.tr("RAW Preview"))   # TODO
+        self.btn_favorites = QPushButton(self.tr("Favorites Only")) # TODO
+        self.btn_favorites.setCheckable(True)
 
-        for btn in [self.btn_open, self.btn_delete, self.btn_toggle_size]:
-            btn.setMaximumWidth(180)  # Zapobiega "fatalnemu" rozciąganiu
-            btn_layout.addWidget(btn)
-        
-        btn_layout.addStretch() # Pcha przyciski do lewej
-        
-        self.btn_open.clicked.connect(self.open_folder)
-        self.btn_delete.clicked.connect(self.delete_images)
-        self.btn_toggle_size.clicked.connect(self.toggle_thumb_size)
+        for btn in [self.btn_toggle_size, self.btn_delete, self.btn_raw_preview, self.btn_favorites]:
+            btn.setMinimumHeight(35)
+            btn.setMaximumWidth(180)
+            view_layout.addWidget(btn)
+        view_layout.addStretch()
 
-        right_layout.addLayout(btn_layout)
+        controls_layout.addLayout(files_layout)
+        controls_layout.addLayout(view_layout)
+        right_layout.addLayout(controls_layout)
 
         # QSplitter przypisany do self, aby main_window mógł go zapisać
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -176,6 +192,39 @@ class DarkroomView(QWidget):
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(5,5,5,5)
         main_layout.addWidget(self.splitter)
+
+        # Sygnały
+        self.btn_open.clicked.connect(self.open_folder)
+        self.btn_last_session.clicked.connect(self.open_last_session)
+        self.btn_delete.clicked.connect(self.delete_images)
+        self.btn_toggle_size.clicked.connect(self.toggle_thumb_size)
+
+    def open_last_session(self):
+        """Otwiera najnowszy podfolder w katalogu sesji z preferencji"""
+        main_win = self.window()
+        if not hasattr(main_win, 'get_session_base_path'):
+            return
+            
+        base_path = main_win.get_session_base_path()
+        if not base_path or not os.path.exists(base_path):
+            return
+
+        try:
+            subdirs = [os.path.join(base_path, d) for d in os.listdir(base_path) 
+                       if os.path.isdir(os.path.join(base_path, d))]
+            if not subdirs:
+                return
+
+            latest_dir = max(subdirs, key=os.path.getmtime)
+            self.load_images(latest_dir)
+            
+            # Automatyczny podgląd pierwszego elementu
+            if self.list_widget.count() > 0:
+                first_item = self.list_widget.item(0)
+                self.list_widget.setCurrentItem(first_item)
+                self.show_image(first_item)
+        except Exception as e:
+            print(f"Error loading last session: {e}")
 
     def open_folder(self):
         default_path = os.path.expanduser("~/Obrazy/sessions")
@@ -199,6 +248,7 @@ class DarkroomView(QWidget):
             for f in os.listdir(folder)
             if f.lower().endswith((".jpg", ".jpeg", ".png"))
         ]
+        self.files.sort() # Dodane sortowanie, by 'pierwsze' zdjęcie było przewidywalne
         self.load_index = 0
         self.timer.start(30)  # 30ms batch loading (responsywność)
 
@@ -206,6 +256,9 @@ class DarkroomView(QWidget):
         """Ładuje JEDNO zdjęcie per tick (responsywność)"""
         if self.load_index >= len(self.files):
             self.timer.stop()
+            # Po zakończeniu ładowania wszystkich, upewnij się że pierwszy jest wybrany jeśli nic nie wyświetlamy
+            if not self.current_image_path and self.list_widget.count() > 0:
+                self.show_image(self.list_widget.item(0))
             return
         
         path = self.files[self.load_index]
@@ -228,31 +281,6 @@ class DarkroomView(QWidget):
         item.setData(Qt.ItemDataRole.UserRole + 1, False)  # Checkbox unchecked
         self.list_widget.addItem(item)
         self.load_index += 1
-
-    def load_preview_cached(self, path):
-        """Ładuje preview z cache lub generuje nowy"""
-        # Nazwa cache: hash z ścieżki + mtime
-        import hashlib
-        mtime = os.path.getmtime(path)
-        cache_key = hashlib.md5(f"{path}{mtime}".encode()).hexdigest()
-        cache_path = os.path.join(self.cache_dir, f"{cache_key}.jpg")
-        
-        # Sprawdź cache
-        if os.path.exists(cache_path):
-            # Touch dla "last access" (30 dni od ostatniego użycia)
-            os.utime(cache_path, None)
-            pixmap = QPixmap(cache_path)
-            if not pixmap.isNull():
-                return pixmap
-        
-        # Cache miss - generuj preview
-        pixmap = self.load_preview_exiftool(path)
-        
-        # Zapisz do cache
-        if pixmap and not pixmap.isNull():
-            pixmap.save(cache_path, "JPG", 90)
-        
-        return pixmap
 
     def show_image(self, item):
         path = item.data(Qt.ItemDataRole.UserRole)

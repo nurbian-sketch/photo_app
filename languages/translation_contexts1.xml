@@ -1,0 +1,98 @@
+<!-- ============================================================
+     BLOKI TŁUMACZEŃ DO WKLEJENIA W PLIKI .ts
+     Wygenerowane z kodu źródłowego Sessions Assistant
+     
+     Użycie:
+     1. Wklej odpowiednie bloki do pl.ts / ru.ts / uk.ts
+     2. Uzupełnij <translation> dla każdego języka
+     3. lrelease locales/pl.ts -qm locales/pl.qm
+     ============================================================ -->
+
+<!-- ======================== ImageControls ======================== -->
+<context>
+    <name>ImageControls</name>
+    <message><source>Image Settings</source><translation type="unfinished"></translation></message>
+    <message><source>Picture Style</source><translation type="unfinished"></translation></message>
+    <message><source>Quality</source><translation type="unfinished"></translation></message>
+    <message><source>ALO</source><translation type="unfinished"></translation></message>
+    <message><source>WB</source><translation type="unfinished"></translation></message>
+    <message><source>Color Temp (K)</source><translation type="unfinished"></translation></message>
+    <message><source>Info</source><translation type="unfinished"></translation></message>
+    <message><source>Large Fine JPEG</source><translation type="unfinished"></translation></message>
+    <message><source>Medium Fine JPEG</source><translation type="unfinished"></translation></message>
+    <message><source>Small Fine JPEG</source><translation type="unfinished"></translation></message>
+    <message><source>RAW + Large Fine JPEG</source><translation type="unfinished"></translation></message>
+    <message><source>RAW</source><translation type="unfinished"></translation></message>
+    <message><source>Off</source><translation type="unfinished"></translation></message>
+    <message><source>Low</source><translation type="unfinished"></translation></message>
+    <message><source>Standard</source><translation type="unfinished"></translation></message>
+    <message><source>High</source><translation type="unfinished"></translation></message>
+    <message><source>Custom</source><translation type="unfinished"></translation></message>
+    <message><source>Candlelight</source><translation type="unfinished"></translation></message>
+    <message><source>Warm White</source><translation type="unfinished"></translation></message>
+    <message><source>Cool White</source><translation type="unfinished"></translation></message>
+    <message><source>Daylight</source><translation type="unfinished"></translation></message>
+    <message><source>Overcast Sky</source><translation type="unfinished"></translation></message>
+    <message><source>Blue Sky</source><translation type="unfinished"></translation></message>
+</context>
+
+<!-- ======================== AutofocusControls ======================== -->
+<context>
+    <name>AutofocusControls</name>
+    <message><source>Focus Settings</source><translation type="unfinished"></translation></message>
+    <message><source>Focus Mode</source><translation type="unfinished"></translation></message>
+    <message><source>AF Method</source><translation type="unfinished"></translation></message>
+    <message><source>Continuous AF</source><translation type="unfinished"></translation></message>
+    <message><source>Manual Focus Drive</source><translation type="unfinished"></translation></message>
+    <message><source>AF</source><translation type="unfinished"></translation></message>
+    <message><source>Trigger Autofocus</source><translation type="unfinished"></translation></message>
+    <message><source>Near</source><translation type="unfinished"></translation></message>
+    <message><source>Far</source><translation type="unfinished"></translation></message>
+    <message><source>One Shot</source><translation type="unfinished"></translation></message>
+    <message><source>AI Focus</source><translation type="unfinished"></translation></message>
+    <message><source>AI Servo</source><translation type="unfinished"></translation></message>
+    <message><source>Manual Focus</source><translation type="unfinished"></translation></message>
+    <message><source>Face + Tracking</source><translation type="unfinished"></translation></message>
+    <message><source>Spot AF</source><translation type="unfinished"></translation></message>
+    <message><source>1-Point AF</source><translation type="unfinished"></translation></message>
+    <message><source>Expand AF: Cross</source><translation type="unfinished"></translation></message>
+    <message><source>Expand AF: Around</source><translation type="unfinished"></translation></message>
+    <message><source>Zone AF</source><translation type="unfinished"></translation></message>
+</context>
+
+<!-- ======================== ExposureControls ======================== -->
+<context>
+    <name>ExposureControls</name>
+    <message><source>Exposure (Fv)</source><translation type="unfinished"></translation></message>
+    <message><source>Flash Sync Mode (1/30 - 1/160)</source><translation type="unfinished"></translation></message>
+    <message><source>Shutter Speed</source><translation type="unfinished"></translation></message>
+    <message><source>Aperture</source><translation type="unfinished"></translation></message>
+    <message><source>ISO Speed</source><translation type="unfinished"></translation></message>
+    <message><source>Exp. Comp.</source><translation type="unfinished"></translation></message>
+</context>
+
+<!-- ======================== CameraView ======================== -->
+<context>
+    <name>CameraView</name>
+    <message><source>Save</source><translation type="unfinished"></translation></message>
+    <message><source>Load</source><translation type="unfinished"></translation></message>
+    <message><source>UPDATE</source><translation type="unfinished"></translation></message>
+    <message><source>CANCEL</source><translation type="unfinished"></translation></message>
+    <message><source>START LIVE VIEW</source><translation type="unfinished"></translation></message>
+    <message><source>STOP LIVE VIEW</source><translation type="unfinished"></translation></message>
+    <message><source>RECONNECT LIVE VIEW</source><translation type="unfinished"></translation></message>
+    <message><source>CAPTURE TEST PHOTO</source><translation type="unfinished"></translation></message>
+    <message><source>LIVE VIEW OFF</source><translation type="unfinished"></translation></message>
+    <message><source>CONNECTION LOST</source><translation type="unfinished"></translation></message>
+</context>
+
+<!-- ======================== MainWindow ======================== -->
+<context>
+    <name>MainWindow</name>
+    <message><source>Sessions Assistant 0.99</source><translation type="unfinished"></translation></message>
+    <message><source>Ready</source><translation type="unfinished"></translation></message>
+    <message><source>File</source><translation type="unfinished"></translation></message>
+    <message><source>Exit</source><translation type="unfinished"></translation></message>
+    <message><source>View</source><translation type="unfinished"></translation></message>
+    <message><source>About</source><translation type="unfinished"></translation></message>
+</context>
