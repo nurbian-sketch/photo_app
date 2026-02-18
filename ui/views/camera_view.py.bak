@@ -13,6 +13,63 @@ from ui.views.camera_components.image_controls import ImageControls
 from ui.views.camera_components.autofocus_controls import AutofocusControls
 
 
+
+def _read_exif(path: str) -> dict:
+    """
+    Czyta podstawowe dane EXIF z pliku.
+    Zwraca dict: shutter, aperture, iso, focal, date, dims, size, camera.
+    """
+    result = {'shutter':'','aperture':'','iso':'','focal':'','date':'','dims':'','size':'','camera':''}
+    try:
+        from PIL import Image
+        from PIL.ExifTags import TAGS
+
+        img = Image.open(path)
+        w, h = img.size
+        result['dims'] = f"{w}\u00d7{h}"
+        size_bytes = os.path.getsize(path)
+        result['size'] = f"{size_bytes/(1024*1024):.1f} MB"
+
+        exif_raw = img._getexif()
+        if not exif_raw:
+            return result
+        exif = {TAGS.get(k, k): v for k, v in exif_raw.items()}
+
+        exp = exif.get("ExposureTime")
+        if exp:
+            n = exp.numerator if hasattr(exp,"numerator") else exp[0]
+            d = exp.denominator if hasattr(exp,"denominator") else exp[1]
+            result["shutter"] = f"1/{int(round(d/n))}s" if n and d/n>=1 else (f"{n/d:.1f}s" if n else "—")
+
+        fn = exif.get("FNumber")
+        if fn:
+            n = fn.numerator if hasattr(fn,"numerator") else fn[0]
+            d = fn.denominator if hasattr(fn,"denominator") else fn[1]
+            result["aperture"] = f"f/{n/d:.1f}"
+
+        iso = exif.get("ISOSpeedRatings")
+        if iso:
+            result["iso"] = f"ISO\u00a0{iso}"
+
+        fl = exif.get("FocalLength")
+        if fl:
+            n = fl.numerator if hasattr(fl,"numerator") else fl[0]
+            d = fl.denominator if hasattr(fl,"denominator") else fl[1]
+            result["focal"] = f"{int(round(n/d))}mm"
+
+        date = exif.get("DateTimeOriginal") or exif.get("DateTime","")
+        if date:
+            date = str(date).replace(":","\u2011",2)
+            result["date"] = date[:16]
+
+        make  = str(exif.get("Make","")).strip()
+        model = str(exif.get("Model","")).strip()
+        if model:
+            result["camera"] = model if model.startswith(make) else (f"{make} {model}" if make else model)
+    except Exception:
+        pass
+    return result
+
 # ─────────────────────────────── Popup podglądu zdjęcia
 
 class CapturePreviewDialog(QDialog):
@@ -140,6 +197,27 @@ class CapturePreviewDialog(QDialog):
         btn_close.setFixedSize(80, 32)
         btn_close.clicked.connect(self.close)
         control_layout.addWidget(btn_close)
+
+
+        # EXIF bar — kompaktowy pasek z danymi zdjecia
+        exif = _read_exif(image_path)
+        exif_parts = []
+        if exif['camera']:  exif_parts.append(exif['camera'])
+        if exif['dims']:    exif_parts.append(exif['dims'])
+        if exif['size']:    exif_parts.append(exif['size'])
+        if exif['shutter']: exif_parts.append(exif['shutter'])
+        if exif['aperture']: exif_parts.append(exif['aperture'])
+        if exif['iso']:     exif_parts.append(exif['iso'])
+        if exif['focal']:   exif_parts.append(exif['focal'])
+        if exif['date']:    exif_parts.append(exif['date'])
+
+        exif_text = "   •   ".join(exif_parts) if exif_parts else "No EXIF data"
+        exif_bar = QLabel(exif_text)
+        exif_bar.setStyleSheet(
+            "background: #2a2a2a; color: #999; font-size: 11px; padding: 3px 10px;"
+        )
+        exif_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(exif_bar)
 
         layout.addWidget(control_bar)
 
@@ -556,15 +634,12 @@ class CameraView(QWidget):
         )
 
     def _stop_lv(self):
-        """Zatrzymuje wątek i czyści widok. Terminate w tle — nie blokuje UI."""
-        dead_thread = self.lv_thread
-        self.lv_thread = None
-        self.exposure_ctrl.gphoto = None
-        self.image_ctrl.gphoto = None
-        self.focus_ctrl.gphoto = None
-        if dead_thread:
-            dead_thread.keep_running = False
-            QTimer.singleShot(100, lambda: self._cleanup_thread(dead_thread))
+        """Zatrzymuje wątek i czyści widok."""
+        if self.lv_thread:
+            self.lv_thread.stop()
+            self.exposure_ctrl.gphoto = None
+            self.image_ctrl.gphoto = None
+            self.focus_ctrl.gphoto = None
 
         self.exposure_ctrl.setEnabled(False)
         self.image_ctrl.setEnabled(False)
@@ -580,42 +655,30 @@ class CameraView(QWidget):
 
     def _on_lv_error(self, error_msg):
         """Obsługa błędów live view."""
-        # Wątek zgłosił błąd i sam skończy run() — tylko odłączamy referencję.
-        # stop() z 4s sleep uruchamiamy w tle żeby nie blokować UI.
-        dead_thread = self.lv_thread
-        self.lv_thread = None
-        self.exposure_ctrl.gphoto = None
-        self.image_ctrl.gphoto = None
-        self.focus_ctrl.gphoto = None
-
-        if dead_thread:
-            dead_thread.keep_running = False
-            QTimer.singleShot(100, lambda: self._cleanup_thread(dead_thread))
+        if self.lv_thread:
+            self.lv_thread.stop()
+            self.exposure_ctrl.gphoto = None
+            self.image_ctrl.gphoto = None
+            self.focus_ctrl.gphoto = None
+            self.lv_thread = None
 
         self.exposure_ctrl.setEnabled(False)
         self.image_ctrl.setEnabled(False)
         self.focus_ctrl.setEnabled(False)
         self._set_buttons_enabled(False)
-
+        
+        # Spokojny komunikat dla użytkownika
         self.lv_screen.setText("Connection lost.\nClick to reconnect.")
         self.lv_screen.setStyleSheet(
             "background: #3d3d3d; border: 2px solid #555; color: #888;"
         )
-
+        
+        # Przycisk RECONNECT — NIE zmieniamy _camera_ready
+        # (to zrobi probe po kliknięciu)
         self._needs_reconnect = True
         self.btn_lv.setEnabled(True)
         self.btn_lv.setText("RECONNECT")
         self.btn_lv.setStyleSheet("")
-
-    def _cleanup_thread(self, thread):
-        """Czeka na zakończenie wątku w tle (nie blokuje UI)."""
-        try:
-            thread.wait(5000)
-            if thread.isRunning():
-                thread.terminate()
-                thread.wait(1000)
-        except RuntimeError:
-            pass
 
     # --- CAPTURE ---
 

@@ -1,8 +1,7 @@
 # --- PyQt6 ---
 from PyQt6.QtWidgets import (
     QMainWindow, QStackedWidget, QMenuBar, QStatusBar,
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QMessageBox, QApplication,
-    QFileDialog  # Dodano QFileDialog
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QMessageBox, QApplication
 )
 from PyQt6.QtGui import QAction, QKeySequence, QShortcut, QKeyEvent, QPixmap, QImage, QPainter
 from PyQt6.QtCore import Qt, QTranslator, QSettings, QSize
@@ -17,6 +16,7 @@ from ui.views.camera_view import CameraView
 # --- Widgety pomocnicze ---
 from ui.widgets.view_switcher import ViewSwitcher
 from core.camera_probe import CameraProbe
+from ui.dialogs.preferences_dialog import PreferencesDialog
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +94,11 @@ class MainWindow(QMainWindow):
         self.change_view(start_view)
         self.switcher.select_view(start_view) # Synchronizacja switchera
 
+        # Reconnect signal → ponowny probe + auto-start LV
+        self.camera_view.reconnect_requested.connect(
+            lambda: self._probe_camera(enforce_fv=True)
+        )
+
         self.read_settings()
         self.setup_menu()
 
@@ -137,13 +142,12 @@ class MainWindow(QMainWindow):
 
         # FILE MENU
         file_menu = menu_bar.addMenu(self.tr("File"))
-        
-        # Preferences submenu
-        pref_menu = file_menu.addMenu(self.tr("Preferences"))
-        set_folder_action = QAction(self.tr("Set Session Folder"), self)
-        set_folder_action.triggered.connect(self.set_session_folder_pref)
-        pref_menu.addAction(set_folder_action)
-        
+
+        pref_action = QAction(self.tr("Preferences..."), self)
+        pref_action.setShortcut(QKeySequence("Ctrl+,"))
+        pref_action.triggered.connect(self._show_preferences)
+        file_menu.addAction(pref_action)
+
         file_menu.addSeparator()
 
         exit_action = QAction(self.tr("Exit"), self)
@@ -167,19 +171,6 @@ class MainWindow(QMainWindow):
             QMenu::item { padding: 5px 30px 5px 20px; }
             QMenu::item:selected { background-color: #3d3d3d; }
         """)
-
-    def get_session_base_path(self):
-        """Pobiera ścieżkę bazową sesji z QSettings lub zwraca domyślną."""
-        default = os.path.join(os.path.expanduser("~"), "Obrazy", "sessions")
-        return self.settings.value("session_base_path", default)
-
-    def set_session_folder_pref(self):
-        """Otwiera okno wyboru folderu i zapisuje nową ścieżkę w ustawieniach."""
-        current = self.get_session_base_path()
-        folder = QFileDialog.getExistingDirectory(self, self.tr("Select Base Session Folder"), current)
-        if folder:
-            self.settings.setValue("session_base_path", folder)
-            self.status_bar.showMessage(self.tr("Session folder updated"), 3000)
 
     def change_view(self, name):
         prev = self._current_view_name
@@ -207,27 +198,60 @@ class MainWindow(QMainWindow):
                 if not probe.connected:
                     self.camera_ready = False
                     self.sd_ready = False
+                    # Komunikat w status bar tylko gdy jesteśmy w Camera view
+                    if self._current_view_name == "Camera":
+                        self.status_bar.showMessage(
+                            self.tr("Could not find camera"), 5000
+                        )
                 else:
                     self.camera_ready = True
                     storage = probe.check_storage()
                     self.sd_ready = storage['ok']
+                    
+                    # Pokaż info o znalezionym aparacie
+                    model = probe.model or "Camera"
 
                     if enforce_fv:
                         mode = probe.get_mode()
-                        if mode != 'Fv':
+                        if mode and mode != 'Fv':
+                            # Tryb znany i różny od Fv - zmień
                             logger.info(f"Tryb {mode} → wymuszam Fv")
                             if probe.set_fv_mode():
                                 self.status_bar.showMessage(
-                                    f"Camera mode: {mode} → Fv", 3000
+                                    f"Found {model}. Mode: {mode} → Fv", 4000
                                 )
                             else:
                                 self.status_bar.showMessage(
-                                    "WARNING: Could not set Fv mode", 5000
+                                    f"Found {model}. WARNING: Could not set Fv (was {mode})", 5000
                                 )
+                        elif mode == 'Fv':
+                            # Już w Fv
+                            self.status_bar.showMessage(
+                                f"Found {model} in Fv mode", 3000
+                            )
+                        else:
+                            # Tryb nieznany - spróbuj ustawić Fv
+                            logger.info("Tryb nieznany → wymuszam Fv")
+                            if probe.set_fv_mode():
+                                self.status_bar.showMessage(
+                                    f"Found {model}. Set Fv mode", 3000
+                                )
+                            else:
+                                self.status_bar.showMessage(
+                                    f"Found {model}. WARNING: Could not set Fv mode", 5000
+                                )
+                    else:
+                        self.status_bar.showMessage(
+                            f"Found {model}", 2000
+                        )
         except Exception as e:
             logger.warning(f"Camera probe error: {e}")
             self.camera_ready = False
             self.sd_ready = False
+            if self._current_view_name == "Camera":
+                self.status_bar.showMessage(
+                    self.tr("Could not find camera"), 5000
+                )
 
         self.set_status_icons(camera=self.camera_ready, sd=self.sd_ready)
         self.camera_view.set_camera_ready(self.camera_ready)
@@ -245,6 +269,7 @@ class MainWindow(QMainWindow):
             self.darkroom_view.splitter.restoreState(self.settings.value("darkroom_splitter"))
 
     def closeEvent(self, event):
+        self.camera_view.close_all_previews()  # Zamknij okna podglądu
         self.camera_view.on_leave()
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("windowState", self.saveState())
@@ -270,6 +295,14 @@ class MainWindow(QMainWindow):
 
     def show_about(self):
         QMessageBox.information(self, self.tr("About"), self.tr("Sessions Assistant 0.99\nAuthor: Grzeza"))
+
+    def _show_preferences(self):
+        """Otwiera dialog preferencji."""
+        dialog = PreferencesDialog(self)
+        if dialog.exec() == PreferencesDialog.DialogCode.Accepted:
+            # Odśwież katalog sesji w camera_view
+            self.camera_view.update_capture_directory()
+            self.status_bar.showMessage(self.tr("Preferences saved"), 2000)
 
     def retranslateUi(self):
         self.setWindowTitle(self.tr("Sessions Assistant 0.99"))

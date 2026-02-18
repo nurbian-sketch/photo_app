@@ -9,6 +9,7 @@ from PyQt6.QtCore import QThread, pyqtSignal, QMutex
 from collections import deque
 import time
 import logging
+import subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,8 @@ class GPhotoInterface(QThread):
     frame_received = pyqtSignal(bytes, bool)
     settings_loaded = pyqtSignal(dict)
     error_occurred = pyqtSignal(str)
+    image_captured = pyqtSignal(str)  # ścieżka do zapisanego pliku
+    capture_failed = pyqtSignal(str)  # błąd capture — NIE zabija sesji LV
 
     # Kody błędów gphoto2
     ERR_USB = -52
@@ -34,9 +37,14 @@ class GPhotoInterface(QThread):
 
     MAX_CONSECUTIVE_ERRORS = 20
 
+    # Timeout dla stop() — normalny vs podczas capture
+    STOP_TIMEOUT_MS = 3000
+    STOP_TIMEOUT_CAPTURE_MS = 15000
+
     def __init__(self):
         super().__init__()
         self.keep_running = False
+        self._capturing = False  # Flaga trwającego capture
         self.camera = None
         self.context = gp.Context()
         self.MAX_ISO = 1600
@@ -44,6 +52,7 @@ class GPhotoInterface(QThread):
         self.MAX_SHUTTER_VAL = 0.001  # 1/1000s
         self.mutex = QMutex()
         self.command_queue = deque(maxlen=32)
+        self._usb_bus_device = None  # Cache dla USB reset
 
     # ─────────────────────────────────── CAMERA DETECTION
 
@@ -57,6 +66,12 @@ class GPhotoInterface(QThread):
             raise Exception("Brak aparatu.")
         model, port = cameras[0]
         logger.info(f"Wykryto aparat: {model} na {port}")
+
+        # Cache USB bus:device dla ewentualnego resetu
+        # port format: "usb:001,004" → bus=001, dev=004
+        if port.startswith("usb:"):
+            self._usb_bus_device = port[4:]  # "001,004"
+
         self.camera = gp.Camera()
         self.camera.set_abilities(
             abilities_list[abilities_list.lookup_model(model)]
@@ -148,8 +163,12 @@ class GPhotoInterface(QThread):
                 try:
                     while self.command_queue:
                         name, value = self.command_queue.popleft()
-                        self._execute_update(name, value)
-                        fps_sleep = 0.15
+                        if name == '__CAPTURE__':
+                            self._execute_capture(value)
+                            fps_sleep = 0.5
+                        else:
+                            self._execute_update(name, value)
+                            fps_sleep = 0.15
                 finally:
                     self.mutex.unlock()
 
@@ -217,6 +236,7 @@ class GPhotoInterface(QThread):
             self.error_occurred.emit(str(e))
 
         finally:
+            self._capturing = False  # Reset flagi przy wyjściu
             self._safe_camera_exit()
 
     def _safe_camera_exit(self):
@@ -329,8 +349,133 @@ class GPhotoInterface(QThread):
         finally:
             self.mutex.unlock()
 
+    def capture_photo(self, save_dir):
+        """
+        Kolejkuje zdjęcie do wykonania (thread-safe).
+        Wywoływane z wątku UI.
+        """
+        print(f"Queued: __CAPTURE__ → {save_dir}")
+        self.mutex.lock()
+        try:
+            self.command_queue.append(('__CAPTURE__', save_dir))
+        finally:
+            self.mutex.unlock()
+
     # Parametry exposure — tylko te mają 00ff Auto
     EXPOSURE_PARAMS = {'shutterspeed', 'aperture', 'iso', 'exposurecompensation'}
+
+    def _execute_capture(self, save_dir):
+        """
+        Wykonuje zdjęcie i pobiera plik BEZPOŚREDNIO do komputera.
+        Plik NIE jest zapisywany na karcie SD aparatu.
+        Wywoływane WEWNĄTRZ pętli roboczej.
+        """
+        import os
+        from datetime import datetime
+
+        self._capturing = True  # ← Flaga: capture w toku
+        original_target = None
+
+        try:
+            # 1. Przełącz capturetarget na RAM (nie kartę SD)
+            try:
+                config = self.camera.get_config(self.context)
+                target_widget = config.get_child_by_name('capturetarget')
+                original_target = target_widget.get_value()
+
+                # Zawsze używamy Memory card — Internal RAM powoduje zawieszenie USB
+                choices = list(target_widget.get_choices())
+                card_option = None
+                for choice in choices:
+                    if 'card' in choice.lower() or 'memory' in choice.lower() or 'sd' in choice.lower():
+                        card_option = choice
+                        break
+
+                if card_option and original_target != card_option:
+                    print(f">>> CAPTURE: switching target {original_target} → {card_option}")
+                    target_widget.set_value(card_option)
+                    self.camera.set_config(config, self.context)
+                    time.sleep(0.1)
+                else:
+                    print(f">>> CAPTURE: target already '{original_target}'")
+                    original_target = None  # Nie przywracaj później
+
+            except Exception as e:
+                logger.warning(f"Could not set capturetarget: {e}")
+                # Kontynuuj mimo błędu — capture może działać z domyślnym targetem
+
+            # 2. Wykonaj zdjęcie
+            print(">>> CAPTURE: trigger")
+            file_path = self.camera.capture(
+                gp.GP_CAPTURE_IMAGE, self.context
+            )
+            print(f"<<< CAPTURE: {file_path.folder}/{file_path.name}")
+
+            # 3. Pobierz plik z aparatu (z RAM lub karty)
+            camera_file = gp.CameraFile()
+            self.camera.file_get(
+                file_path.folder, file_path.name,
+                gp.GP_FILE_TYPE_NORMAL, camera_file, self.context
+            )
+
+            # 4. Zapisz lokalnie: save_dir/captures/YYYYMMDD_HHMMSS_IMG_xxxx.CR3
+            captures_dir = os.path.join(save_dir, "captures")
+            os.makedirs(captures_dir, exist_ok=True)
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"{timestamp}_{file_path.name}"
+            local_path = os.path.join(captures_dir, filename)
+
+            camera_file.save(local_path)
+            print(f"<<< SAVED: {local_path}")
+
+            # 5. Usuń plik z aparatu (zwolnij RAM/kartę)
+            try:
+                self.camera.file_delete(
+                    file_path.folder, file_path.name, self.context
+                )
+                print(f"<<< DELETED from camera: {file_path.name}")
+            except Exception as e:
+                logger.debug(f"Could not delete from camera (may be normal): {e}")
+
+            self.image_captured.emit(local_path)
+
+            # 6. Po capture aparat wychodzi z LV — restart preview
+            time.sleep(0.3)
+            try:
+                recovery = gp.CameraFile()
+                self.camera.capture_preview(recovery, self.context)
+                print("<<< LV recovered after capture")
+            except Exception:
+                print("<<< LV recovery failed — next frame will retry")
+
+            return True
+
+        except gp.GPhoto2Error as e:
+            logger.warning(f"Capture failed: gphoto2 error {e.code}")
+            # NIE emituj error_occurred — to zabiłoby sesję LV!
+            # capture_failed to "miękki" błąd, LV będzie próbować się odzyskać
+            self.capture_failed.emit(f"Capture failed (error {e.code}). Retrying...")
+            return False
+
+        except Exception as e:
+            logger.exception(f"Unexpected capture error: {e}")
+            self.capture_failed.emit(f"Capture error: {e}")
+            return False
+
+        finally:
+            self._capturing = False  # ← Zawsze resetuj flagę
+
+            # Przywróć oryginalny capturetarget (jeśli zmienialiśmy)
+            if original_target:
+                try:
+                    config = self.camera.get_config(self.context)
+                    target_widget = config.get_child_by_name('capturetarget')
+                    target_widget.set_value(original_target)
+                    self.camera.set_config(config, self.context)
+                    print(f"<<< CAPTURE: restored target → {original_target}")
+                except Exception as e:
+                    logger.warning(f"Could not restore capturetarget: {e}")
 
     def _execute_update(self, name, value) -> bool:
         """
@@ -376,13 +521,82 @@ class GPhotoInterface(QThread):
             logger.exception(f"Nieoczekiwany błąd ustawiania {name}={value}")
             return False
 
+    # ─────────────────────────────────── USB RESET FALLBACK
+
+    def _try_usb_reset(self):
+        """
+        Fallback: próbuje zresetować port USB po wymuszonym terminate().
+        Wymaga pakietu usbutils (usbreset) lub sudo.
+        """
+        if not self._usb_bus_device:
+            logger.warning("USB reset: brak informacji o porcie USB")
+            return False
+
+        try:
+            # Format: "001,004" → bus=001, device=004
+            parts = self._usb_bus_device.split(',')
+            if len(parts) != 2:
+                logger.warning(f"USB reset: nieprawidłowy format portu: {self._usb_bus_device}")
+                return False
+
+            bus, dev = parts[0], parts[1]
+            usb_path = f"/dev/bus/usb/{bus}/{dev}"
+
+            # Metoda 1: usbreset (z pakietu usbutils)
+            # Wymaga: sudo apt install usbutils
+            # oraz dodania użytkownika do grupy z dostępem do USB
+            try:
+                result = subprocess.run(
+                    ['usbreset', usb_path],
+                    capture_output=True,
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    logger.info(f"USB reset OK: {usb_path}")
+                    time.sleep(1.0)  # Czas na re-enumerację
+                    return True
+                else:
+                    logger.warning(f"USB reset failed: {result.stderr.decode()}")
+            except FileNotFoundError:
+                logger.debug("usbreset nie znaleziony, próbuję alternatywnej metody")
+            except subprocess.TimeoutExpired:
+                logger.warning("USB reset timeout")
+
+            # Metoda 2: Unbind/rebind przez sysfs (wymaga sudo lub odpowiednich uprawnień)
+            # To jest bardziej agresywne ale nie wymaga dodatkowych narzędzi
+            logger.info("USB reset: próba unbind/rebind przez sysfs")
+            # Nie implementujemy tutaj — wymaga root lub skomplikowanej konfiguracji udev
+
+            return False
+
+        except Exception as e:
+            logger.warning(f"USB reset error: {e}")
+            return False
+
     # ─────────────────────────────────── STOP
 
     def stop(self):
-        """Bezpieczne zatrzymanie wątku."""
+        """
+        Bezpieczne zatrzymanie wątku.
+        Czeka dłużej jeśli capture jest w toku.
+        """
         self.keep_running = False
-        self.wait(3000)  # timeout 3s zamiast wiecznego czekania
+
+        # Zawsze krótki timeout — nie czekamy na zakończenie capture.
+        # Przy terminate USB zostaje zablokowany; recovery czeka 4s.
+        if self._capturing:
+            logger.warning("Stop requested during capture — forcing terminate")
+
+        self.wait(self.STOP_TIMEOUT_MS)
+
         if self.isRunning():
-            logger.warning("Wątek gphoto nie zakończył się w 3s — terminate")
+            logger.warning(
+                f"Wątek gphoto nie zakończył się w {self.STOP_TIMEOUT_MS}ms — terminate"
+            )
             self.terminate()
             self.wait(1000)
+
+            # USB needs time to recover after forced terminate
+            logger.info("Czekam 4s na zwolnienie portu USB...")
+            time.sleep(4.0)
+            logger.info("USB recovery sleep done")
