@@ -3,8 +3,10 @@ Panel sterowania autofokusem Canon EOS RP.
 Parametry: focusmode, afmethod, continuousaf.
 Architektura: kody aparatu ↔ etykiety UI (tr()-ready).
 """
+import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QGroupBox, QSizePolicy
 from PyQt6.QtCore import QSettings, QTimer
+from PyQt6.QtGui import QIcon
 from ui.widgets.labeled_combo_box import LabeledComboBox
 import logging
 
@@ -25,6 +27,39 @@ AFMETHOD_KEYS = {
     'LiveSingleExpandSurround':    'expand_around',
     'LiveZone':                    'zone_af',
 }
+
+# ─────────────────────────── Ikony AF
+
+_AF_ICON_DIR = os.path.join('assets', 'icons', 'af')
+
+# Mapowanie: display text (po tr()) → plik ikony
+# Dla focusmode i afmethod — używamy display text jako klucza,
+# bo tr() może się zmienić → osobne dykty per param po translacji.
+# Zamiast tego mapujemy KOD → plik (bezpieczniejsze).
+AF_METHOD_ICON_MAP = {
+    'LiveFace':                 'af_face_tracking.png',
+    'LiveSpotAF':               'af_spot.png',
+    'Live':                     'af_1point.png',
+    'LiveSingleExpandCross':    'af_expand_cross.png',
+    'LiveSingleExpandSurround': 'af_expand_around.png',
+    'LiveZone':                 'af_zone.png',
+}
+
+FOCUSMODE_ICON_MAP = {
+    'One Shot': 'af_one_shot.png',
+    'AI Servo': 'af_ai_servo.png',
+}
+
+
+def _af_icon(icon_map: dict, code: str):
+    """Zwraca QIcon dla kodu AF lub None jeśli brak pliku."""
+    filename = icon_map.get(code)
+    if not filename:
+        return None
+    path = os.path.join(_AF_ICON_DIR, filename)
+    if not os.path.exists(path):
+        return None
+    return QIcon(path)
 
 
 class AutofocusControls(QWidget):
@@ -128,6 +163,29 @@ class AutofocusControls(QWidget):
     def _to_display(self, param, code):
         return self._code_map.get(param, {}).get(code, code)
 
+    # ─────────────────────────── IKONY AF
+
+    def _apply_af_icons(self, param: str, codes: list):
+        """Ustawia ikony w combo wg kodów aparatu. Wywołać po update_items()."""
+        if param == 'afmethod':
+            icon_map = AF_METHOD_ICON_MAP
+        elif param == 'focusmode':
+            icon_map = FOCUSMODE_ICON_MAP
+        else:
+            return
+
+        icon_dict = {}
+        for code in codes:
+            icon = _af_icon(icon_map, code)
+            if icon:
+                display = self._to_display(param, code)
+                icon_dict[display] = icon
+
+        if icon_dict:
+            combo = self._get_combo(param)
+            if combo:
+                combo.set_item_icons(icon_dict)
+
     # ─────────────────────────── DEBOUNCE + GPHOTO
 
     def _queue_param(self, param):
@@ -186,6 +244,10 @@ class AutofocusControls(QWidget):
                 combo.setCurrentText(display_current)
                 combo.blockSignals(False)
 
+            # Ikony AF method i Focus Mode
+            if param in ('afmethod', 'focusmode'):
+                self._apply_af_icons(param, codes)
+
         self._save_state()
 
     # ─────────────────────────── ZAPIS/ODCZYT
@@ -221,6 +283,10 @@ class AutofocusControls(QWidget):
                 combo.update_items(display_items)
                 if display_current:
                     combo.setCurrentText(display_current)
+
+            # Ikony AF method i Focus Mode przy przywracaniu stanu
+            if param in ('afmethod', 'focusmode'):
+                self._apply_af_icons(param, codes)
 
     # ─────────────────────────── API
 

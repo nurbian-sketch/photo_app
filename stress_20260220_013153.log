@@ -1,0 +1,1272 @@
+
+────────────────────────────────────────────────────────────────
+  Sessions Assistant — Camera Stress Test
+────────────────────────────────────────────────────────────────
+[+0000000ms] INFO  Scenariusze: ['S01', 'S02', 'S03', 'S04', 'S05', 'S06', 'S07', 'S08', 'S09', 'S10', 'S11', 'S12']
+[+0000000ms] INFO  gphoto2: 2.5.33
+[+0000000ms] INFO  lv_seconds=30  save_dir=/tmp/stress_captures
+
+────────────────────────────────────────────────────────────────
+  Wstępna sonda USB
+────────────────────────────────────────────────────────────────
+[+0000020ms] INFO  [USB@start] lsusb: Bus 001 Device 119: ID 04a9:32e2 Canon, Inc. Canon Digital Camera
+[+0000098ms] INFO  [USB@start] gp.detect (32.1ms): 1 aparat(ów) → Canon EOS RP
+[+0000099ms] INFO  Wstępna detekcja...
+[+0000099ms] INFO  connect: start
+[+0000176ms] TIME    detect: 77.0ms
+[+0000176ms] INFO    wykryto: "Canon EOS RP" @ usb:001,119
+[+0000181ms] TIME    set_abilities+port_info: 4.6ms
+[+0000199ms] TIME    camera.init(): 17.5ms
+[+0000199ms] OK    connect OK
+[+0000199ms] OK    Aparat: "Canon EOS RP"
+[+0000199ms] INFO  safe_exit...
+[+0000231ms] TIME    camera.exit(): 31.5ms
+[+0000231ms] OK    safe_exit OK
+
+────────────────────────────────────────────────────────────────
+  START S01
+────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────
+  S01 — USB detection + init timing (5 prób)
+────────────────────────────────────────────────────────────────
+[+0000732ms] INFO  Próba 1/5:
+[+0000732ms] INFO  connect: start
+[+0000785ms] TIME    detect: 52.5ms
+[+0000785ms] INFO    wykryto: "Canon EOS RP" @ usb:001,119
+[+0000787ms] TIME    set_abilities+port_info: 1.9ms
+[+0000809ms] TIME    camera.init(): 22.4ms
+[+0000809ms] OK    connect OK
+[+0000809ms] TIME    próba 1 TOTAL: 77.2ms
+[+0000809ms] INFO  safe_exit...
+[+0000838ms] TIME    camera.exit(): 28.4ms
+[+0000838ms] OK    safe_exit OK
+[+0001338ms] INFO  Próba 2/5:
+[+0001338ms] INFO  connect: start
+[+0001388ms] TIME    detect: 49.6ms
+[+0001388ms] INFO    wykryto: "Canon EOS RP" @ usb:001,119
+[+0001391ms] TIME    set_abilities+port_info: 2.5ms
+[+0001416ms] TIME    camera.init(): 25.2ms
+[+0001416ms] OK    connect OK
+[+0001416ms] TIME    próba 2 TOTAL: 78.2ms
+[+0001417ms] INFO  safe_exit...
+[+0001442ms] TIME    camera.exit(): 25.1ms
+[+0001443ms] OK    safe_exit OK
+[+0001943ms] INFO  Próba 3/5:
+[+0001943ms] INFO  connect: start
+[+0001991ms] TIME    detect: 47.7ms
+[+0001991ms] INFO    wykryto: "Canon EOS RP" @ usb:001,119
+[+0001993ms] TIME    set_abilities+port_info: 1.7ms
+[+0002011ms] TIME    camera.init(): 17.9ms
+[+0002011ms] OK    connect OK
+[+0002011ms] TIME    próba 3 TOTAL: 67.8ms
+[+0002011ms] INFO  safe_exit...
+[+0002039ms] TIME    camera.exit(): 27.8ms
+[+0002039ms] OK    safe_exit OK
+[+0002539ms] INFO  Próba 4/5:
+[+0002539ms] INFO  connect: start
+[+0002582ms] TIME    detect: 43.0ms
+[+0002583ms] INFO    wykryto: "Canon EOS RP" @ usb:001,119
+[+0002585ms] TIME    set_abilities+port_info: 2.1ms
+[+0002599ms] TIME    camera.init(): 14.5ms
+[+0002599ms] OK    connect OK
+[+0002600ms] TIME    próba 4 TOTAL: 60.2ms
+[+0002600ms] INFO  safe_exit...
+[+0002631ms] TIME    camera.exit(): 31.1ms
+[+0002631ms] OK    safe_exit OK
+[+0003131ms] INFO  Próba 5/5:
+[+0003131ms] INFO  connect: start
+[+0003182ms] TIME    detect: 51.2ms
+[+0003182ms] INFO    wykryto: "Canon EOS RP" @ usb:001,119
+[+0003184ms] TIME    set_abilities+port_info: 2.0ms
+[+0003201ms] TIME    camera.init(): 16.8ms
+[+0003201ms] OK    connect OK
+[+0003201ms] TIME    próba 5 TOTAL: 70.4ms
+[+0003202ms] INFO  safe_exit...
+[+0003232ms] TIME    camera.exit(): 30.2ms
+[+0003232ms] OK    safe_exit OK
+[+0003732ms] INFO  Statystyki [ms]: min=60  max=78  avg=71
+[+0003732ms] TIME  S01 total: 3000.6ms
+[+0003732ms] INFO  Pauza 2s po S01...
+[+0005741ms] INFO  [USB@po S01] lsusb: Bus 001 Device 119: ID 04a9:32e2 Canon, Inc. Canon Digital Camera
+[+0005783ms] INFO  [USB@po S01] gp.detect (15.6ms): 1 aparat(ów) → Canon EOS RP
+
+────────────────────────────────────────────────────────────────
+  START S02
+────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────
+  S02 — Pełny dump konfiguracji aparatu
+────────────────────────────────────────────────────────────────
+[+0005784ms] INFO  connect: start
+[+0005833ms] TIME    detect: 49.3ms
+[+0005833ms] INFO    wykryto: "Canon EOS RP" @ usb:001,119
+[+0005835ms] TIME    set_abilities+port_info: 1.9ms
+[+0005867ms] TIME    camera.init(): 31.4ms
+[+0005867ms] OK    connect OK
+[+0005958ms] TIME    get_config(): 91.4ms
+[+0005958ms] main [Camera and Driver Configuration] = "<no_value>"
+[+0005959ms]   actions [Camera Actions] = "<no_value>"
+[+0005959ms]     syncdatetimeutc [Synchronize camera date and time with PC (UTC)] = "0"
+[+0005959ms]     syncdatetime [Synchronize camera date and time with PC] = "0"
+[+0005959ms]     uilock [UI Lock] = "2"
+[+0005959ms]     popupflash [Popup Flash] = "2"
+[+0005959ms]     autofocusdrive [Drive Canon DSLR Autofocus] = "0"
+[+0005959ms]     manualfocusdrive [Drive Canon DSLR Manual focus] = "None"  choices=['Near 1', 'Near 2', 'Near 3', 'None', 'Far 1']…
+[+0005959ms]     cancelautofocus [Cancel Canon DSLR Autofocus] = "0"
+[+0005959ms]     eoszoom [Canon EOS Zoom] = "0"
+[+0005959ms]     eoszoomposition [Canon EOS Zoom Position] = "0,0"
+[+0005959ms]     viewfinder [Canon EOS Viewfinder] = "0"
+[+0005959ms]     eosremoterelease [Canon EOS Remote Release] = "None"  choices=['None', 'Press Half', 'Press Full', 'Release Half', 'Release Full']…
+[+0005959ms]     eosmoviemode [Movie Mode] = "2"
+[+0005960ms]     opcode [PTP Opcode] = "0x1001,0xparam1,0xparam2"
+[+0005960ms]   settings [Camera Settings] = "<no_value>"
+[+0005960ms]     datetimeutc [Camera Date and Time] = "1771547821"
+[+0005960ms]     datetime [Camera Date and Time] = "1771547821"
+[+0005960ms]     output [Camera Output] = "PC"  choices=['Off', 'TFT', 'PC', 'TFT + PC', 'MOBILE']…
+[+0005960ms]     movierecordtarget [Recording Destination] = "SDRAM"  choices=['Card', 'None', 'SDRAM']
+[+0005960ms]     evfmode [EVF Mode] = "1"  choices=['1']
+[+0005960ms]     ownername [Owner Name] = ""
+[+0005960ms]     artist [Artist] = ""
+[+0005960ms]     copyright [Copyright] = ""
+[+0005960ms]     nickname [Nickname] = "EOSRP"
+[+0005960ms]     customfuncex [Custom Functions Ex] = "20,1,6,14,1,102,1,0,"
+[+0005960ms]     focusarea [Focus Area] = "100947799"
+[+0005960ms]     strobofiring [Strobo Firing] = "1"  choices=['0', '1'] [RO]
+[+0005960ms]     flashcharged [Flash Charging State] = "0" [RO]
+[+0005960ms]     oneshotrawon [One Shot Raw On] = "0" [RO]
+[+0005960ms]     autopoweroff [Auto Power Off] = "0"  choices=['30', '60', '180', '300', '600']…
+[+0005960ms]     depthoffield [Depth of Field] = "0"
+[+0005960ms]     capturetarget [Capture Target] = "Memory card"  choices=['Internal RAM', 'Memory card']
+[+0005960ms]     capture [Capture] = "0"
+[+0005960ms]     remotemode [Remote Mode] = "0"
+[+0005960ms]     eventmode [Event Mode] = "0"
+[+0005960ms]     testolc [Test OLC] = "2"
+[+0005960ms]   status [Camera Status Information] = "<no_value>"
+[+0005960ms]     serialnumber [Serial Number] = "92532eba25194e009102af5a6f88022f" [RO]
+[+0005961ms]     manufacturer [Camera Manufacturer] = "Canon.Inc" [RO]
+[+0005961ms]     cameramodel [Camera Model] = "Canon EOS RP" [RO]
+[+0005961ms]     deviceversion [Device Version] = "3-1.6.3" [RO]
+[+0005961ms]     vendorextension [Vendor Extension] = "" [RO]
+[+0005961ms]     model [Camera Model] = "2147484723" [RO]
+[+0005961ms]     batterylevel [Battery Level] = "100%" [RO]
+[+0005961ms]     batterylevel [Battery Level] = "100%" [RO]
+[+0005961ms]     mirrorlockstatus [Mirror Lock Status] = "0" [RO]
+[+0005961ms]     mirrordownstatus [Mirror Down Status] = "0" [RO]
+[+0005961ms]     lensname [Lens Name] = "EF16-35mm f/2.8L II USM" [RO]
+[+0005961ms]     eosserialnumber [Serial Number] = "643021003493" [RO]
+[+0005961ms]     availableshots [Available Shots] = "11610" [RO]
+[+0005961ms]     eosmovieswitch [Movie Switch] = "0" [RO]
+[+0005961ms]   imgsettings [Image Settings] = "<no_value>"
+[+0005961ms]     imageformat [Image Format] = "M"  choices=['L', 'cL', 'M', 'cM', 'S1']…
+[+0005961ms]     imageformatsd [Image Format SD] = "M"  choices=['L', 'cL', 'M', 'cM', 'S1']…
+[+0005961ms]     imageformatcf [Image Format CF] = "M"  choices=['L', 'cL', 'M', 'cM', 'S1']…
+[+0005961ms]     iso [ISO Speed] = "Auto"  choices=['Auto', '100', '125', '160', '200']…
+[+0005961ms]     whitebalance [WhiteBalance] = "Color Temperature"  choices=['Auto', 'AWB White', 'Daylight', 'Shadow', 'Cloudy']…
+[+0005961ms]     colortemperature [Color Temperature] = "2600"  choices=['2500', '2600', '2700', '2800', '2900']…
+[+0005961ms]     whitebalanceadjusta [WhiteBalance Adjust A] = "0"  choices=['-9', '-8', '-7', '-6', '-5']…
+[+0005961ms]     whitebalanceadjustb [WhiteBalance Adjust B] = "0"  choices=['-9', '-8', '-7', '-6', '-5']…
+[+0005961ms]     whitebalancexa [WhiteBalance X A] = "0"  choices=['0', '1', '2', '3'] [RO]
+[+0005962ms]     whitebalancexb [WhiteBalance X B] = "0"  choices=['0', '1', '2', '3'] [RO]
+[+0005962ms]     colorspace [Color Space] = "sRGB"  choices=['sRGB', 'AdobeRGB']
+[+0005962ms]   capturesettings [Capture Settings] = "<no_value>"
+[+0005962ms]     zoomspeed [Zoom Speed] = "0"
+[+0005962ms]     exposurecompensation [Exposure Compensation] = "0"  choices=['-3', '-2.6', '-2.3', '-2', '-1.6']…
+[+0005962ms]     focusmode [Focus Mode] = "One Shot"  choices=['One Shot']
+[+0005962ms]     continuousaf [Continuous AF] = "On"  choices=['Off', 'On']
+[+0005962ms]     aspectratio [Aspect Ratio] = "3:2"  choices=['3:2', '1.6x', '1:1', '4:3', '16:9']
+[+0005962ms]     afmethod [AF Method] = "LiveFace"  choices=['LiveFace', 'LiveSpotAF', 'Live', 'LiveSingleExpandCross', 'LiveSingleExpandSurround']…
+[+0005962ms]     storageid [Storage Device] = "00020001"
+[+0005962ms]     highisonr [High ISO Noise Reduction] = "Off"  choices=['High', 'Low', 'Off', 'Normal', 'Multi-Shot']
+[+0005962ms]     autoexposuremode [Canon Auto Exposure Mode] = "Fv"  choices=['P', 'TV', 'AV', 'Manual', 'Bulb']…
+[+0005962ms]     autoexposuremodedial [Canon Auto Exposure Mode Dial] = "Fv"  choices=['P', 'TV', 'AV', 'Manual', 'Bulb']…
+[+0005962ms]     drivemode [Drive Mode] = "Single"  choices=['Single', 'Continuous high speed', 'Continuous low speed', 'Timer 10 sec', 'Timer 2 sec']…
+[+0005962ms]     picturestyle [Picture Style] = "Landscape"  choices=['Auto', 'Standard', 'Portrait', 'Landscape', 'Fine detail']…
+[+0005962ms]     aperture [Aperture] = "Unknown value 00ff"  choices=['Unknown value 00ff', '2.8', '3.2', '3.5', '4']…
+[+0005962ms]     shutterspeed [Shutter Speed] = "bulb"  choices=['bulb', '30', '25', '20', '15']…
+[+0005962ms]     meteringmode [Metering Mode] = "Center-weighted average"  choices=['Evaluative', 'Partial', 'Spot', 'Center-weighted average']
+[+0005962ms]     liveviewsize [Live View Size] = "Large"  choices=['Large', 'Medium', 'Small']
+[+0005962ms]     bracketmode [Bracket Mode] = "Unknown value 0000"  choices=['Unknown value 0000']
+[+0005962ms]     aeb [Auto Exposure Bracketing] = "off"  choices=['off', '+/- 1/3', '+/- 2/3', '+/- 1', '+/- 1 1/3']…
+[+0005962ms]     alomode [Auto Lighting Optimization] = "x3"  choices=['x3', 'x1', 'Standard (disabled in manual exposure)', 'x2']
+[+0005963ms]     movieservoaf [Movie Servo AF] = "Off"  choices=['Off']
+[+0005963ms]   other [Other PTP Device Properties] = "<no_value>"
+[+0005963ms]     d402 [Friendly Device Name] = "Canon EOS RP" [RO]
+[+0005963ms]     d407 [Perceived Device Type] = "1" [RO]
+[+0005963ms]     d406 [Session Initiator Info] = "Unknown Initiator"
+[+0005963ms]     d303 [PTP Property 0xd303] = "1" [RO]
+[+0005963ms]     5001 [Battery Level] = "100"  choices=['100', '0', '75', '50'] [RO]
+[+0005963ms] INFO    łącznie: 90 parametrów
+[+0005963ms] INFO  safe_exit...
+[+0006239ms] TIME    camera.exit(): 275.9ms
+[+0006239ms] OK    safe_exit OK
+[+0006239ms] TIME  S02 total: 455.5ms
+[+0006239ms] INFO  Pauza 2s po S02...
+[+0008247ms] INFO  [USB@po S02] lsusb: Bus 001 Device 119: ID 04a9:32e2 Canon, Inc. Canon Digital Camera
+[+0008291ms] INFO  [USB@po S02] gp.detect (15.3ms): 1 aparat(ów) → Canon EOS RP
+
+────────────────────────────────────────────────────────────────
+  START S03
+────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────
+  S03 — focusmode: dostępność przed LV i podczas LV
+────────────────────────────────────────────────────────────────
+[+0008291ms] INFO  connect: start
+[+0008344ms] TIME    detect: 52.5ms
+[+0008344ms] INFO    wykryto: "Canon EOS RP" @ usb:001,119
+[+0008346ms] TIME    set_abilities+port_info: 2.3ms
+[+0008366ms] TIME    camera.init(): 19.5ms
+[+0008366ms] OK    connect OK
+[+0008366ms] INFO  --- Stan 1: zaraz po init(), BEZ capture_preview ---
+[+0008453ms] INFO    autoexposuremode: value="Fv"  choices=['P', 'TV', 'AV', 'Manual', 'Bulb', 'A_DEP', 'DEP', 'Custom', 'Lock', 'Green', 'Night Portrait', 'Sports', 'Portrait', 'Landscape', 'Closeup', 'Flash Off', 'C2', 'C3', 'Creative Auto', 'Movie', 'Auto', 'Handheld Night Scene', 'HDR Backlight Control', 'SCN', 'Food', 'Grainy B/W', 'Soft focus', 'Toy camera effect', 'Fish-eye effect', 'Water painting effect', 'Miniature effect', 'HDR art standard', 'HDR art vivid', 'HDR art bold', 'HDR art embossed', 'Panning', 'HDR', 'Self Portrait', 'Hybrid Auto', 'Smooth skin', 'Fv']
+[+0008454ms] INFO    focusmode: value="One Shot"  choices=['One Shot']
+[+0008455ms] INFO    afmethod: value="LiveFace"  choices=['LiveFace', 'LiveSpotAF', 'Live', 'LiveSingleExpandCross', 'LiveSingleExpandSurround', 'LiveZone']
+[+0008456ms] INFO    continuousaf: value="On"  choices=['Off', 'On']
+[+0008456ms] INFO  --- Warmup: 5 klatek ---
+[+0009573ms] INFO  [w1] OK  159785B  prev=117.3ms  ev=0.0ms  total=117.4ms  ev_type=0
+[+0009685ms] INFO  [w2] OK  159325B  prev=11.1ms  ev=0.1ms  total=11.2ms  ev_type=0
+[+0009798ms] INFO  [w3] OK  159670B  prev=12.9ms  ev=0.1ms  total=12.9ms  ev_type=0
+[+0009906ms] INFO  [w4] OK  159540B  prev=7.2ms  ev=0.1ms  total=7.3ms  ev_type=0
+[+0010013ms] INFO  [w5] OK  159254B  prev=6.6ms  ev=0.0ms  total=6.7ms  ev_type=0
+[+0010113ms] INFO  --- Stan 2: po 5 klatkach LV ---
+[+0010133ms] INFO    autoexposuremode: value="Fv"  choices=['P', 'TV', 'AV', 'Manual', 'Bulb', 'A_DEP', 'DEP', 'Custom', 'Lock', 'Green', 'Night Portrait', 'Sports', 'Portrait', 'Landscape', 'Closeup', 'Flash Off', 'C2', 'C3', 'Creative Auto', 'Movie', 'Auto', 'Handheld Night Scene', 'HDR Backlight Control', 'SCN', 'Food', 'Grainy B/W', 'Soft focus', 'Toy camera effect', 'Fish-eye effect', 'Water painting effect', 'Miniature effect', 'HDR art standard', 'HDR art vivid', 'HDR art bold', 'HDR art embossed', 'Panning', 'HDR', 'Self Portrait', 'Hybrid Auto', 'Smooth skin', 'Fv']
+[+0010140ms] INFO    focusmode: value="One Shot"  choices=['One Shot']
+[+0010140ms] WARN    !! focusmode ma 1 opcję(e) — powinno być 2+
+[+0010142ms] INFO    afmethod: value="LiveFace"  choices=['LiveFace', 'LiveSpotAF', 'Live', 'LiveSingleExpandCross', 'LiveSingleExpandSurround', 'LiveZone']
+[+0010144ms] INFO    continuousaf: value="On"  choices=['Off', 'On']
+[+0010144ms] INFO  --- Warmup: 30 klatek ciągłych ---
+[+0010152ms] INFO  [w1] OK  159465B  prev=7.6ms  ev=0.1ms  total=7.7ms  ev_type=0
+[+0010213ms] INFO  [w2] OK  159465B  prev=11.1ms  ev=0.1ms  total=11.2ms  ev_type=0
+[+0010273ms] INFO  [w3] OK  159419B  prev=8.3ms  ev=0.0ms  total=8.4ms  ev_type=0
+[+0010333ms] INFO  [w4] OK  159552B  prev=9.7ms  ev=0.0ms  total=9.8ms  ev_type=0
+[+0010390ms] INFO  [w5] OK  159529B  prev=6.6ms  ev=0.0ms  total=6.7ms  ev_type=0
+[+0010446ms] INFO  [w6] OK  159355B  prev=6.3ms  ev=0.0ms  total=6.3ms  ev_type=0
+[+0010505ms] INFO  [w7] OK  159456B  prev=8.9ms  ev=0.0ms  total=8.9ms  ev_type=0
+[+0010573ms] INFO  [w8] OK  159750B  prev=17.3ms  ev=0.0ms  total=17.3ms  ev_type=0
+[+0010631ms] INFO  [w9] OK  159574B  prev=8.0ms  ev=0.1ms  total=8.1ms  ev_type=0
+[+0010690ms] INFO  [w10] OK  159530B  prev=8.6ms  ev=0.0ms  total=8.7ms  ev_type=0
+[+0010748ms] INFO  [w11] OK  159588B  prev=7.6ms  ev=0.0ms  total=7.6ms  ev_type=0
+[+0010807ms] INFO  [w12] OK  159374B  prev=8.2ms  ev=0.0ms  total=8.3ms  ev_type=0
+[+0010865ms] INFO  [w13] OK  159544B  prev=8.6ms  ev=0.0ms  total=8.7ms  ev_type=0
+[+0010923ms] INFO  [w14] OK  159525B  prev=7.7ms  ev=0.0ms  total=7.8ms  ev_type=0
+[+0010980ms] INFO  [w15] OK  159287B  prev=6.5ms  ev=0.0ms  total=6.6ms  ev_type=0
+[+0011045ms] INFO  [w16] OK  159608B  prev=14.5ms  ev=0.1ms  total=14.6ms  ev_type=0
+[+0011106ms] INFO  [w17] OK  159665B  prev=10.9ms  ev=0.0ms  total=10.9ms  ev_type=0
+[+0011165ms] INFO  [w18] OK  159706B  prev=8.0ms  ev=0.0ms  total=8.1ms  ev_type=0
+[+0011224ms] INFO  [w19] OK  159291B  prev=8.7ms  ev=0.0ms  total=8.7ms  ev_type=0
+[+0011286ms] INFO  [w20] OK  159423B  prev=12.5ms  ev=0.0ms  total=12.5ms  ev_type=0
+[+0011345ms] INFO  [w21] OK  159413B  prev=8.8ms  ev=0.0ms  total=8.9ms  ev_type=0
+[+0011407ms] INFO  [w22] OK  159557B  prev=11.6ms  ev=0.0ms  total=11.6ms  ev_type=0
+[+0011465ms] INFO  [w23] OK  159468B  prev=7.8ms  ev=0.0ms  total=7.8ms  ev_type=0
+[+0011534ms] INFO  [w24] OK  159399B  prev=17.9ms  ev=0.0ms  total=18.0ms  ev_type=0
+[+0011591ms] INFO  [w25] OK  159501B  prev=6.7ms  ev=0.0ms  total=6.8ms  ev_type=0
+[+0011648ms] INFO  [w26] OK  159512B  prev=7.5ms  ev=0.0ms  total=7.5ms  ev_type=0
+[+0011707ms] INFO  [w27] OK  159243B  prev=8.8ms  ev=0.0ms  total=8.8ms  ev_type=0
+[+0011767ms] INFO  [w28] OK  159633B  prev=9.1ms  ev=0.0ms  total=9.1ms  ev_type=0
+[+0011824ms] INFO  [w29] OK  159550B  prev=7.5ms  ev=0.0ms  total=7.5ms  ev_type=0
+[+0011883ms] INFO  [w30] OK  159375B  prev=7.9ms  ev=0.0ms  total=7.9ms  ev_type=0
+[+0011933ms] INFO  --- Stan 3: po 35 klatkach LV ---
+[+0011953ms] INFO    focusmode: value="One Shot"  choices=['One Shot']
+[+0011959ms] INFO    afmethod: value="LiveFace"  choices=['LiveFace', 'LiveSpotAF', 'Live', 'LiveSingleExpandCross', 'LiveSingleExpandSurround', 'LiveZone']
+[+0011960ms] INFO    continuousaf: value="On"  choices=['Off', 'On']
+[+0011960ms] INFO  safe_exit...
+[+0012092ms] TIME    camera.exit(): 131.7ms
+[+0012092ms] OK    safe_exit OK
+[+0012093ms] TIME  S03 total: 3801.4ms
+[+0012093ms] INFO  Pauza 2s po S03...
+[+0014101ms] INFO  [USB@po S03] lsusb: Bus 001 Device 119: ID 04a9:32e2 Canon, Inc. Canon Digital Camera
+[+0014156ms] INFO  [USB@po S03] gp.detect (18.8ms): 1 aparat(ów) → Canon EOS RP
+
+────────────────────────────────────────────────────────────────
+  START S04
+────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────
+  S04 — LV warmup: timing pierwszych 30 klatek
+────────────────────────────────────────────────────────────────
+[+0014156ms] INFO  connect: start
+[+0014207ms] TIME    detect: 51.0ms
+[+0014208ms] INFO    wykryto: "Canon EOS RP" @ usb:001,119
+[+0014210ms] TIME    set_abilities+port_info: 2.7ms
+[+0014235ms] TIME    camera.init(): 24.4ms
+[+0014235ms] OK    connect OK
+[+0015395ms] INFO  [f01] OK  159609B  prev=160.0ms  ev=0.0ms  total=160.1ms  ev_type=0
+[+0015453ms] INFO  [f02] OK  159551B  prev=7.0ms  ev=0.0ms  total=7.1ms  ev_type=0
+[+0015511ms] INFO  [f03] OK  159675B  prev=8.0ms  ev=0.1ms  total=8.1ms  ev_type=0
+[+0015569ms] INFO  [f04] OK  159403B  prev=7.6ms  ev=0.1ms  total=7.7ms  ev_type=0
+[+0015628ms] INFO  [f05] OK  159480B  prev=8.7ms  ev=0.1ms  total=8.8ms  ev_type=0
+[+0015686ms] INFO  [f06] OK  159500B  prev=8.0ms  ev=0.1ms  total=8.0ms  ev_type=0
+[+0015745ms] INFO  [f07] OK  159355B  prev=8.9ms  ev=0.0ms  total=8.9ms  ev_type=0
+[+0015812ms] INFO  [f08] OK  159659B  prev=16.6ms  ev=0.1ms  total=16.7ms  ev_type=0
+[+0015873ms] INFO  [f09] OK  159359B  prev=10.8ms  ev=0.1ms  total=10.8ms  ev_type=0
+[+0015930ms] INFO  [f10] OK  159667B  prev=6.3ms  ev=0.1ms  total=6.4ms  ev_type=0
+[+0015991ms] INFO  [f11] OK  159486B  prev=10.6ms  ev=0.0ms  total=10.7ms  ev_type=0
+[+0016050ms] INFO  [f12] OK  159498B  prev=8.6ms  ev=0.1ms  total=8.6ms  ev_type=0
+[+0016110ms] INFO  [f13] OK  159511B  prev=10.3ms  ev=0.0ms  total=10.3ms  ev_type=0
+[+0016171ms] INFO  [f14] OK  159680B  prev=9.9ms  ev=0.1ms  total=9.9ms  ev_type=0
+[+0016228ms] INFO  [f15] OK  159328B  prev=7.4ms  ev=0.0ms  total=7.5ms  ev_type=0
+[+0016286ms] INFO  [f16] OK  159503B  prev=7.6ms  ev=0.1ms  total=7.7ms  ev_type=0
+[+0016345ms] INFO  [f17] OK  160051B  prev=8.3ms  ev=0.0ms  total=8.3ms  ev_type=0
+[+0016404ms] INFO  [f18] OK  159789B  prev=9.3ms  ev=0.0ms  total=9.4ms  ev_type=0
+[+0016470ms] INFO  [f19] OK  159727B  prev=15.4ms  ev=0.1ms  total=15.5ms  ev_type=0
+[+0016529ms] INFO  [f20] OK  159606B  prev=8.3ms  ev=0.0ms  total=8.4ms  ev_type=0
+[+0016585ms] INFO  [f21] OK  159304B  prev=6.2ms  ev=0.0ms  total=6.2ms  ev_type=0
+[+0016644ms] INFO  [f22] OK  159322B  prev=9.0ms  ev=0.0ms  total=9.0ms  ev_type=0
+[+0016712ms] INFO  [f23] OK  159490B  prev=17.4ms  ev=0.0ms  total=17.5ms  ev_type=0
+[+0016770ms] INFO  [f24] OK  159307B  prev=8.1ms  ev=0.1ms  total=8.1ms  ev_type=0
+[+0016829ms] INFO  [f25] OK  159457B  prev=8.3ms  ev=0.0ms  total=8.4ms  ev_type=0
+[+0016886ms] INFO  [f26] OK  159613B  prev=6.7ms  ev=0.0ms  total=6.8ms  ev_type=0
+[+0016946ms] INFO  [f27] OK  159687B  prev=9.8ms  ev=0.0ms  total=9.9ms  ev_type=0
+[+0017013ms] INFO  [f28] OK  159612B  prev=16.5ms  ev=0.1ms  total=16.5ms  ev_type=0
+[+0017074ms] INFO  [f29] OK  159695B  prev=11.0ms  ev=0.0ms  total=11.0ms  ev_type=0
+[+0017131ms] INFO  [f30] OK  159537B  prev=6.4ms  ev=0.0ms  total=6.4ms  ev_type=0
+[+0017181ms] INFO  safe_exit...
+[+0017304ms] TIME    camera.exit(): 122.4ms
+[+0017304ms] OK    safe_exit OK
+[+0017304ms] TIME  S04 total: 3147.7ms
+[+0017304ms] INFO  Pauza 2s po S04...
+[+0019313ms] INFO  [USB@po S04] lsusb: Bus 001 Device 119: ID 04a9:32e2 Canon, Inc. Canon Digital Camera
+[+0019356ms] INFO  [USB@po S04] gp.detect (14.9ms): 1 aparat(ów) → Canon EOS RP
+
+────────────────────────────────────────────────────────────────
+  START S05
+────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────
+  S05 — LV steady state: 30s pętla
+────────────────────────────────────────────────────────────────
+[+0019357ms] INFO  connect: start
+[+0019419ms] TIME    detect: 62.1ms
+[+0019419ms] INFO    wykryto: "Canon EOS RP" @ usb:001,119
+[+0019422ms] TIME    set_abilities+port_info: 2.8ms
+[+0019445ms] TIME    camera.init(): 22.3ms
+[+0019445ms] OK    connect OK
+[+0020612ms] INFO  [w] OK  159278B  prev=166.7ms  ev=0.0ms  total=166.7ms  ev_type=0
+[+0020671ms] INFO  [w] OK  159544B  prev=9.4ms  ev=0.1ms  total=9.4ms  ev_type=0
+[+0020732ms] INFO  [w] OK  159571B  prev=10.8ms  ev=0.1ms  total=10.9ms  ev_type=0
+[+0020791ms] INFO  [w] OK  159511B  prev=8.2ms  ev=0.2ms  total=8.4ms  ev_type=0
+[+0020849ms] INFO  [w] OK  159529B  prev=7.7ms  ev=0.1ms  total=7.7ms  ev_type=0
+[+0020906ms] INFO  [w] OK  159440B  prev=6.3ms  ev=0.0ms  total=6.4ms  ev_type=0
+[+0020965ms] INFO  [w] OK  159480B  prev=9.0ms  ev=0.0ms  total=9.1ms  ev_type=0
+[+0021025ms] INFO  [w] OK  159604B  prev=9.9ms  ev=0.0ms  total=10.0ms  ev_type=0
+[+0021092ms] INFO  [w] OK  159399B  prev=16.8ms  ev=0.0ms  total=16.8ms  ev_type=0
+[+0021150ms] INFO  [w] OK  159872B  prev=7.0ms  ev=0.0ms  total=7.0ms  ev_type=0
+[+0021200ms] INFO  Główna pętla 30s...
+[+0021207ms] INFO  OK  159552B  prev=7.3ms  ev=0.0ms  total=7.3ms  ev_type=0
+[+0021266ms] INFO  OK  159722B  prev=8.5ms  ev=0.0ms  total=8.5ms  ev_type=0
+[+0021329ms] INFO  OK  159363B  prev=12.5ms  ev=0.0ms  total=12.5ms  ev_type=0
+[+0021391ms] INFO  OK  159643B  prev=12.0ms  ev=0.1ms  total=12.1ms  ev_type=0
+[+0021450ms] INFO  OK  159605B  prev=8.2ms  ev=0.0ms  total=8.2ms  ev_type=0
+[+0021506ms] INFO  OK  159779B  prev=6.4ms  ev=0.0ms  total=6.4ms  ev_type=0
+[+0021572ms] INFO  OK  159681B  prev=15.1ms  ev=0.0ms  total=15.2ms  ev_type=0
+[+0021629ms] INFO  OK  159123B  prev=7.1ms  ev=0.0ms  total=7.2ms  ev_type=0
+[+0021692ms] INFO  OK  159714B  prev=12.3ms  ev=0.0ms  total=12.3ms  ev_type=0
+[+0021750ms] INFO  OK  159735B  prev=8.1ms  ev=0.0ms  total=8.2ms  ev_type=0
+[+0021808ms] INFO  OK  159498B  prev=7.2ms  ev=0.0ms  total=7.2ms  ev_type=0
+[+0021866ms] INFO  OK  159587B  prev=8.5ms  ev=0.0ms  total=8.5ms  ev_type=0
+[+0021926ms] INFO  OK  159567B  prev=9.3ms  ev=0.1ms  total=9.3ms  ev_type=0
+[+0021985ms] INFO  OK  159586B  prev=8.7ms  ev=0.0ms  total=8.8ms  ev_type=0
+[+0022046ms] INFO  OK  159512B  prev=11.1ms  ev=0.0ms  total=11.1ms  ev_type=0
+[+0022106ms] INFO  OK  159808B  prev=9.0ms  ev=0.0ms  total=9.1ms  ev_type=0
+[+0022166ms] INFO  OK  159385B  prev=10.0ms  ev=0.0ms  total=10.0ms  ev_type=0
+[+0022226ms] INFO  OK  159711B  prev=9.8ms  ev=0.0ms  total=9.9ms  ev_type=0
+[+0022293ms] INFO  OK  159767B  prev=16.2ms  ev=0.0ms  total=16.3ms  ev_type=0
+[+0022351ms] INFO  OK  159486B  prev=7.8ms  ev=0.0ms  total=7.8ms  ev_type=0
+[+0022408ms] INFO  OK  159634B  prev=7.7ms  ev=0.0ms  total=7.7ms  ev_type=0
+[+0022467ms] INFO  OK  159341B  prev=8.3ms  ev=0.0ms  total=8.3ms  ev_type=0
+[+0022533ms] INFO  OK  159725B  prev=13.3ms  ev=0.0ms  total=13.3ms  ev_type=0
+[+0022593ms] INFO  OK  159651B  prev=9.9ms  ev=0.0ms  total=9.9ms  ev_type=0
+[+0022653ms] INFO  OK  159460B  prev=9.4ms  ev=0.0ms  total=9.4ms  ev_type=0
+[+0022713ms] INFO  OK  159569B  prev=9.7ms  ev=0.0ms  total=9.8ms  ev_type=0
+[+0022773ms] INFO  OK  159565B  prev=9.7ms  ev=0.0ms  total=9.8ms  ev_type=0
+[+0022833ms] INFO  OK  159530B  prev=9.9ms  ev=0.0ms  total=9.9ms  ev_type=0
+[+0022894ms] INFO  OK  159491B  prev=10.8ms  ev=0.0ms  total=10.9ms  ev_type=0
+[+0022951ms] INFO  OK  159540B  prev=7.2ms  ev=0.0ms  total=7.2ms  ev_type=0
+[+0023008ms] INFO  OK  159367B  prev=6.2ms  ev=0.0ms  total=6.2ms  ev_type=0
+[+0023067ms] INFO  OK  159232B  prev=8.7ms  ev=0.1ms  total=8.7ms  ev_type=0
+[+0023127ms] INFO  OK  159047B  prev=9.8ms  ev=0.1ms  total=9.9ms  ev_type=0
+[+0023185ms] INFO  OK  159506B  prev=8.1ms  ev=0.0ms  total=8.1ms  ev_type=0
+[+0023247ms] INFO  OK  159599B  prev=11.7ms  ev=0.0ms  total=11.8ms  ev_type=0
+[+0023307ms] INFO  OK  159453B  prev=9.6ms  ev=0.0ms  total=9.7ms  ev_type=0
+[+0023367ms] INFO  OK  159600B  prev=9.4ms  ev=0.0ms  total=9.4ms  ev_type=0
+[+0023427ms] INFO  OK  159796B  prev=9.6ms  ev=0.0ms  total=9.7ms  ev_type=0
+[+0023486ms] INFO  OK  159726B  prev=8.6ms  ev=0.0ms  total=8.7ms  ev_type=0
+[+0023543ms] INFO  OK  159423B  prev=6.9ms  ev=0.0ms  total=7.0ms  ev_type=0
+[+0023601ms] INFO  OK  159545B  prev=8.5ms  ev=0.0ms  total=8.5ms  ev_type=0
+[+0023661ms] INFO  OK  159717B  prev=9.4ms  ev=0.0ms  total=9.4ms  ev_type=0
+[+0023727ms] INFO  OK  159313B  prev=15.3ms  ev=0.1ms  total=15.3ms  ev_type=0
+[+0023785ms] INFO  OK  159590B  prev=8.2ms  ev=0.1ms  total=8.3ms  ev_type=0
+[+0023843ms] INFO  OK  159522B  prev=6.8ms  ev=0.1ms  total=6.9ms  ev_type=0
+[+0023902ms] INFO  OK  159760B  prev=8.5ms  ev=0.0ms  total=8.5ms  ev_type=0
+[+0023965ms] INFO  OK  159511B  prev=12.9ms  ev=0.0ms  total=12.9ms  ev_type=0
+[+0024026ms] INFO  OK  159706B  prev=10.6ms  ev=0.0ms  total=10.6ms  ev_type=0
+[+0024084ms] INFO  OK  159333B  prev=8.2ms  ev=0.0ms  total=8.3ms  ev_type=0
+[+0024143ms] INFO  OK  159487B  prev=8.1ms  ev=0.1ms  total=8.2ms  ev_type=0
+[+0024207ms] INFO  OK  159502B  prev=14.1ms  ev=0.0ms  total=14.1ms  ev_type=0
+[+0024265ms] INFO  OK  159562B  prev=7.7ms  ev=0.0ms  total=7.7ms  ev_type=0
+[+0024327ms] INFO  OK  159501B  prev=11.7ms  ev=0.0ms  total=11.7ms  ev_type=0
+[+0024386ms] INFO  OK  159401B  prev=8.6ms  ev=0.0ms  total=8.6ms  ev_type=0
+[+0024448ms] INFO  OK  159643B  prev=12.3ms  ev=0.0ms  total=12.3ms  ev_type=0
+[+0024508ms] INFO  OK  159513B  prev=9.8ms  ev=0.0ms  total=9.8ms  ev_type=0
+[+0024565ms] INFO  OK  159386B  prev=6.4ms  ev=0.0ms  total=6.4ms  ev_type=0
+[+0024627ms] INFO  OK  159533B  prev=11.4ms  ev=0.0ms  total=11.4ms  ev_type=0
+[+0024686ms] INFO  OK  159465B  prev=8.2ms  ev=0.0ms  total=8.2ms  ev_type=0
+[+0024744ms] INFO  OK  159130B  prev=5.8ms  ev=0.0ms  total=5.8ms  ev_type=0
+[+0024803ms] INFO  OK  159487B  prev=8.0ms  ev=0.0ms  total=8.0ms  ev_type=0
+[+0024862ms] INFO  OK  159479B  prev=9.2ms  ev=0.1ms  total=9.3ms  ev_type=0
+[+0024928ms] INFO  OK  159386B  prev=15.4ms  ev=0.0ms  total=15.4ms  ev_type=0
+[+0024988ms] INFO  OK  159274B  prev=9.7ms  ev=0.1ms  total=9.8ms  ev_type=0
+[+0025046ms] INFO  OK  159440B  prev=7.9ms  ev=0.0ms  total=7.9ms  ev_type=0
+[+0025104ms] INFO  OK  159539B  prev=7.4ms  ev=0.0ms  total=7.4ms  ev_type=0
+[+0025171ms] INFO  OK  159519B  prev=16.7ms  ev=0.0ms  total=16.7ms  ev_type=0
+[+0025232ms] INFO  OK  159426B  prev=11.0ms  ev=0.0ms  total=11.0ms  ev_type=0
+[+0025289ms] INFO  OK  159825B  prev=6.5ms  ev=0.0ms  total=6.6ms  ev_type=0
+[+0025348ms] INFO  OK  159659B  prev=8.9ms  ev=0.0ms  total=8.9ms  ev_type=0
+[+0025408ms] INFO  OK  159452B  prev=10.0ms  ev=0.0ms  total=10.0ms  ev_type=0
+[+0025466ms] INFO  OK  159206B  prev=7.8ms  ev=0.0ms  total=7.8ms  ev_type=0
+[+0025522ms] INFO  OK  159492B  prev=6.4ms  ev=0.0ms  total=6.4ms  ev_type=0
+[+0025582ms] INFO  OK  159567B  prev=9.5ms  ev=0.0ms  total=9.5ms  ev_type=0
+[+0025651ms] INFO  OK  159555B  prev=18.1ms  ev=0.0ms  total=18.2ms  ev_type=0
+[+0025710ms] INFO  OK  159727B  prev=9.0ms  ev=0.0ms  total=9.0ms  ev_type=0
+[+0025769ms] INFO  OK  159619B  prev=9.2ms  ev=0.0ms  total=9.2ms  ev_type=0
+[+0025829ms] INFO  OK  159557B  prev=9.6ms  ev=0.0ms  total=9.6ms  ev_type=0
+[+0025887ms] INFO  OK  159901B  prev=7.4ms  ev=0.0ms  total=7.5ms  ev_type=0
+[+0025945ms] INFO  OK  159600B  prev=7.4ms  ev=0.0ms  total=7.4ms  ev_type=0
+[+0026003ms] INFO  OK  159657B  prev=8.6ms  ev=0.0ms  total=8.7ms  ev_type=0
+[+0026063ms] INFO  OK  159374B  prev=9.4ms  ev=0.0ms  total=9.5ms  ev_type=0
+[+0026129ms] INFO  OK  159670B  prev=15.3ms  ev=0.0ms  total=15.3ms  ev_type=0
+[+0026188ms] INFO  OK  159522B  prev=8.8ms  ev=0.0ms  total=8.9ms  ev_type=0
+[+0026245ms] INFO  OK  159638B  prev=7.1ms  ev=0.0ms  total=7.1ms  ev_type=0
+[+0026305ms] INFO  OK  159520B  prev=9.5ms  ev=0.0ms  total=9.5ms  ev_type=0
+[+0026372ms] INFO  OK  159435B  prev=16.3ms  ev=0.0ms  total=16.4ms  ev_type=0
+[+0026433ms] INFO  OK  159632B  prev=10.6ms  ev=0.0ms  total=10.7ms  ev_type=0
+[+0026489ms] INFO  OK  159412B  prev=6.0ms  ev=0.0ms  total=6.1ms  ev_type=0
+[+0026546ms] INFO  OK  159625B  prev=6.9ms  ev=0.0ms  total=6.9ms  ev_type=0
+[+0026609ms] INFO  OK  159489B  prev=12.5ms  ev=0.0ms  total=12.5ms  ev_type=0
+[+0026670ms] INFO  OK  159728B  prev=10.4ms  ev=0.0ms  total=10.5ms  ev_type=0
+[+0026730ms] INFO  OK  159714B  prev=10.3ms  ev=0.0ms  total=10.4ms  ev_type=0
+[+0026789ms] INFO  OK  159573B  prev=8.7ms  ev=0.0ms  total=8.7ms  ev_type=0
+[+0026850ms] INFO  OK  159409B  prev=10.7ms  ev=0.0ms  total=10.7ms  ev_type=0
+[+0026911ms] INFO  OK  159402B  prev=10.8ms  ev=0.0ms  total=10.9ms  ev_type=0
+[+0026971ms] INFO  OK  159474B  prev=9.3ms  ev=0.0ms  total=9.4ms  ev_type=0
+[+0027030ms] INFO  OK  159790B  prev=8.7ms  ev=0.0ms  total=8.7ms  ev_type=0
+[+0027088ms] INFO  OK  159402B  prev=7.8ms  ev=0.0ms  total=7.8ms  ev_type=0
+[+0027145ms] INFO  OK  159610B  prev=6.7ms  ev=0.0ms  total=6.7ms  ev_type=0
+[+0027204ms] INFO  OK  159542B  prev=9.0ms  ev=0.0ms  total=9.0ms  ev_type=0
+[+0027264ms] INFO  OK  159370B  prev=9.7ms  ev=0.0ms  total=9.8ms  ev_type=0
+[+0027337ms] INFO  OK  159455B  prev=22.6ms  ev=0.0ms  total=22.6ms  ev_type=0
+[+0027404ms] INFO  OK  159616B  prev=16.7ms  ev=0.0ms  total=16.7ms  ev_type=0
+[+0027463ms] INFO  OK  159308B  prev=8.2ms  ev=0.0ms  total=8.3ms  ev_type=0
+[+0027522ms] INFO  OK  159716B  prev=9.1ms  ev=0.0ms  total=9.1ms  ev_type=0
+[+0027579ms] INFO  OK  159496B  prev=6.5ms  ev=0.0ms  total=6.5ms  ev_type=0
+[+0027644ms] INFO  OK  159229B  prev=15.2ms  ev=0.0ms  total=15.2ms  ev_type=0
+[+0027705ms] INFO  OK  159582B  prev=11.2ms  ev=0.0ms  total=11.2ms  ev_type=0
+[+0027763ms] INFO  OK  159710B  prev=7.4ms  ev=0.0ms  total=7.4ms  ev_type=0
+[+0027822ms] INFO  OK  159497B  prev=8.9ms  ev=0.0ms  total=8.9ms  ev_type=0
+[+0027884ms] INFO  OK  159610B  prev=11.8ms  ev=0.0ms  total=11.8ms  ev_type=0
+[+0027944ms] INFO  OK  159689B  prev=9.0ms  ev=0.0ms  total=9.0ms  ev_type=0
+[+0028005ms] INFO  OK  159361B  prev=11.3ms  ev=0.1ms  total=11.4ms  ev_type=0
+[+0028065ms] INFO  OK  159240B  prev=9.4ms  ev=0.0ms  total=9.4ms  ev_type=0
+[+0028131ms] INFO  OK  159866B  prev=15.6ms  ev=0.1ms  total=15.6ms  ev_type=0
+[+0028190ms] INFO  OK  159264B  prev=8.3ms  ev=0.0ms  total=8.4ms  ev_type=0
+[+0028247ms] INFO  OK  159606B  prev=7.0ms  ev=0.0ms  total=7.0ms  ev_type=0
+[+0028306ms] INFO  OK  159421B  prev=8.7ms  ev=0.0ms  total=8.7ms  ev_type=0
+[+0028368ms] INFO  OK  159596B  prev=12.0ms  ev=0.0ms  total=12.0ms  ev_type=0
+[+0028429ms] INFO  OK  159373B  prev=10.7ms  ev=0.0ms  total=10.7ms  ev_type=0
+[+0028486ms] INFO  OK  159549B  prev=6.8ms  ev=0.0ms  total=6.8ms  ev_type=0
+[+0028544ms] INFO  OK  159671B  prev=7.9ms  ev=0.0ms  total=7.9ms  ev_type=0
+[+0028611ms] INFO  OK  159329B  prev=16.6ms  ev=0.0ms  total=16.7ms  ev_type=0
+[+0028672ms] INFO  OK  159477B  prev=10.4ms  ev=0.0ms  total=10.4ms  ev_type=0
+[+0028732ms] INFO  OK  159420B  prev=10.2ms  ev=0.0ms  total=10.2ms  ev_type=0
+[+0028790ms] INFO  OK  159709B  prev=7.8ms  ev=0.0ms  total=7.8ms  ev_type=0
+[+0028850ms] INFO  OK  159359B  prev=9.1ms  ev=0.3ms  total=9.4ms  ev_type=0
+[+0028907ms] INFO  OK  159231B  prev=7.4ms  ev=0.0ms  total=7.4ms  ev_type=0
+[+0028968ms] INFO  OK  159503B  prev=10.6ms  ev=0.0ms  total=10.6ms  ev_type=0
+[+0029025ms] INFO  OK  159713B  prev=6.4ms  ev=0.0ms  total=6.4ms  ev_type=0
+[+0029086ms] INFO  OK  159469B  prev=10.5ms  ev=0.0ms  total=10.5ms  ev_type=0
+[+0029144ms] INFO  OK  159640B  prev=8.4ms  ev=0.0ms  total=8.4ms  ev_type=0
+[+0029206ms] INFO  OK  159408B  prev=11.4ms  ev=0.0ms  total=11.4ms  ev_type=0
+[+0029266ms] INFO  OK  159581B  prev=9.7ms  ev=0.0ms  total=9.7ms  ev_type=0
+[+0029331ms] INFO  OK  159355B  prev=15.1ms  ev=0.0ms  total=15.2ms  ev_type=0
+[+0029390ms] INFO  OK  159405B  prev=8.6ms  ev=0.1ms  total=8.7ms  ev_type=0
+[+0029447ms] INFO  OK  159294B  prev=6.2ms  ev=0.0ms  total=6.3ms  ev_type=0
+[+0029507ms] INFO  OK  159402B  prev=9.7ms  ev=0.1ms  total=9.8ms  ev_type=0
+[+0029566ms] INFO  OK  159516B  prev=8.8ms  ev=0.0ms  total=8.8ms  ev_type=0
+[+0029624ms] INFO  OK  159546B  prev=7.5ms  ev=0.1ms  total=7.5ms  ev_type=0
+[+0029681ms] INFO  OK  159654B  prev=7.4ms  ev=0.0ms  total=7.4ms  ev_type=0
+[+0029740ms] INFO  OK  159519B  prev=8.9ms  ev=0.0ms  total=9.0ms  ev_type=0
+[+0029807ms] INFO  OK  159552B  prev=15.8ms  ev=0.1ms  total=15.9ms  ev_type=0
+[+0029865ms] INFO  OK  159638B  prev=8.3ms  ev=0.0ms  total=8.4ms  ev_type=0
+[+0029924ms] INFO  OK  159403B  prev=8.9ms  ev=0.0ms  total=8.9ms  ev_type=0
+[+0029981ms] INFO  OK  159202B  prev=6.3ms  ev=0.0ms  total=6.3ms  ev_type=0
+[+0030043ms] INFO  OK  159763B  prev=11.8ms  ev=0.1ms  total=11.9ms  ev_type=0
+[+0030107ms] INFO  OK  159337B  prev=13.8ms  ev=0.0ms  total=13.8ms  ev_type=0
+[+0030165ms] INFO  OK  159500B  prev=7.6ms  ev=0.0ms  total=7.7ms  ev_type=0
+[+0030224ms] INFO  OK  159624B  prev=9.0ms  ev=0.0ms  total=9.0ms  ev_type=0
+[+0030287ms] INFO  OK  159248B  prev=11.8ms  ev=0.0ms  total=11.8ms  ev_type=0
+[+0030346ms] INFO  OK  159533B  prev=8.9ms  ev=0.0ms  total=8.9ms  ev_type=0
+[+0030406ms] INFO  OK  159435B  prev=10.3ms  ev=0.0ms  total=10.4ms  ev_type=0
+[+0030467ms] INFO  OK  159333B  prev=10.6ms  ev=0.0ms  total=10.6ms  ev_type=0
+[+0030526ms] INFO  OK  159538B  prev=8.7ms  ev=0.0ms  total=8.7ms  ev_type=0
+[+0030587ms] INFO  OK  159370B  prev=10.5ms  ev=0.0ms  total=10.6ms  ev_type=0
+[+0030646ms] INFO  OK  159531B  prev=9.4ms  ev=0.0ms  total=9.4ms  ev_type=0
+[+0030708ms] INFO  OK  159220B  prev=11.4ms  ev=0.0ms  total=11.4ms  ev_type=0
+[+0030767ms] INFO  OK  159356B  prev=9.3ms  ev=0.1ms  total=9.4ms  ev_type=0
+[+0030825ms] INFO  OK  159575B  prev=7.0ms  ev=0.0ms  total=7.1ms  ev_type=0
+[+0030883ms] INFO  OK  159292B  prev=7.6ms  ev=0.0ms  total=7.6ms  ev_type=0
+[+0030941ms] INFO  OK  159514B  prev=8.4ms  ev=0.0ms  total=8.4ms  ev_type=0
+[+0031009ms] INFO  OK  159631B  prev=17.3ms  ev=0.0ms  total=17.3ms  ev_type=0
+[+0031070ms] INFO  OK  159263B  prev=11.1ms  ev=0.1ms  total=11.2ms  ev_type=0
+[+0031127ms] INFO  OK  159752B  prev=6.2ms  ev=0.0ms  total=6.3ms  ev_type=0
+[+0031187ms] INFO  OK  159226B  prev=9.6ms  ev=0.0ms  total=9.6ms  ev_type=0
+[+0031247ms] INFO  OK  159725B  prev=9.7ms  ev=0.0ms  total=9.7ms  ev_type=0
+[+0031309ms] INFO  OK  159447B  prev=11.4ms  ev=0.0ms  total=11.4ms  ev_type=0
+[+0031366ms] INFO  OK  159250B  prev=7.7ms  ev=0.0ms  total=7.7ms  ev_type=0
+[+0031425ms] INFO  OK  159362B  prev=8.6ms  ev=0.0ms  total=8.6ms  ev_type=0
+[+0031488ms] INFO  OK  159870B  prev=11.8ms  ev=0.0ms  total=11.8ms  ev_type=0
+[+0031547ms] INFO  OK  159502B  prev=8.8ms  ev=0.0ms  total=8.9ms  ev_type=0
+[+0031605ms] INFO  OK  159628B  prev=8.0ms  ev=0.0ms  total=8.1ms  ev_type=0
+[+0031668ms] INFO  OK  159491B  prev=12.3ms  ev=0.0ms  total=12.4ms  ev_type=0
+[+0031727ms] INFO  OK  159175B  prev=8.7ms  ev=0.0ms  total=8.8ms  ev_type=0
+[+0031784ms] INFO  OK  159744B  prev=7.2ms  ev=0.0ms  total=7.2ms  ev_type=0
+[+0031842ms] INFO  OK  159464B  prev=7.9ms  ev=0.1ms  total=8.0ms  ev_type=0
+[+0031902ms] INFO  OK  159579B  prev=9.1ms  ev=0.0ms  total=9.1ms  ev_type=0
+[+0031968ms] INFO  OK  159347B  prev=15.7ms  ev=0.0ms  total=15.8ms  ev_type=0
+[+0032026ms] INFO  OK  159387B  prev=7.5ms  ev=0.0ms  total=7.5ms  ev_type=0
+[+0032083ms] INFO  OK  159556B  prev=6.9ms  ev=0.0ms  total=6.9ms  ev_type=0
+[+0032142ms] INFO  OK  159395B  prev=8.9ms  ev=0.0ms  total=8.9ms  ev_type=0
+[+0032210ms] INFO  OK  159292B  prev=17.4ms  ev=0.0ms  total=17.5ms  ev_type=0
+[+0032271ms] INFO  OK  159458B  prev=11.1ms  ev=0.0ms  total=11.1ms  ev_type=0
+[+0032328ms] INFO  OK  159642B  prev=6.5ms  ev=0.0ms  total=6.5ms  ev_type=0
+[+0032387ms] INFO  OK  159296B  prev=8.9ms  ev=0.0ms  total=8.9ms  ev_type=0
+[+0032447ms] INFO  OK  159373B  prev=9.9ms  ev=0.0ms  total=10.0ms  ev_type=0
+[+0032510ms] INFO  OK  159602B  prev=11.9ms  ev=0.0ms  total=11.9ms  ev_type=0
+[+0032567ms] INFO  OK  159566B  prev=7.7ms  ev=0.0ms  total=7.7ms  ev_type=0
+[+0032627ms] INFO  OK  159618B  prev=9.1ms  ev=0.0ms  total=9.1ms  ev_type=0
+[+0032689ms] INFO  OK  159359B  prev=12.1ms  ev=0.0ms  total=12.1ms  ev_type=0
+[+0032749ms] INFO  OK  159226B  prev=9.6ms  ev=0.0ms  total=9.6ms  ev_type=0
+[+0032809ms] INFO  OK  159744B  prev=9.4ms  ev=0.0ms  total=9.4ms  ev_type=0
+[+0032870ms] INFO  OK  159448B  prev=10.8ms  ev=0.0ms  total=10.8ms  ev_type=0
+[+0032927ms] INFO  OK  159505B  prev=7.5ms  ev=0.0ms  total=7.5ms  ev_type=0
+[+0032985ms] INFO  OK  159266B  prev=7.3ms  ev=0.0ms  total=7.3ms  ev_type=0
+[+0033044ms] INFO  OK  159502B  prev=9.1ms  ev=0.0ms  total=9.1ms  ev_type=0
+[+0033110ms] INFO  OK  159375B  prev=15.4ms  ev=0.0ms  total=15.4ms  ev_type=0
+[+0033169ms] INFO  OK  159595B  prev=9.0ms  ev=0.1ms  total=9.1ms  ev_type=0
+[+0033227ms] INFO  OK  159610B  prev=7.4ms  ev=0.0ms  total=7.4ms  ev_type=0
+[+0033284ms] INFO  OK  159663B  prev=6.1ms  ev=0.0ms  total=6.1ms  ev_type=0
+[+0033343ms] INFO  OK  159667B  prev=8.9ms  ev=0.0ms  total=8.9ms  ev_type=0
+[+0033411ms] INFO  OK  159306B  prev=17.7ms  ev=0.0ms  total=17.7ms  ev_type=0
+[+0033468ms] INFO  OK  159604B  prev=7.4ms  ev=0.0ms  total=7.4ms  ev_type=0
+[+0033527ms] INFO  OK  159392B  prev=8.2ms  ev=0.0ms  total=8.2ms  ev_type=0
+[+0033584ms] INFO  OK  159703B  prev=6.9ms  ev=0.0ms  total=6.9ms  ev_type=0
+[+0033644ms] INFO  OK  159479B  prev=10.1ms  ev=0.0ms  total=10.2ms  ev_type=0
+[+0033704ms] INFO  OK  159409B  prev=9.2ms  ev=0.0ms  total=9.3ms  ev_type=0
+[+0033762ms] INFO  OK  159552B  prev=8.0ms  ev=0.0ms  total=8.0ms  ev_type=0
+[+0033820ms] INFO  OK  159643B  prev=8.3ms  ev=0.0ms  total=8.3ms  ev_type=0
+[+0033883ms] INFO  OK  159611B  prev=12.4ms  ev=0.0ms  total=12.4ms  ev_type=0
+[+0033944ms] INFO  OK  159500B  prev=10.7ms  ev=0.0ms  total=10.8ms  ev_type=0
+[+0034003ms] INFO  OK  159981B  prev=8.4ms  ev=0.0ms  total=8.4ms  ev_type=0
+[+0034061ms] INFO  OK  159521B  prev=8.0ms  ev=0.0ms  total=8.1ms  ev_type=0
+[+0034124ms] INFO  OK  159822B  prev=13.0ms  ev=0.0ms  total=13.0ms  ev_type=0
+[+0034182ms] INFO  OK  159498B  prev=7.8ms  ev=0.0ms  total=7.8ms  ev_type=0
+[+0034244ms] INFO  OK  159346B  prev=11.7ms  ev=0.0ms  total=11.7ms  ev_type=0
+[+0034304ms] INFO  OK  159117B  prev=9.7ms  ev=0.1ms  total=9.7ms  ev_type=0
+[+0034371ms] INFO  OK  159483B  prev=15.7ms  ev=0.0ms  total=15.7ms  ev_type=0
+[+0034428ms] INFO  OK  159511B  prev=7.4ms  ev=0.0ms  total=7.4ms  ev_type=0
+[+0034484ms] INFO  OK  159040B  prev=6.0ms  ev=0.0ms  total=6.0ms  ev_type=0
+[+0034544ms] INFO  OK  159310B  prev=9.1ms  ev=0.0ms  total=9.1ms  ev_type=0
+[+0034611ms] INFO  OK  159606B  prev=17.3ms  ev=0.0ms  total=17.3ms  ev_type=0
+[+0034669ms] INFO  OK  159091B  prev=7.7ms  ev=0.0ms  total=7.7ms  ev_type=0
+[+0034728ms] INFO  OK  159889B  prev=8.5ms  ev=0.0ms  total=8.5ms  ev_type=0
+[+0034785ms] INFO  OK  159463B  prev=7.1ms  ev=0.0ms  total=7.1ms  ev_type=0
+[+0034846ms] INFO  OK  159520B  prev=10.2ms  ev=0.0ms  total=10.3ms  ev_type=0
+[+0034912ms] INFO  OK  159566B  prev=15.8ms  ev=0.0ms  total=15.8ms  ev_type=0
+[+0034970ms] INFO  OK  159493B  prev=8.1ms  ev=0.1ms  total=8.1ms  ev_type=0
+[+0035029ms] INFO  OK  159169B  prev=7.8ms  ev=0.0ms  total=7.8ms  ev_type=0
+[+0035091ms] INFO  OK  159324B  prev=11.6ms  ev=0.0ms  total=11.6ms  ev_type=0
+[+0035150ms] INFO  OK  159326B  prev=9.0ms  ev=0.0ms  total=9.0ms  ev_type=0
+[+0035211ms] INFO  OK  159596B  prev=10.3ms  ev=0.0ms  total=10.4ms  ev_type=0
+[+0035271ms] INFO  OK  159421B  prev=10.7ms  ev=0.0ms  total=10.7ms  ev_type=0
+[+0035331ms] INFO  OK  159646B  prev=9.4ms  ev=0.0ms  total=9.5ms  ev_type=0
+[+0035388ms] INFO  OK  159569B  prev=7.1ms  ev=0.0ms  total=7.1ms  ev_type=0
+[+0035446ms] INFO  OK  159496B  prev=7.0ms  ev=0.0ms  total=7.0ms  ev_type=0
+[+0035505ms] INFO  OK  159470B  prev=9.4ms  ev=0.0ms  total=9.4ms  ev_type=0
+[+0035570ms] INFO  OK  159286B  prev=14.7ms  ev=0.0ms  total=14.7ms  ev_type=0
+[+0035629ms] INFO  OK  159341B  prev=8.6ms  ev=0.0ms  total=8.7ms  ev_type=0
+[+0035686ms] INFO  OK  159617B  prev=6.9ms  ev=0.0ms  total=6.9ms  ev_type=0
+[+0035746ms] INFO  OK  159324B  prev=9.1ms  ev=0.0ms  total=9.1ms  ev_type=0
+[+0035806ms] INFO  OK  159716B  prev=10.5ms  ev=0.0ms  total=10.6ms  ev_type=0
+[+0035863ms] INFO  OK  159312B  prev=6.6ms  ev=0.0ms  total=6.6ms  ev_type=0
+[+0035920ms] INFO  OK  159678B  prev=5.9ms  ev=0.0ms  total=6.0ms  ev_type=0
+[+0035979ms] INFO  OK  159313B  prev=9.4ms  ev=0.0ms  total=9.4ms  ev_type=0
+[+0036041ms] INFO  OK  159420B  prev=11.7ms  ev=0.0ms  total=11.8ms  ev_type=0
+[+0036098ms] INFO  OK  159654B  prev=6.2ms  ev=0.0ms  total=6.3ms  ev_type=0
+[+0036156ms] INFO  OK  159830B  prev=7.8ms  ev=0.0ms  total=7.8ms  ev_type=0
+[+0036213ms] INFO  OK  159380B  prev=6.9ms  ev=0.0ms  total=6.9ms  ev_type=0
+[+0036271ms] INFO  OK  159691B  prev=8.0ms  ev=0.1ms  total=8.1ms  ev_type=0
+[+0036331ms] INFO  OK  159587B  prev=9.3ms  ev=0.0ms  total=9.4ms  ev_type=0
+[+0036392ms] INFO  OK  159687B  prev=10.5ms  ev=0.0ms  total=10.5ms  ev_type=0
+[+0036451ms] INFO  OK  159347B  prev=9.3ms  ev=0.0ms  total=9.3ms  ev_type=0
+[+0036519ms] INFO  OK  159596B  prev=17.6ms  ev=0.0ms  total=17.7ms  ev_type=0
+[+0036578ms] INFO  OK  159420B  prev=9.0ms  ev=0.0ms  total=9.0ms  ev_type=0
+[+0036640ms] INFO  OK  159250B  prev=11.1ms  ev=0.0ms  total=11.1ms  ev_type=0
+[+0036697ms] INFO  OK  159476B  prev=7.3ms  ev=0.1ms  total=7.4ms  ev_type=0
+[+0036761ms] INFO  OK  159400B  prev=12.9ms  ev=0.0ms  total=13.0ms  ev_type=0
+[+0036818ms] INFO  OK  159469B  prev=6.9ms  ev=0.0ms  total=7.0ms  ev_type=0
+[+0036880ms] INFO  OK  159569B  prev=12.1ms  ev=0.1ms  total=12.1ms  ev_type=0
+[+0036942ms] INFO  OK  159503B  prev=11.3ms  ev=0.0ms  total=11.4ms  ev_type=0
+[+0037006ms] INFO  OK  159442B  prev=14.1ms  ev=0.0ms  total=14.2ms  ev_type=0
+[+0037065ms] INFO  OK  159437B  prev=7.8ms  ev=0.0ms  total=7.9ms  ev_type=0
+[+0037122ms] INFO  OK  159450B  prev=7.3ms  ev=0.0ms  total=7.3ms  ev_type=0
+[+0037181ms] INFO  OK  159446B  prev=8.1ms  ev=0.0ms  total=8.1ms  ev_type=0
+[+0037248ms] INFO  OK  159344B  prev=16.7ms  ev=0.1ms  total=16.8ms  ev_type=0
+[+0037319ms] INFO  OK  159271B  prev=21.3ms  ev=0.0ms  total=21.4ms  ev_type=0
+[+0037377ms] INFO  OK  159706B  prev=7.2ms  ev=0.0ms  total=7.2ms  ev_type=0
+[+0037439ms] INFO  OK  159450B  prev=11.9ms  ev=0.0ms  total=11.9ms  ev_type=0
+[+0037497ms] INFO  OK  159426B  prev=8.3ms  ev=0.0ms  total=8.3ms  ev_type=0
+[+0037560ms] INFO  OK  159549B  prev=12.3ms  ev=0.0ms  total=12.3ms  ev_type=0
+[+0037619ms] INFO  OK  159458B  prev=8.7ms  ev=0.0ms  total=8.7ms  ev_type=0
+[+0037681ms] INFO  OK  159394B  prev=12.2ms  ev=0.0ms  total=12.2ms  ev_type=0
+[+0037740ms] INFO  OK  159434B  prev=8.2ms  ev=0.2ms  total=8.4ms  ev_type=0
+[+0037807ms] INFO  OK  159264B  prev=16.9ms  ev=0.0ms  total=16.9ms  ev_type=0
+[+0037865ms] INFO  OK  159440B  prev=7.9ms  ev=0.1ms  total=8.0ms  ev_type=0
+[+0037922ms] INFO  OK  159730B  prev=6.8ms  ev=0.0ms  total=6.8ms  ev_type=0
+[+0037982ms] INFO  OK  159538B  prev=9.6ms  ev=0.0ms  total=9.6ms  ev_type=0
+[+0038048ms] INFO  OK  159529B  prev=15.6ms  ev=0.0ms  total=15.6ms  ev_type=0
+[+0038108ms] INFO  OK  159551B  prev=9.2ms  ev=0.0ms  total=9.2ms  ev_type=0
+[+0038165ms] INFO  OK  159373B  prev=7.4ms  ev=0.0ms  total=7.4ms  ev_type=0
+[+0038223ms] INFO  OK  159638B  prev=7.5ms  ev=0.0ms  total=7.5ms  ev_type=0
+[+0038286ms] INFO  OK  159619B  prev=12.9ms  ev=0.0ms  total=12.9ms  ev_type=0
+[+0038348ms] INFO  OK  159562B  prev=11.5ms  ev=0.0ms  total=11.5ms  ev_type=0
+[+0038406ms] INFO  OK  159287B  prev=8.0ms  ev=0.0ms  total=8.0ms  ev_type=0
+[+0038465ms] INFO  OK  159486B  prev=8.1ms  ev=0.0ms  total=8.1ms  ev_type=0
+[+0038528ms] INFO  OK  159353B  prev=12.8ms  ev=0.0ms  total=12.8ms  ev_type=0
+[+0038586ms] INFO  OK  159404B  prev=8.1ms  ev=0.0ms  total=8.2ms  ev_type=0
+[+0038648ms] INFO  OK  159582B  prev=11.6ms  ev=0.0ms  total=11.6ms  ev_type=0
+[+0038708ms] INFO  OK  159282B  prev=9.4ms  ev=0.0ms  total=9.5ms  ev_type=0
+[+0038777ms] INFO  OK  159380B  prev=7.5ms  ev=11.5ms  total=19.0ms  ev_type=1
+[+0038854ms] INFO  OK  159566B  prev=14.9ms  ev=11.5ms  total=26.5ms  ev_type=1
+[+0038933ms] INFO  OK  159570B  prev=17.1ms  ev=11.6ms  total=28.7ms  ev_type=1
+[+0039008ms] INFO  OK  159486B  prev=7.3ms  ev=17.1ms  total=24.4ms  ev_type=1
+[+0039078ms] INFO  OK  159444B  prev=7.9ms  ev=11.9ms  total=19.8ms  ev_type=1
+[+0039156ms] INFO  OK  159267B  prev=12.3ms  ev=16.1ms  total=28.3ms  ev_type=1
+[+0039227ms] INFO  OK  159498B  prev=8.8ms  ev=11.5ms  total=20.3ms  ev_type=1
+[+0039298ms] INFO  OK  159517B  prev=9.9ms  ev=11.2ms  total=21.2ms  ev_type=1
+[+0039366ms] INFO  OK  159704B  prev=6.7ms  ev=11.1ms  total=17.8ms  ev_type=1
+[+0039435ms] INFO  OK  159558B  prev=7.1ms  ev=11.6ms  total=18.7ms  ev_type=1
+[+0039508ms] INFO  OK  159118B  prev=9.3ms  ev=13.6ms  total=22.9ms  ev_type=1
+[+0039577ms] INFO  OK  159208B  prev=7.8ms  ev=11.3ms  total=19.1ms  ev_type=1
+[+0039654ms] INFO  OK  159688B  prev=14.7ms  ev=11.4ms  total=26.1ms  ev_type=1
+[+0039734ms] INFO  OK  159545B  prev=18.1ms  ev=11.8ms  total=29.9ms  ev_type=1
+[+0039808ms] INFO  OK  159249B  prev=7.0ms  ev=16.5ms  total=23.5ms  ev_type=1
+[+0039878ms] INFO  OK  159547B  prev=8.7ms  ev=11.5ms  total=20.2ms  ev_type=1
+[+0039956ms] INFO  OK  159502B  prev=12.5ms  ev=15.5ms  total=28.1ms  ev_type=1
+[+0040028ms] INFO  OK  159570B  prev=9.7ms  ev=12.0ms  total=21.7ms  ev_type=1
+[+0040100ms] INFO  OK  159626B  prev=9.6ms  ev=11.8ms  total=21.4ms  ev_type=1
+[+0040168ms] INFO  OK  159408B  prev=6.0ms  ev=11.2ms  total=17.2ms  ev_type=1
+[+0040241ms] INFO  OK  159477B  prev=7.2ms  ev=15.8ms  total=23.0ms  ev_type=1
+[+0040311ms] INFO  OK  159594B  prev=8.7ms  ev=11.2ms  total=19.9ms  ev_type=1
+[+0040379ms] INFO  OK  159476B  prev=6.9ms  ev=11.1ms  total=17.9ms  ev_type=1
+[+0040454ms] INFO  OK  159645B  prev=12.8ms  ev=11.5ms  total=24.3ms  ev_type=1
+[+0040533ms] INFO  OK  159415B  prev=18.4ms  ev=11.1ms  total=29.6ms  ev_type=1
+[+0040612ms] INFO  OK  159589B  prev=16.4ms  ev=11.6ms  total=28.1ms  ev_type=1
+[+0040683ms] INFO  OK  159699B  prev=6.7ms  ev=14.6ms  total=21.3ms  ev_type=1
+[+0040757ms] INFO  OK  159512B  prev=9.3ms  ev=14.4ms  total=23.7ms  ev_type=1
+[+0040829ms] INFO  OK  159644B  prev=9.1ms  ev=12.2ms  total=21.4ms  ev_type=1
+[+0040900ms] INFO  OK  159440B  prev=9.3ms  ev=11.3ms  total=20.6ms  ev_type=1
+[+0040974ms] INFO  OK  159605B  prev=8.6ms  ev=15.3ms  total=23.9ms  ev_type=1
+[+0041043ms] INFO  OK  159333B  prev=7.3ms  ev=10.9ms  total=18.2ms  ev_type=1
+[+0041116ms] INFO  OK  159520B  prev=8.8ms  ev=14.5ms  total=23.3ms  ev_type=1
+[+0041191ms] INFO  OK  159554B  prev=10.3ms  ev=14.5ms  total=24.8ms  ev_type=1
+[+0041262ms] INFO  OK  159578B  prev=9.1ms  ev=11.7ms  total=20.8ms  ev_type=1
+[+0041342ms] INFO  OK  159211B  prev=18.7ms  ev=11.2ms  total=29.9ms  ev_type=1
+[+0041421ms] INFO  OK  159631B  prev=17.7ms  ev=11.2ms  total=28.9ms  ev_type=1
+[+0041500ms] INFO  OK  159492B  prev=17.7ms  ev=11.1ms  total=28.8ms  ev_type=1
+[+0041576ms] INFO  OK  159426B  prev=12.9ms  ev=12.2ms  total=25.2ms  ev_type=1
+[+0041653ms] INFO  OK  159788B  prev=15.7ms  ev=11.5ms  total=27.2ms  ev_type=1
+[+0041735ms] INFO  OK  159559B  prev=19.6ms  ev=11.8ms  total=31.4ms  ev_type=1
+[+0041811ms] INFO  OK  159378B  prev=13.5ms  ev=12.1ms  total=25.7ms  ev_type=1
+[+0041880ms] INFO  OK  159342B  prev=8.1ms  ev=11.1ms  total=19.2ms  ev_type=1
+[+0041958ms] INFO  OK  159400B  prev=12.5ms  ev=14.9ms  total=27.4ms  ev_type=1
+[+0042030ms] INFO  OK  159539B  prev=8.9ms  ev=13.2ms  total=22.1ms  ev_type=1
+[+0042101ms] INFO  OK  159557B  prev=9.3ms  ev=11.3ms  total=20.6ms  ev_type=1
+[+0042175ms] INFO  OK  159690B  prev=8.8ms  ev=15.1ms  total=23.9ms  ev_type=1
+[+0042243ms] INFO  OK  159693B  prev=5.9ms  ev=11.6ms  total=17.5ms  ev_type=1
+[+0042313ms] INFO  OK  159659B  prev=8.6ms  ev=11.2ms  total=19.8ms  ev_type=1
+[+0042384ms] INFO  OK  159521B  prev=6.5ms  ev=14.4ms  total=20.9ms  ev_type=1
+[+0042459ms] INFO  OK  159483B  prev=12.8ms  ev=11.5ms  total=24.3ms  ev_type=1
+[+0042533ms] INFO  OK  159724B  prev=12.7ms  ev=11.1ms  total=23.8ms  ev_type=1
+[+0042601ms] INFO  OK  159341B  prev=6.9ms  ev=11.2ms  total=18.1ms  ev_type=1
+[+0042670ms] INFO  OK  159644B  prev=7.2ms  ev=11.1ms  total=18.3ms  ev_type=1
+[+0042744ms] INFO  OK  159359B  prev=7.0ms  ev=17.1ms  total=24.0ms  ev_type=1
+[+0042815ms] INFO  OK  159344B  prev=8.6ms  ev=11.8ms  total=20.4ms  ev_type=1
+[+0042890ms] INFO  OK  159642B  prev=13.3ms  ev=11.5ms  total=24.8ms  ev_type=1
+[+0042965ms] INFO  OK  159647B  prev=13.8ms  ev=11.5ms  total=25.3ms  ev_type=1
+[+0043035ms] INFO  OK  159288B  prev=8.4ms  ev=11.1ms  total=19.4ms  ev_type=1
+[+0043103ms] INFO  OK  159404B  prev=6.6ms  ev=11.4ms  total=18.1ms  ev_type=1
+[+0043177ms] INFO  OK  159302B  prev=11.2ms  ev=12.2ms  total=23.5ms  ev_type=1
+[+0043248ms] INFO  OK  159346B  prev=9.4ms  ev=11.4ms  total=20.8ms  ev_type=1
+[+0043321ms] INFO  OK  159629B  prev=6.7ms  ev=15.8ms  total=22.4ms  ev_type=1
+[+0043399ms] INFO  OK  159424B  prev=10.2ms  ev=17.5ms  total=27.7ms  ev_type=1
+[+0043480ms] INFO  OK  159739B  prev=10.0ms  ev=21.5ms  total=31.5ms  ev_type=1
+[+0043548ms] INFO  OK  159389B  prev=6.3ms  ev=11.3ms  total=17.6ms  ev_type=1
+[+0043618ms] INFO  OK  159444B  prev=6.2ms  ev=13.8ms  total=20.0ms  ev_type=1
+[+0043691ms] INFO  OK  159445B  prev=10.7ms  ev=12.0ms  total=22.7ms  ev_type=1
+[+0043765ms] INFO  OK  159571B  prev=11.1ms  ev=12.1ms  total=23.2ms  ev_type=1
+[+0043837ms] INFO  OK  159114B  prev=10.0ms  ev=11.6ms  total=21.6ms  ev_type=1
+[+0043905ms] INFO  OK  159359B  prev=6.7ms  ev=11.6ms  total=18.3ms  ev_type=1
+[+0043978ms] INFO  OK  159557B  prev=10.6ms  ev=11.7ms  total=22.3ms  ev_type=1
+[+0044059ms] INFO  OK  159638B  prev=18.5ms  ev=12.4ms  total=30.8ms  ev_type=1
+[+0044136ms] INFO  OK  159468B  prev=15.7ms  ev=11.1ms  total=26.8ms  ev_type=1
+[+0044212ms] INFO  OK  159508B  prev=12.5ms  ev=13.3ms  total=25.8ms  ev_type=1
+[+0044281ms] INFO  OK  159764B  prev=7.6ms  ev=11.2ms  total=18.8ms  ev_type=1
+[+0044358ms] INFO  OK  159502B  prev=6.7ms  ev=20.4ms  total=27.1ms  ev_type=1
+[+0044428ms] INFO  OK  159244B  prev=7.7ms  ev=11.6ms  total=19.3ms  ev_type=1
+[+0044500ms] INFO  OK  159634B  prev=8.9ms  ev=12.6ms  total=21.5ms  ev_type=1
+[+0044572ms] INFO  OK  159690B  prev=10.9ms  ev=11.1ms  total=22.0ms  ev_type=1
+[+0044645ms] INFO  OK  159544B  prev=6.9ms  ev=15.9ms  total=22.8ms  ev_type=1
+[+0044716ms] INFO  OK  159118B  prev=9.3ms  ev=11.1ms  total=20.4ms  ev_type=1
+[+0044786ms] INFO  OK  159608B  prev=6.1ms  ev=14.6ms  total=20.6ms  ev_type=1
+[+0044858ms] INFO  OK  159598B  prev=9.2ms  ev=11.8ms  total=21.1ms  ev_type=1
+[+0044937ms] INFO  OK  159575B  prev=18.4ms  ev=10.9ms  total=29.2ms  ev_type=1
+[+0045013ms] INFO  OK  159655B  prev=12.2ms  ev=13.2ms  total=25.5ms  ev_type=1
+[+0045083ms] INFO  OK  159333B  prev=8.3ms  ev=11.3ms  total=19.6ms  ev_type=1
+[+0045159ms] INFO  OK  159372B  prev=5.9ms  ev=20.4ms  total=26.3ms  ev_type=1
+[+0045228ms] INFO  OK  159512B  prev=7.2ms  ev=10.7ms  total=17.9ms  ev_type=1
+[+0045300ms] INFO  OK  159198B  prev=9.6ms  ev=12.4ms  total=21.9ms  ev_type=1
+[+0045371ms] INFO  OK  159396B  prev=10.3ms  ev=11.1ms  total=21.4ms  ev_type=1
+[+0045439ms] INFO  OK  159541B  prev=6.2ms  ev=11.1ms  total=17.3ms  ev_type=1
+[+0045507ms] INFO  OK  159345B  prev=6.9ms  ev=11.1ms  total=18.0ms  ev_type=1
+[+0045579ms] INFO  OK  159817B  prev=10.1ms  ev=11.7ms  total=21.8ms  ev_type=1
+[+0045658ms] INFO  OK  159295B  prev=16.8ms  ev=11.6ms  total=28.4ms  ev_type=1
+[+0045738ms] INFO  OK  159516B  prev=19.1ms  ev=11.2ms  total=30.3ms  ev_type=1
+[+0045814ms] INFO  OK  159555B  prev=9.4ms  ev=15.7ms  total=25.1ms  ev_type=1
+[+0045893ms] INFO  OK  159214B  prev=16.5ms  ev=11.8ms  total=28.3ms  ev_type=1
+[+0045972ms] INFO  OK  159431B  prev=18.1ms  ev=11.4ms  total=29.6ms  ev_type=1
+[+0046046ms] INFO  OK  159743B  prev=7.6ms  ev=15.6ms  total=23.2ms  ev_type=1
+[+0046121ms] INFO  OK  159702B  prev=9.3ms  ev=15.4ms  total=24.8ms  ev_type=1
+[+0046196ms] INFO  OK  159285B  prev=9.0ms  ev=15.5ms  total=24.5ms  ev_type=1
+[+0046267ms] INFO  OK  159187B  prev=9.2ms  ev=11.7ms  total=20.9ms  ev_type=1
+[+0046338ms] INFO  OK  159280B  prev=9.6ms  ev=11.1ms  total=20.7ms  ev_type=1
+[+0046406ms] INFO  OK  159614B  prev=7.0ms  ev=11.1ms  total=18.1ms  ev_type=1
+[+0046473ms] INFO  OK  159326B  prev=6.1ms  ev=11.1ms  total=17.2ms  ev_type=1
+[+0046541ms] INFO  OK  159509B  prev=6.6ms  ev=11.4ms  total=17.9ms  ev_type=1
+[+0046614ms] INFO  OK  159698B  prev=10.3ms  ev=12.4ms  total=22.7ms  ev_type=1
+[+0046693ms] INFO  OK  159280B  prev=17.3ms  ev=11.6ms  total=28.9ms  ev_type=1
+[+0046774ms] INFO  OK  159705B  prev=18.4ms  ev=11.8ms  total=30.2ms  ev_type=1
+[+0046850ms] INFO  OK  159688B  prev=14.2ms  ev=11.3ms  total=25.5ms  ev_type=1
+[+0046922ms] INFO  OK  159393B  prev=6.9ms  ev=14.7ms  total=21.6ms  ev_type=1
+[+0046996ms] INFO  OK  159498B  prev=8.5ms  ev=15.9ms  total=24.3ms  ev_type=1
+[+0047068ms] INFO  OK  159614B  prev=9.6ms  ev=11.6ms  total=21.2ms  ev_type=1
+[+0047139ms] INFO  OK  159374B  prev=9.7ms  ev=11.6ms  total=21.3ms  ev_type=1
+[+0047207ms] INFO  OK  159523B  prev=6.4ms  ev=11.1ms  total=17.5ms  ev_type=1
+[+0047275ms] INFO  OK  159437B  prev=6.9ms  ev=11.0ms  total=17.9ms  ev_type=1
+[+0047348ms] INFO  OK  159418B  prev=10.7ms  ev=11.4ms  total=22.0ms  ev_type=1
+[+0047418ms] INFO  OK  159409B  prev=8.7ms  ev=11.1ms  total=19.8ms  ev_type=1
+[+0047493ms] INFO  OK  159275B  prev=13.5ms  ev=12.2ms  total=25.7ms  ev_type=1
+[+0047573ms] INFO  OK  159672B  prev=18.3ms  ev=11.2ms  total=29.5ms  ev_type=1
+[+0047642ms] INFO  OK  159723B  prev=7.4ms  ev=11.7ms  total=19.2ms  ev_type=1
+[+0047723ms] INFO  OK  159502B  prev=9.6ms  ev=20.5ms  total=30.1ms  ev_type=1
+[+0047797ms] INFO  OK  159646B  prev=8.4ms  ev=15.4ms  total=23.8ms  ev_type=1
+[+0047868ms] INFO  OK  159529B  prev=9.5ms  ev=11.6ms  total=21.0ms  ev_type=1
+[+0047940ms] INFO  OK  159513B  prev=9.8ms  ev=11.3ms  total=21.2ms  ev_type=1
+[+0048013ms] INFO  OK  159391B  prev=8.2ms  ev=14.7ms  total=23.0ms  ev_type=1
+[+0048082ms] INFO  OK  159228B  prev=7.0ms  ev=12.1ms  total=19.1ms  ev_type=1
+[+0048153ms] INFO  OK  159172B  prev=7.9ms  ev=12.5ms  total=20.4ms  ev_type=1
+[+0048228ms] INFO  OK  159553B  prev=11.9ms  ev=12.3ms  total=24.2ms  ev_type=1
+[+0048302ms] INFO  OK  159466B  prev=11.8ms  ev=12.2ms  total=24.0ms  ev_type=1
+[+0048382ms] INFO  OK  159288B  prev=16.7ms  ev=13.1ms  total=29.8ms  ev_type=1
+[+0048460ms] INFO  OK  159384B  prev=16.1ms  ev=12.1ms  total=28.2ms  ev_type=1
+[+0048540ms] INFO  OK  159738B  prev=18.8ms  ev=11.1ms  total=29.9ms  ev_type=1
+[+0048616ms] INFO  OK  159599B  prev=13.3ms  ev=12.4ms  total=25.7ms  ev_type=1
+[+0048694ms] INFO  OK  159415B  prev=15.3ms  ev=12.4ms  total=27.7ms  ev_type=1
+[+0048774ms] INFO  OK  159547B  prev=17.5ms  ev=11.8ms  total=29.3ms  ev_type=1
+[+0048850ms] INFO  OK  159405B  prev=14.5ms  ev=11.7ms  total=26.3ms  ev_type=1
+[+0048924ms] INFO  OK  159794B  prev=8.0ms  ev=15.1ms  total=23.1ms  ev_type=1
+[+0048997ms] INFO  OK  159314B  prev=8.5ms  ev=14.8ms  total=23.3ms  ev_type=1
+[+0049069ms] INFO  OK  159548B  prev=10.1ms  ev=11.8ms  total=21.9ms  ev_type=1
+[+0049140ms] INFO  OK  159500B  prev=9.8ms  ev=11.1ms  total=20.8ms  ev_type=1
+[+0049210ms] INFO  OK  159594B  prev=8.3ms  ev=11.3ms  total=19.7ms  ev_type=1
+[+0049283ms] INFO  OK  159395B  prev=7.1ms  ev=15.7ms  total=22.8ms  ev_type=1
+[+0049357ms] INFO  OK  159606B  prev=9.0ms  ev=14.2ms  total=23.3ms  ev_type=1
+[+0049429ms] INFO  OK  159833B  prev=10.4ms  ev=11.2ms  total=21.7ms  ev_type=1
+[+0049503ms] INFO  OK  159430B  prev=11.7ms  ev=12.2ms  total=23.9ms  ev_type=1
+[+0049577ms] INFO  OK  159568B  prev=12.5ms  ev=11.1ms  total=23.5ms  ev_type=1
+[+0049651ms] INFO  OK  159420B  prev=12.6ms  ev=11.2ms  total=23.8ms  ev_type=1
+[+0049725ms] INFO  OK  159331B  prev=8.3ms  ev=15.6ms  total=23.9ms  ev_type=1
+[+0049797ms] INFO  OK  159334B  prev=7.9ms  ev=14.5ms  total=22.4ms  ev_type=1
+[+0049870ms] INFO  OK  159354B  prev=10.6ms  ev=11.9ms  total=22.5ms  ev_type=1
+[+0049941ms] INFO  OK  159420B  prev=9.6ms  ev=11.1ms  total=20.7ms  ev_type=1
+[+0050014ms] INFO  OK  159493B  prev=8.9ms  ev=14.4ms  total=23.3ms  ev_type=1
+[+0050085ms] INFO  OK  159367B  prev=7.5ms  ev=12.3ms  total=19.8ms  ev_type=1
+[+0050154ms] INFO  OK  159783B  prev=7.3ms  ev=11.2ms  total=18.6ms  ev_type=1
+[+0050221ms] INFO  OK  159448B  prev=6.1ms  ev=11.4ms  total=17.5ms  ev_type=1
+[+0050296ms] INFO  OK  159450B  prev=12.4ms  ev=12.2ms  total=24.6ms  ev_type=1
+[+0050375ms] INFO  OK  159616B  prev=18.0ms  ev=11.1ms  total=29.1ms  ev_type=1
+[+0050450ms] INFO  OK  159207B  prev=13.5ms  ev=11.2ms  total=24.7ms  ev_type=1
+[+0050522ms] INFO  OK  159496B  prev=8.9ms  ev=12.5ms  total=21.4ms  ev_type=1
+[+0050600ms] INFO  OK  159427B  prev=6.3ms  ev=21.5ms  total=27.8ms  ev_type=1
+[+0050676ms] INFO  OK  159156B  prev=9.2ms  ev=17.0ms  total=26.2ms  ev_type=1
+[+0050744ms] INFO  OK  159260B  prev=6.6ms  ev=11.3ms  total=17.8ms  ev_type=1
+[+0050817ms] INFO  OK  159578B  prev=9.3ms  ev=13.0ms  total=22.3ms  ev_type=1
+[+0050892ms] INFO  OK  159591B  prev=10.1ms  ev=14.7ms  total=24.8ms  ev_type=1
+[+0050972ms] INFO  OK  159639B  prev=15.8ms  ev=13.9ms  total=29.8ms  ev_type=1
+[+0051044ms] INFO  OK  159517B  prev=9.3ms  ev=12.2ms  total=21.5ms  ev_type=1
+[+0051119ms] INFO  OK  159314B  prev=8.4ms  ev=15.8ms  total=24.2ms  ev_type=1
+[+0051188ms] INFO  OK  159252B  prev=7.9ms  ev=11.5ms  total=19.4ms  ev_type=1
+[+0051238ms] INFO  Wyniki S05:  frames_ok=462  frames_fail=0  fps=15.38
+[+0051239ms] TIME    frame avg: 14.8ms
+[+0051239ms] TIME    frame max: 31.5ms
+[+0051239ms] INFO  safe_exit...
+[+0051358ms] TIME    camera.exit(): 118.9ms
+[+0051358ms] OK    safe_exit OK
+[+0051358ms] TIME  S05 total: 32001.5ms
+[+0051358ms] INFO  Pauza 2s po S05...
+[+0053367ms] INFO  [USB@po S05] lsusb: Bus 001 Device 119: ID 04a9:32e2 Canon, Inc. Canon Digital Camera
+[+0053410ms] INFO  [USB@po S05] gp.detect (14.7ms): 1 aparat(ów) → Canon EOS RP
+
+────────────────────────────────────────────────────────────────
+  START S06
+────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────
+  S06 — wait_for_event: bez vs z (po 30 klatek każdy)
+────────────────────────────────────────────────────────────────
+[+0053410ms] INFO  connect: start
+[+0053459ms] TIME    detect: 49.4ms
+[+0053459ms] INFO    wykryto: "Canon EOS RP" @ usb:001,119
+[+0053462ms] TIME    set_abilities+port_info: 2.4ms
+[+0053487ms] TIME    camera.init(): 24.6ms
+[+0053487ms] OK    connect OK
+[+0054487ms] INFO  === A: tylko capture_preview, BEZ wait_for_event (30 klatek) ===
+[+0054681ms] INFO    A-01: 159354B  193.9ms
+[+0054746ms] INFO    A-02: 159392B  15.2ms
+[+0054807ms] INFO    A-03: 159483B  10.2ms
+[+0054863ms] INFO    A-04: 159593B  6.4ms
+[+0054920ms] INFO    A-05: 159580B  6.6ms
+[+0054985ms] INFO    A-06: 159344B  14.6ms
+[+0055046ms] INFO    A-07: 159293B  11.1ms
+[+0055105ms] INFO    A-08: 159627B  8.4ms
+[+0055164ms] INFO    A-09: 159421B  8.6ms
+[+0055226ms] INFO    A-10: 159519B  12.4ms
+[+0055285ms] INFO    A-11: 159605B  8.2ms
+[+0055346ms] INFO    A-12: 159638B  10.9ms
+[+0055406ms] INFO    A-13: 159440B  10.2ms
+[+0055464ms] INFO    A-14: 159459B  7.7ms
+[+0055521ms] INFO    A-15: 159480B  6.9ms
+[+0055580ms] INFO    A-16: 159758B  9.0ms
+[+0055639ms] INFO    A-17: 159458B  8.2ms
+[+0055707ms] INFO    A-18: 159399B  18.1ms
+[+0055765ms] INFO    A-19: 159449B  7.4ms
+[+0055822ms] INFO    A-20: 159634B  7.0ms
+[+0055882ms] INFO    A-21: 159475B  9.3ms
+[+0055948ms] INFO    A-22: 159506B  15.8ms
+[+0056008ms] INFO    A-23: 159541B  9.8ms
+[+0056064ms] INFO    A-24: 159634B  6.4ms
+[+0056121ms] INFO    A-25: 159100B  6.6ms
+[+0056182ms] INFO    A-26: 159346B  10.8ms
+[+0056247ms] INFO    A-27: 159374B  14.8ms
+[+0056306ms] INFO    A-28: 159181B  7.7ms
+[+0056365ms] INFO    A-29: 160035B  8.8ms
+[+0056427ms] INFO    A-30: 159690B  12.3ms
+[+0056477ms] INFO  === B: capture_preview + wait_for_event(10ms) (30 klatek) ===
+[+0056486ms] INFO    B-01: 159526B  prev=8.3ms  ev=0.0ms  total=8.4ms  ev_type=0
+[+0056547ms] INFO    B-02: 159601B  prev=10.6ms  ev=0.1ms  total=10.6ms  ev_type=0
+[+0056608ms] INFO    B-03: 159529B  prev=10.6ms  ev=0.1ms  total=10.7ms  ev_type=0
+[+0056666ms] INFO    B-04: 159682B  prev=7.7ms  ev=0.1ms  total=7.7ms  ev_type=0
+[+0056722ms] INFO    B-05: 159479B  prev=6.5ms  ev=0.1ms  total=6.6ms  ev_type=0
+[+0056782ms] INFO    B-06: 159528B  prev=9.1ms  ev=0.1ms  total=9.2ms  ev_type=0
+[+0056840ms] INFO    B-07: 159505B  prev=7.6ms  ev=0.0ms  total=7.7ms  ev_type=0
+[+0056908ms] INFO    B-08: 159685B  prev=17.8ms  ev=0.0ms  total=17.9ms  ev_type=0
+[+0056967ms] INFO    B-09: 159782B  prev=9.0ms  ev=0.0ms  total=9.0ms  ev_type=0
+[+0057026ms] INFO    B-10: 159694B  prev=9.0ms  ev=0.0ms  total=9.0ms  ev_type=0
+[+0057087ms] INFO    B-11: 159353B  prev=10.4ms  ev=0.1ms  total=10.5ms  ev_type=0
+[+0057148ms] INFO    B-12: 159290B  prev=10.9ms  ev=0.1ms  total=10.9ms  ev_type=0
+[+0057209ms] INFO    B-13: 159692B  prev=10.7ms  ev=0.1ms  total=10.8ms  ev_type=0
+[+0057267ms] INFO    B-14: 159566B  prev=6.9ms  ev=0.1ms  total=7.0ms  ev_type=0
+[+0057325ms] INFO    B-15: 159376B  prev=8.1ms  ev=0.0ms  total=8.1ms  ev_type=0
+[+0057383ms] INFO    B-16: 159340B  prev=7.8ms  ev=0.0ms  total=7.9ms  ev_type=0
+[+0057447ms] INFO    B-17: 159408B  prev=14.1ms  ev=0.1ms  total=14.1ms  ev_type=0
+[+0057507ms] INFO    B-18: 159714B  prev=9.3ms  ev=0.0ms  total=9.4ms  ev_type=0
+[+0057566ms] INFO    B-19: 159384B  prev=8.2ms  ev=0.0ms  total=8.2ms  ev_type=0
+[+0057629ms] INFO    B-20: 159515B  prev=13.2ms  ev=0.0ms  total=13.2ms  ev_type=0
+[+0057689ms] INFO    B-21: 159503B  prev=9.2ms  ev=0.0ms  total=9.2ms  ev_type=0
+[+0057749ms] INFO    B-22: 159460B  prev=9.7ms  ev=0.0ms  total=9.7ms  ev_type=0
+[+0057809ms] INFO    B-23: 159425B  prev=9.8ms  ev=0.0ms  total=9.8ms  ev_type=0
+[+0057866ms] INFO    B-24: 159455B  prev=7.5ms  ev=0.0ms  total=7.5ms  ev_type=0
+[+0057924ms] INFO    B-25: 159620B  prev=7.2ms  ev=0.0ms  total=7.3ms  ev_type=0
+[+0057984ms] INFO    B-26: 159617B  prev=9.6ms  ev=0.1ms  total=9.6ms  ev_type=0
+[+0058045ms] INFO    B-27: 159823B  prev=11.1ms  ev=0.0ms  total=11.1ms  ev_type=0
+[+0058108ms] INFO    B-28: 159454B  prev=13.1ms  ev=0.0ms  total=13.2ms  ev_type=0
+[+0058167ms] INFO    B-29: 159767B  prev=7.9ms  ev=0.0ms  total=7.9ms  ev_type=0
+[+0058223ms] INFO    B-30: 159550B  prev=6.4ms  ev=0.0ms  total=6.4ms  ev_type=0
+[+0058273ms] TIME  A avg: 16.1ms
+[+0058273ms] TIME  A max: 193.9ms
+[+0058273ms] TIME  B avg: 9.6ms
+[+0058274ms] TIME  B max: 17.9ms
+[+0058274ms] INFO  wait_for_event overhead avg: -6.5ms
+[+0058274ms] INFO  safe_exit...
+[+0058404ms] TIME    camera.exit(): 130.1ms
+[+0058404ms] OK    safe_exit OK
+[+0058404ms] TIME  S06 total: 4994.3ms
+[+0058404ms] INFO  Pauza 2s po S06...
+[+0060413ms] INFO  [USB@po S06] lsusb: Bus 001 Device 119: ID 04a9:32e2 Canon, Inc. Canon Digital Camera
+[+0060456ms] INFO  [USB@po S06] gp.detect (14.6ms): 1 aparat(ów) → Canon EOS RP
+
+────────────────────────────────────────────────────────────────
+  START S07
+────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────
+  S07 — get_config podczas LV: koliduje?
+────────────────────────────────────────────────────────────────
+[+0060456ms] INFO  connect: start
+[+0060503ms] TIME    detect: 46.5ms
+[+0060503ms] INFO    wykryto: "Canon EOS RP" @ usb:001,119
+[+0060505ms] TIME    set_abilities+port_info: 1.8ms
+[+0060525ms] TIME    camera.init(): 20.6ms
+[+0060525ms] OK    connect OK
+[+0061721ms] INFO  [w] OK  159447B  prev=195.3ms  ev=0.0ms  total=195.3ms  ev_type=0
+[+0061787ms] INFO  [w] OK  159535B  prev=15.7ms  ev=0.1ms  total=15.8ms  ev_type=0
+[+0061849ms] INFO  [w] OK  159374B  prev=11.4ms  ev=0.1ms  total=11.5ms  ev_type=0
+[+0061905ms] INFO  [w] OK  159395B  prev=6.3ms  ev=0.1ms  total=6.4ms  ev_type=0
+[+0061963ms] INFO  [w] OK  159649B  prev=7.8ms  ev=0.0ms  total=7.8ms  ev_type=0
+[+0062021ms] INFO  [w] OK  159481B  prev=7.5ms  ev=0.1ms  total=7.6ms  ev_type=0
+[+0062087ms] INFO  [w] OK  159163B  prev=15.8ms  ev=0.1ms  total=15.8ms  ev_type=0
+[+0062149ms] INFO  [w] OK  159480B  prev=11.7ms  ev=0.0ms  total=11.7ms  ev_type=0
+[+0062206ms] INFO  [w] OK  159564B  prev=6.1ms  ev=0.0ms  total=6.1ms  ev_type=0
+[+0062265ms] INFO  [w] OK  159733B  prev=9.4ms  ev=0.0ms  total=9.4ms  ev_type=0
+[+0062325ms] INFO  [1-pre] OK  159670B  prev=9.4ms  ev=0.0ms  total=9.4ms  ev_type=0
+[+0062335ms] TIME    [1] get_config(): 9.7ms
+[+0062335ms] INFO      focusmode="One Shot"
+[+0062335ms] INFO      whitebalance="Color Temperature"
+[+0062335ms] INFO      iso="Auto"
+[+0062346ms] INFO  [1-post] OK  159640B  prev=11.2ms  ev=0.0ms  total=11.2ms  ev_type=0
+[+0062459ms] INFO  [2-pre] OK  159419B  prev=12.5ms  ev=0.0ms  total=12.6ms  ev_type=0
+[+0062460ms] TIME    [2] get_config(): 1.0ms
+[+0062460ms] INFO      focusmode="One Shot"
+[+0062460ms] INFO      whitebalance="Color Temperature"
+[+0062460ms] INFO      iso="Auto"
+[+0062466ms] INFO  [2-post] OK  159449B  prev=6.2ms  ev=0.0ms  total=6.2ms  ev_type=0
+[+0062576ms] INFO  [3-pre] OK  159818B  prev=9.6ms  ev=0.0ms  total=9.7ms  ev_type=0
+[+0062578ms] TIME    [3] get_config(): 1.4ms
+[+0062582ms] INFO      focusmode="One Shot"
+[+0062582ms] INFO      whitebalance="Color Temperature"
+[+0062582ms] INFO      iso="Auto"
+[+0062591ms] INFO  [3-post] OK  159543B  prev=9.0ms  ev=0.0ms  total=9.0ms  ev_type=0
+[+0062700ms] INFO  [4-pre] OK  159344B  prev=8.4ms  ev=0.0ms  total=8.5ms  ev_type=0
+[+0062701ms] TIME    [4] get_config(): 1.0ms
+[+0062701ms] INFO      focusmode="One Shot"
+[+0062701ms] INFO      whitebalance="Color Temperature"
+[+0062701ms] INFO      iso="Auto"
+[+0062712ms] INFO  [4-post] OK  159392B  prev=10.3ms  ev=0.0ms  total=10.4ms  ev_type=0
+[+0062820ms] INFO  [5-pre] OK  159730B  prev=8.2ms  ev=0.0ms  total=8.3ms  ev_type=0
+[+0062822ms] TIME    [5] get_config(): 1.6ms
+[+0062822ms] INFO      focusmode="One Shot"
+[+0062822ms] INFO      whitebalance="Color Temperature"
+[+0062822ms] INFO      iso="Auto"
+[+0062829ms] INFO  [5-post] OK  159362B  prev=6.4ms  ev=0.0ms  total=6.4ms  ev_type=0
+[+0062945ms] INFO  [6-pre] OK  159344B  prev=16.4ms  ev=0.0ms  total=16.5ms  ev_type=0
+[+0062946ms] TIME    [6] get_config(): 0.9ms
+[+0062947ms] INFO      focusmode="One Shot"
+[+0062947ms] INFO      whitebalance="Color Temperature"
+[+0062947ms] INFO      iso="Auto"
+[+0062955ms] INFO  [6-post] OK  159477B  prev=7.9ms  ev=0.1ms  total=8.0ms  ev_type=0
+[+0063062ms] INFO  [7-pre] OK  159477B  prev=7.0ms  ev=0.0ms  total=7.0ms  ev_type=0
+[+0063067ms] TIME    [7] get_config(): 4.2ms
+[+0063067ms] INFO      focusmode="One Shot"
+[+0063067ms] INFO      whitebalance="Color Temperature"
+[+0063067ms] INFO      iso="Auto"
+[+0063080ms] INFO  [7-post] OK  159512B  prev=12.2ms  ev=0.1ms  total=12.3ms  ev_type=0
+[+0063187ms] INFO  [8-pre] OK  159940B  prev=7.6ms  ev=0.0ms  total=7.6ms  ev_type=0
+[+0063189ms] TIME    [8] get_config(): 1.3ms
+[+0063189ms] INFO      focusmode="One Shot"
+[+0063189ms] INFO      whitebalance="Color Temperature"
+[+0063189ms] INFO      iso="Auto"
+[+0063196ms] INFO  [8-post] OK  159424B  prev=6.4ms  ev=0.0ms  total=6.5ms  ev_type=0
+[+0063304ms] INFO  [9-pre] OK  159727B  prev=8.1ms  ev=0.0ms  total=8.2ms  ev_type=0
+[+0063305ms] TIME    [9] get_config(): 0.8ms
+[+0063305ms] INFO      focusmode="One Shot"
+[+0063305ms] INFO      whitebalance="Color Temperature"
+[+0063305ms] INFO      iso="Auto"
+[+0063314ms] INFO  [9-post] OK  159436B  prev=8.6ms  ev=0.0ms  total=8.6ms  ev_type=0
+[+0063426ms] INFO  [10-pre] OK  159658B  prev=11.6ms  ev=0.0ms  total=11.6ms  ev_type=0
+[+0063426ms] TIME    [10] get_config(): 0.8ms
+[+0063427ms] INFO      focusmode="One Shot"
+[+0063427ms] INFO      whitebalance="Color Temperature"
+[+0063427ms] INFO      iso="Auto"
+[+0063433ms] INFO  [10-post] OK  159407B  prev=6.4ms  ev=0.0ms  total=6.4ms  ev_type=0
+[+0063533ms] INFO  safe_exit...
+[+0063657ms] TIME    camera.exit(): 123.3ms
+[+0063657ms] OK    safe_exit OK
+[+0063657ms] TIME  S07 total: 3201.0ms
+[+0063657ms] INFO  Pauza 2s po S07...
+[+0065665ms] INFO  [USB@po S07] lsusb: Bus 001 Device 119: ID 04a9:32e2 Canon, Inc. Canon Digital Camera
+[+0065714ms] INFO  [USB@po S07] gp.detect (20.5ms): 1 aparat(ów) → Canon EOS RP
+
+────────────────────────────────────────────────────────────────
+  START S08
+────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────
+  S08 — set_config (WB) podczas LV: timing + stabilność po update
+────────────────────────────────────────────────────────────────
+[+0065714ms] INFO  connect: start
+[+0065759ms] TIME    detect: 44.8ms
+[+0065759ms] INFO    wykryto: "Canon EOS RP" @ usb:001,119
+[+0065761ms] TIME    set_abilities+port_info: 1.8ms
+[+0065789ms] TIME    camera.init(): 27.7ms
+[+0065789ms] OK    connect OK
+[+0066960ms] INFO  [w] OK  159430B  prev=171.0ms  ev=0.0ms  total=171.1ms  ev_type=0
+[+0067019ms] INFO  [w] OK  159612B  prev=9.2ms  ev=0.1ms  total=9.3ms  ev_type=0
+[+0067079ms] INFO  [w] OK  159680B  prev=9.3ms  ev=0.0ms  total=9.4ms  ev_type=0
+[+0067141ms] INFO  [w] OK  159676B  prev=11.8ms  ev=0.1ms  total=11.9ms  ev_type=0
+[+0067200ms] INFO  [w] OK  159756B  prev=9.0ms  ev=0.0ms  total=9.0ms  ev_type=0
+[+0067259ms] INFO  [w] OK  159423B  prev=8.2ms  ev=0.1ms  total=8.3ms  ev_type=0
+[+0067316ms] INFO  [w] OK  159428B  prev=7.2ms  ev=0.0ms  total=7.2ms  ev_type=0
+[+0067380ms] INFO  [w] OK  159798B  prev=13.8ms  ev=0.0ms  total=13.8ms  ev_type=0
+[+0067437ms] INFO  [w] OK  159559B  prev=7.0ms  ev=0.0ms  total=7.0ms  ev_type=0
+[+0067494ms] INFO  [w] OK  159668B  prev=6.1ms  ev=0.0ms  total=6.1ms  ev_type=0
+[+0067554ms] INFO    whitebalance: value="Color Temperature"  choices=['Auto', 'AWB White', 'Daylight', 'Shadow', 'Cloudy', 'Tungsten', 'Fluorescent', 'Flash', 'Manual', 'Color Temperature']
+[+0067554ms] INFO  Przełączam WB: Auto ↔ AWB White (8 cykli)
+[+0067567ms] INFO  [1-pre] OK  159499B  prev=12.7ms  ev=0.0ms  total=12.7ms  ev_type=0
+[+0067577ms] TIME    [1] set_config WB=Auto: 10.3ms
+[+0067587ms] TIME    [1] recovery preview: 9.6ms
+[+0067594ms] INFO  [1-post] OK  159495B  prev=6.3ms  ev=0.0ms  total=6.3ms  ev_type=0
+[+0067708ms] INFO  [2-pre] OK  159448B  prev=14.6ms  ev=0.1ms  total=14.7ms  ev_type=0
+[+0067716ms] TIME    [2] set_config WB=AWB White: 7.1ms
+[+0067727ms] TIME    [2] recovery preview: 11.3ms
+[+0067745ms] INFO  [2-post] OK  159545B  prev=17.6ms  ev=0.1ms  total=17.6ms  ev_type=0
+[+0067855ms] INFO  [3-pre] OK  159421B  prev=9.2ms  ev=0.0ms  total=9.2ms  ev_type=0
+[+0067861ms] TIME    [3] set_config WB=Auto: 6.2ms
+[+0067883ms] TIME    [3] recovery preview: 21.7ms
+[+0067891ms] INFO  [3-post] OK  159669B  prev=7.9ms  ev=0.0ms  total=8.0ms  ev_type=0
+[+0068002ms] INFO  [4-pre] OK  159323B  prev=11.0ms  ev=0.0ms  total=11.0ms  ev_type=0
+[+0068012ms] TIME    [4] set_config WB=AWB White: 10.0ms
+[+0068021ms] TIME    [4] recovery preview: 8.7ms
+[+0068028ms] INFO  [4-post] OK  159732B  prev=6.1ms  ev=0.0ms  total=6.2ms  ev_type=0
+[+0068147ms] INFO  [5-pre] OK  159745B  prev=18.4ms  ev=0.0ms  total=18.4ms  ev_type=0
+[+0068155ms] TIME    [5] set_config WB=Auto: 7.7ms
+[+0068168ms] TIME    [5] recovery preview: 13.2ms
+[+0068176ms] INFO  [5-post] OK  159595B  prev=7.5ms  ev=0.0ms  total=7.6ms  ev_type=0
+[+0068282ms] INFO  [6-pre] OK  159793B  prev=6.2ms  ev=0.0ms  total=6.2ms  ev_type=0
+[+0068290ms] TIME    [6] set_config WB=AWB White: 7.6ms
+[+0068312ms] TIME    [6] recovery preview: 21.8ms
+[+0068321ms] INFO  [6-post] OK  159447B  prev=9.6ms  ev=0.0ms  total=9.6ms  ev_type=0
+[+0068428ms] INFO  [7-pre] OK  159574B  prev=6.3ms  ev=0.0ms  total=6.3ms  ev_type=0
+[+0068442ms] TIME    [7] set_config WB=Auto: 14.5ms
+[+0068450ms] TIME    [7] recovery preview: 7.5ms
+[+0068458ms] INFO  [7-post] OK  159325B  prev=7.8ms  ev=0.0ms  total=7.8ms  ev_type=0
+[+0068576ms] INFO  [8-pre] OK  159504B  prev=17.3ms  ev=0.0ms  total=17.3ms  ev_type=0
+[+0068583ms] TIME    [8] set_config WB=AWB White: 7.0ms
+[+0068589ms] TIME    [8] recovery preview: 6.2ms
+[+0068600ms] INFO  [8-post] OK  160997B  prev=10.4ms  ev=0.0ms  total=10.5ms  ev_type=0
+[+0068711ms] OK    WB przywrócony: "Color Temperature"
+[+0068711ms] INFO  safe_exit...
+[+0068833ms] TIME    camera.exit(): 121.8ms
+[+0068833ms] OK    safe_exit OK
+[+0068833ms] TIME  S08 total: 3119.4ms
+[+0068834ms] INFO  Pauza 2s po S08...
+[+0070842ms] INFO  [USB@po S08] lsusb: Bus 001 Device 119: ID 04a9:32e2 Canon, Inc. Canon Digital Camera
+[+0070888ms] INFO  [USB@po S08] gp.detect (14.7ms): 1 aparat(ów) → Canon EOS RP
+
+────────────────────────────────────────────────────────────────
+  START S09
+────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────
+  S09 — Capture OK: pełny flow z timingiem każdego kroku
+────────────────────────────────────────────────────────────────
+[+0070888ms] INFO  connect: start
+[+0070948ms] TIME    detect: 59.9ms
+[+0070948ms] INFO    wykryto: "Canon EOS RP" @ usb:001,119
+[+0070951ms] TIME    set_abilities+port_info: 2.9ms
+[+0070976ms] TIME    camera.init(): 24.7ms
+[+0070976ms] OK    connect OK
+[+0071976ms] INFO  Warmup 10 klatek...
+[+0072169ms] INFO  [w] OK  159513B  prev=192.1ms  ev=0.0ms  total=192.2ms  ev_type=0
+[+0072228ms] INFO  [w] OK  159584B  prev=8.8ms  ev=0.1ms  total=8.8ms  ev_type=0
+[+0072288ms] INFO  [w] OK  159715B  prev=9.7ms  ev=0.1ms  total=9.7ms  ev_type=0
+[+0072346ms] INFO  [w] OK  159572B  prev=7.6ms  ev=0.1ms  total=7.7ms  ev_type=0
+[+0072404ms] INFO  [w] OK  159653B  prev=8.2ms  ev=0.0ms  total=8.3ms  ev_type=0
+[+0072463ms] INFO  [w] OK  159652B  prev=8.3ms  ev=0.1ms  total=8.3ms  ev_type=0
+[+0072523ms] INFO  [w] OK  159631B  prev=10.0ms  ev=0.0ms  total=10.0ms  ev_type=0
+[+0072580ms] INFO  [w] OK  159246B  prev=7.1ms  ev=0.0ms  total=7.2ms  ev_type=0
+[+0072638ms] INFO  [w] OK  159335B  prev=7.2ms  ev=0.0ms  total=7.2ms  ev_type=0
+[+0072697ms] INFO  [w] OK  159579B  prev=9.2ms  ev=0.1ms  total=9.2ms  ev_type=0
+[+0072747ms] INFO  --- capturetarget ---
+[+0072764ms] INFO    current="Memory card"  choices=['Internal RAM', 'Memory card']
+[+0072764ms] OK      już "Memory card"
+[+0072764ms] INFO  --- camera.capture() ---
+[+0074328ms] TIME    camera.capture(): 1564.2ms
+[+0074328ms] OK      /store_00020001/DCIM/100CANON/IMG_3771.JPG
+[+0074329ms] INFO  --- file_get ---
+[+0074445ms] TIME    file_get(): 115.8ms
+[+0074445ms] INFO  --- save na dysk ---
+[+0074446ms] TIME    cf.save(): 1.8ms
+[+0074447ms] OK      /tmp/stress_captures/20260220_013307_IMG_3771.JPG  (2503KB)
+[+0074447ms] INFO  --- file_delete z aparatu ---
+[+0074461ms] TIME    file_delete(): 14.1ms
+[+0074461ms] OK      usunięto z aparatu
+[+0074461ms] INFO  --- LV recovery po capture ---
+[+0076823ms] INFO  [rec-1] OK  159789B  prev=2061.7ms  ev=0.0ms  total=2061.7ms  ev_type=0
+[+0076823ms] TIME    LV recovery (attempt 1): 2061.9ms
+[+0076823ms] OK      LV wrócił po 1 próbach
+[+0076823ms] INFO  --- 10 klatek po capture ---
+[+0076829ms] INFO  [post-1] OK  159680B  prev=6.0ms  ev=0.0ms  total=6.0ms  ev_type=4
+[+0076888ms] INFO  [post-2] OK  159489B  prev=8.4ms  ev=0.0ms  total=8.4ms  ev_type=0
+[+0076950ms] INFO  [post-3] OK  159636B  prev=12.2ms  ev=0.0ms  total=12.2ms  ev_type=0
+[+0077008ms] INFO  [post-4] OK  159843B  prev=7.7ms  ev=0.0ms  total=7.7ms  ev_type=0
+[+0077066ms] INFO  [post-5] OK  159356B  prev=8.3ms  ev=0.0ms  total=8.3ms  ev_type=0
+[+0077124ms] INFO  [post-6] OK  159363B  prev=7.5ms  ev=0.0ms  total=7.5ms  ev_type=0
+[+0077183ms] INFO  [post-7] OK  159595B  prev=8.8ms  ev=0.0ms  total=8.8ms  ev_type=0
+[+0077242ms] INFO  [post-8] OK  159294B  prev=8.3ms  ev=0.0ms  total=8.3ms  ev_type=0
+[+0077301ms] INFO  [post-9] OK  159375B  prev=9.2ms  ev=0.0ms  total=9.2ms  ev_type=0
+[+0077358ms] INFO  [post-10] OK  159417B  prev=7.3ms  ev=0.0ms  total=7.3ms  ev_type=0
+[+0077409ms] INFO  safe_exit...
+[+0077535ms] TIME    camera.exit(): 126.1ms
+[+0077535ms] OK    safe_exit OK
+[+0077535ms] TIME  S09 total: 6647.4ms
+[+0077535ms] INFO  Pauza 2s po S09...
+[+0079544ms] INFO  [USB@po S09] lsusb: Bus 001 Device 119: ID 04a9:32e2 Canon, Inc. Canon Digital Camera
+[+0079587ms] INFO  [USB@po S09] gp.detect (14.2ms): 1 aparat(ów) → Canon EOS RP
+
+────────────────────────────────────────────────────────────────
+  START S10
+────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────
+  S10 — Capture TIMEOUT (-110): co się dzieje z USB po timeoucie?
+────────────────────────────────────────────────────────────────
+[+0079588ms] WARN  Wymagane: obiektyw w MF lub cap — AF nie może złapać fokusa.
+[+0114413ms] INFO  connect: start
+[+0114459ms] TIME    detect: 46.0ms
+[+0114459ms] INFO    wykryto: "Canon EOS RP" @ usb:001,119
+[+0114461ms] TIME    set_abilities+port_info: 2.1ms
+[+0114483ms] TIME    camera.init(): 21.6ms
+[+0114483ms] OK    connect OK
+[+0115641ms] INFO  [w] OK  159122B  prev=157.9ms  ev=0.1ms  total=158.0ms  ev_type=0
+[+0115698ms] INFO  [w] OK  159325B  prev=6.2ms  ev=0.1ms  total=6.2ms  ev_type=0
+[+0115757ms] INFO  [w] OK  159567B  prev=8.6ms  ev=0.0ms  total=8.7ms  ev_type=0
+[+0115824ms] INFO  [w] OK  159314B  prev=17.0ms  ev=0.1ms  total=17.1ms  ev_type=0
+[+0115885ms] INFO  [w] OK  159285B  prev=10.6ms  ev=0.0ms  total=10.7ms  ev_type=0
+[+0115944ms] INFO  [w] OK  159421B  prev=8.9ms  ev=0.0ms  total=9.0ms  ev_type=0
+[+0116002ms] INFO  [w] OK  159162B  prev=7.9ms  ev=0.0ms  total=7.9ms  ev_type=0
+[+0116060ms] INFO  [w] OK  159309B  prev=7.7ms  ev=0.1ms  total=7.7ms  ev_type=0
+[+0116119ms] INFO  [w] OK  159122B  prev=7.8ms  ev=0.0ms  total=7.9ms  ev_type=0
+[+0116178ms] INFO  [w] OK  159275B  prev=8.7ms  ev=0.0ms  total=8.8ms  ev_type=0
+[+0116245ms] OK    capturetarget → "Memory card"
+[+0116245ms] INFO  --- Klatka PRZED capture ---
+[+0116252ms] INFO  [before] OK  159296B  prev=6.9ms  ev=0.0ms  total=6.9ms  ev_type=0
+[+0116265ms] INFO  [USB@przed capture] lsusb: Bus 001 Device 119: ID 04a9:32e2 Canon, Inc. Canon Digital Camera
+[+0116305ms] INFO  [USB@przed capture] gp.detect (15.2ms): 1 aparat(ów) → Canon EOS RP
+[+0116305ms] INFO  --- camera.capture() — oczekujemy -110 ---
+[+0117344ms] WARN    Capture SUCCEEDED w 1038.0ms — zdjęcie zrobione
+[+0117344ms] WARN    S10 wymaga nieudanego capture. Załóż cap lub ustaw MF.
+[+0117356ms] INFO  safe_exit...
+[+0117448ms] TIME    camera.exit(): 91.7ms
+[+0117448ms] OK    safe_exit OK
+[+0117448ms] TIME  S10 total: 37860.4ms
+[+0117448ms] INFO  Pauza 2s po S10...
+[+0119456ms] INFO  [USB@po S10] lsusb: Bus 001 Device 119: ID 04a9:32e2 Canon, Inc. Canon Digital Camera
+[+0119500ms] INFO  [USB@po S10] gp.detect (15.2ms): 1 aparat(ów) → Canon EOS RP
+
+────────────────────────────────────────────────────────────────
+  START S11
+────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────
+  S11 — Replikacja kaskady: -110 → -1 → -52 × N
+────────────────────────────────────────────────────────────────
+[+0119500ms] WARN  Replikuje dokładną sekwencję z logów aplikacji.
+[+0119500ms] WARN  Wymagane: obiektyw MF lub cap (capture musi dostać -110).
+[+0138872ms] INFO  connect: start
+[+0138927ms] TIME    detect: 55.1ms
+[+0138928ms] INFO    wykryto: "Canon EOS RP" @ usb:001,119
+[+0138931ms] TIME    set_abilities+port_info: 3.2ms
+[+0138941ms] TIME    camera.init(): 9.9ms
+[+0138941ms] OK    connect OK
+[+0139941ms] INFO  Normalna pętla LV (5 klatek):
+[+0142992ms] ERROR [lv-1] FAIL  code=-1 GP_ERROR  3051.1ms
+[+0146048ms] ERROR [lv-2] FAIL  code=-1 GP_ERROR  3005.4ms
+[+0149105ms] ERROR [lv-3] FAIL  code=-1 GP_ERROR  3006.9ms
+[+0152161ms] ERROR [lv-4] FAIL  code=-1 GP_ERROR  3005.4ms
+[+0155218ms] ERROR [lv-5] FAIL  code=-1 GP_ERROR  3006.7ms
+[+0155275ms] INFO  --- CAPTURE (oczekujemy -110) ---
+[+0156645ms] WARN  Capture się udał — S11 wymaga timeoutu. Ustaw MF/cap.
+[+0156645ms] INFO  safe_exit...
+[+0156729ms] TIME    camera.exit(): 84.0ms
+[+0156729ms] OK    safe_exit OK
+[+0156729ms] TIME  S11 total: 37229.4ms
+[+0156729ms] INFO  Pauza 2s po S11...
+[+0158738ms] INFO  [USB@po S11] lsusb: Bus 001 Device 119: ID 04a9:32e2 Canon, Inc. Canon Digital Camera
+[+0158792ms] INFO  [USB@po S11] gp.detect (20.2ms): 1 aparat(ów) → Canon EOS RP
+
+────────────────────────────────────────────────────────────────
+  START S12
+────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────
+  S12 — exit() timing + okno reconnect
+────────────────────────────────────────────────────────────────
+[+0158793ms] INFO  connect: start
+[+0158835ms] TIME    detect: 42.8ms
+[+0158835ms] INFO    wykryto: "Canon EOS RP" @ usb:001,119
+[+0158838ms] TIME    set_abilities+port_info: 2.3ms
+[+0158848ms] TIME    camera.init(): 9.9ms
+[+0158848ms] OK    connect OK
+[+0159848ms] INFO  Warmup 10 klatek...
+[+0162899ms] ERROR [w] FAIL  code=-1 GP_ERROR  3050.2ms
+[+0165954ms] ERROR [w] FAIL  code=-1 GP_ERROR  3005.1ms
+[+0169010ms] ERROR [w] FAIL  code=-1 GP_ERROR  3005.4ms
+[+0172067ms] ERROR [w] FAIL  code=-1 GP_ERROR  3006.7ms
+[+0175124ms] ERROR [w] FAIL  code=-1 GP_ERROR  3007.4ms
+[+0178179ms] ERROR [w] FAIL  code=-1 GP_ERROR  3005.0ms
+[+0181239ms] ERROR [w] FAIL  code=-1 GP_ERROR  3009.1ms
+[+0184297ms] ERROR [w] FAIL  code=-1 GP_ERROR  3008.0ms
+[+0187354ms] ERROR [w] FAIL  code=-1 GP_ERROR  3006.6ms
+[+0190409ms] ERROR [w] FAIL  code=-1 GP_ERROR  3005.4ms
+[+0190460ms] INFO  --- camera.exit() ---
+[+0190460ms] INFO  safe_exit...
+[+0190690ms] TIME    camera.exit(): 229.6ms
+[+0190690ms] OK    safe_exit OK
+[+0190690ms] TIME  exit() total: 230.2ms
+[+0190699ms] INFO  [USB@natychmiast po exit] lsusb: Bus 001 Device 119: ID 04a9:32e2 Canon, Inc. Canon Digital Camera
+[+0190745ms] INFO  [USB@natychmiast po exit] gp.detect (15.8ms): 1 aparat(ów) → Canon EOS RP
+[+0190745ms] INFO  --- Próby reconnect w różnych odstępach od exit() ---
+[+0190759ms] INFO  [USB@0ms] lsusb: Bus 001 Device 119: ID 04a9:32e2 Canon, Inc. Canon Digital Camera
+[+0190806ms] INFO  [USB@0ms] gp.detect (14.9ms): 1 aparat(ów) → Canon EOS RP
+[+0190806ms] INFO  connect: start
+[+0190850ms] TIME    detect: 43.9ms
+[+0190850ms] INFO    wykryto: "Canon EOS RP" @ usb:001,119
+[+0190852ms] TIME    set_abilities+port_info: 1.7ms
+[+0190870ms] TIME    camera.init(): 17.7ms
+[+0190870ms] OK    connect OK
+[+0190870ms] TIME    RECONNECT SUCCESS po 0ms od exit: 63.9ms
+[+0190870ms] OK      Minimalny czas po exit(): 0ms
+[+0190870ms] INFO  safe_exit...
+[+0190895ms] TIME    camera.exit(): 24.4ms
+[+0190895ms] OK    safe_exit OK
+[+0190895ms] TIME  S12 total: 32102.5ms
+[+0190895ms] INFO  Pauza 2s po S12...
+[+0192903ms] INFO  [USB@po S12] lsusb: Bus 001 Device 119: ID 04a9:32e2 Canon, Inc. Canon Digital Camera
+[+0192948ms] INFO  [USB@po S12] gp.detect (14.6ms): 1 aparat(ów) → Canon EOS RP
+
+────────────────────────────────────────────────────────────────
+  PODSUMOWANIE
+────────────────────────────────────────────────────────────────
+[+0192948ms] INFO    ✓ S01: OK
+[+0192948ms] INFO    ✓ S02: OK
+[+0192948ms] INFO    ✓ S03: OK
+[+0192948ms] INFO    ✓ S04: OK
+[+0192948ms] INFO    ✓ S05: OK
+[+0192948ms] INFO    ✓ S06: OK
+[+0192948ms] INFO    ✓ S07: OK
+[+0192948ms] INFO    ✓ S08: OK
+[+0192948ms] INFO    ✓ S09: OK
+[+0192948ms] INFO    ✓ S10: OK
+[+0192948ms] INFO    ✓ S11: OK
+[+0192948ms] INFO    ✓ S12: OK
+[+0192948ms] INFO  
+Log: stress_20260220_013153.log

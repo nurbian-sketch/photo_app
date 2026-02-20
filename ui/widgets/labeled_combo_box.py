@@ -7,6 +7,7 @@ Universal component for displaying combobox with label.
 
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QComboBox, QSizePolicy
 from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtGui import QIcon
 
 
 class LabeledComboBox(QWidget):
@@ -51,6 +52,7 @@ class LabeledComboBox(QWidget):
         
         # ComboBox - zachowuje standardowy rozmiar (brak Policy.Expanding dla kontrolki)
         self.combo = QComboBox()
+        self.combo.setIconSize(self.combo.iconSize().__class__(24, 24))
         self.combo.addItems([str(item) for item in items])
         layout.addWidget(self.combo)
 
@@ -138,6 +140,28 @@ class LabeledComboBox(QWidget):
         if idx >= 0:
             self.combo.setCurrentIndex(idx)
         self.combo.blockSignals(False)
+
+    def set_item_icons(self, icons: dict):
+        """
+        Set icons for combo items by text label.
+
+        Args:
+            icons: dict mapping item text → QIcon or file path (str)
+
+        Example:
+            wb_combo.set_item_icons({
+                'Auto':     QIcon('assets/icons/wb/wb_awb.png'),
+                'Daylight': 'assets/icons/wb/wb_daylight.png',
+            })
+        """
+        for i in range(self.combo.count()):
+            text = self.combo.itemText(i)
+            icon = icons.get(text)
+            if icon is None:
+                continue
+            if isinstance(icon, str):
+                icon = QIcon(icon)
+            self.combo.setItemIcon(i, icon)
 
     def count(self) -> int:
         """

@@ -155,6 +155,9 @@ class GPhotoInterface(QThread):
             self.keep_running = True
             consecutive_errors = 0
 
+            # EOS RP potrzebuje chwili po init() zanim odpowie na capture_preview
+            time.sleep(1.0)
+
             while self.keep_running:
                 fps_sleep = 0.05
 
@@ -207,6 +210,13 @@ class GPhotoInterface(QThread):
 
                     if e.code in self.HEAVY_ERRORS:
                         fps_sleep = 1.5
+                        # USB zerwany — nie czekaj 20 prób, zakończ szybko
+                        if consecutive_errors >= 5:
+                            self.error_occurred.emit(
+                                f"USB disconnected (error {e.code}). Przerywam."
+                            )
+                            self.keep_running = False
+                            break
                     elif e.code in self.LIGHT_ERRORS:
                         fps_sleep = 0.5
                     else:

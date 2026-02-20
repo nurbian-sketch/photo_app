@@ -13,6 +13,80 @@ from ui.views.camera_components.image_controls import ImageControls
 from ui.views.camera_components.autofocus_controls import AutofocusControls
 
 
+
+def _read_exif(path: str) -> dict:
+    """Czyta podstawowe dane EXIF. Zwraca dict z polami lub '' gdy brak."""
+    r = {'shutter':'','aperture':'','iso':'','focal':'','date':'','dims':'','size':'','camera':''}
+    try:
+        from PIL import Image
+        from PIL.ExifTags import TAGS
+        img = Image.open(path)
+        w, h = img.size
+        r['dims'] = f"{w}\u00d7{h}"
+        r['size'] = f"{os.path.getsize(path)/(1024*1024):.1f}\u00a0MB"
+
+        # getexif() — główny IFD (Make, Model, DateTime, dims)
+        exif_obj = img.getexif()
+        print(f"EXIF DEBUG: getexif len={len(exif_obj)}, bool={bool(exif_obj)}")
+        if not exif_obj:
+            print("EXIF DEBUG: exif_obj empty → returning")
+            return r
+        exif = {TAGS.get(k, k): v for k, v in exif_obj.items()}
+        print(f"EXIF DEBUG: main IFD keys={list(exif.keys())[:5]}")
+
+        # ExifIFD (0x8769) — tu są ExposureTime, FNumber, ISO, FocalLength
+        from PIL.ExifTags import TAGS, IFD
+        try:
+            exif_ifd = exif_obj.get_ifd(0x8769)
+            print(f"EXIF DEBUG: ExifIFD len={len(exif_ifd)}, keys={[TAGS.get(k,k) for k in exif_ifd.keys()]}")
+            exif.update({TAGS.get(k, k): v for k, v in exif_ifd.items()})
+        except Exception as e:
+            print(f"EXIF DEBUG: ExifIFD error: {e}")
+
+        def frac(v):
+            if hasattr(v, 'numerator'):
+                return v.numerator, v.denominator
+            try:
+                return v[0], v[1]
+            except Exception:
+                return float(v), 1
+
+        exp = exif.get('ExposureTime')
+        if exp:
+            n, d = frac(exp)
+            if n and d:
+                ratio = d / n
+                r['shutter'] = f"1/{int(round(ratio))}s" if ratio >= 1 else f"{n/d:.1f}s"
+
+        fn = exif.get('FNumber')
+        if fn:
+            n, d = frac(fn)
+            if d: r['aperture'] = f"f/{n/d:.1f}"
+
+        iso = exif.get('ISOSpeedRatings') or exif.get('PhotographicSensitivity')
+        if iso:
+            r['iso'] = f"ISO\u00a0{iso}"
+
+        fl = exif.get('FocalLength')
+        if fl:
+            n, d = frac(fl)
+            if d: r['focal'] = f"{int(round(n/d))}mm"
+
+        date = exif.get('DateTimeOriginal') or exif.get('DateTime', '')
+        if date:
+            s = str(date)
+            r['date'] = s[:10].replace(':', '-') + ' ' + s[11:16]
+
+        make  = str(exif.get('Make',  '')).strip()
+        model = str(exif.get('Model', '')).strip()
+        if model:
+            r['camera'] = model if model.startswith(make) else (f"{make} {model}".strip() if make else model)
+
+    except Exception as e:
+        print(f"EXIF read error: {e}")
+        import traceback; traceback.print_exc()
+    return r
+
 # ─────────────────────────────── Popup podglądu zdjęcia
 
 class CapturePreviewDialog(QDialog):
@@ -141,6 +215,20 @@ class CapturePreviewDialog(QDialog):
         btn_close.clicked.connect(self.close)
         control_layout.addWidget(btn_close)
 
+        # EXIF bar — jedna linia z danymi zdjęcia
+        exif = _read_exif(self._image_path)
+        parts = [v for v in [
+            exif['camera'], exif['dims'], exif['size'],
+            exif['shutter'], exif['aperture'], exif['iso'],
+            exif['focal'], exif['date']
+        ] if v]
+        self._exif_bar = QLabel("   •   ".join(parts) if parts else "No EXIF data")
+        self._exif_bar.setStyleSheet(
+            "background: #222; color: #999; font-size: 11px; padding: 3px 10px;"
+        )
+        self._exif_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self._exif_bar)
+
         layout.addWidget(control_bar)
 
     def _rotate_left(self):
@@ -188,6 +276,7 @@ class CapturePreviewDialog(QDialog):
         else:
             self._saved_geometry = self.geometry()
             self.showFullScreen()
+        QTimer.singleShot(50, self._zoom_fit)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -313,6 +402,8 @@ class CameraView(QWidget):
         self.lv_thread = None
         self._camera_ready = False
         self._needs_reconnect = False  # Flaga: było zerwane połączenie
+        self._stopping = False    # Wątek w trakcie zatrzymywania
+        self._reconnecting = False  # Trwa próba reconnect
         self._settings = QSettings("Grzeza", "SessionsAssistant")
         self._capture_dir = self._get_capture_directory()
         self._preview_dialogs = []  # Referencje do otwartych podglądów
@@ -467,20 +558,18 @@ class CameraView(QWidget):
     def set_camera_ready(self, ready):
         """Ustawia stan gotowości aparatu — włącza/wyłącza przyciski."""
         self._camera_ready = ready
-        
-        # Aktualizuj tekst przycisku LV w zależności od stanu
-        if not ready:
-            # Brak aparatu — przycisk służy do połączenia
-            self.btn_lv.setText("CONNECT CAMERA")
-            self.btn_lv.setStyleSheet("")
-            self.btn_lv.setEnabled(True)
-        elif not (self.lv_thread and self.lv_thread.isRunning()):
-            # Aparat gotowy, LV nieaktywne
-            self.btn_lv.setText("START LIVE VIEW")
-            self.btn_lv.setStyleSheet("")
-            self.btn_lv.setEnabled(True)
-        
-        # Przyciski aktywne tylko gdy aparat podłączony i LV nieaktywne
+
+        # Podczas reconnect nie zmieniamy btn_lv — _auto_start_after_reconnect to zrobi
+        if not self._reconnecting and not self._stopping:
+            if not ready:
+                self.btn_lv.setText("CONNECT CAMERA")
+                self.btn_lv.setStyleSheet("")
+                self.btn_lv.setEnabled(True)
+            elif not (self.lv_thread and self.lv_thread.isRunning()):
+                self.btn_lv.setText("START LIVE VIEW")
+                self.btn_lv.setStyleSheet("")
+                self.btn_lv.setEnabled(True)
+
         if not (self.lv_thread and self.lv_thread.isRunning()):
             self._set_buttons_enabled(ready)
 
@@ -514,16 +603,22 @@ class CameraView(QWidget):
 
     def _try_reconnect(self):
         """Próbuje reconnect: probe + auto-start LV."""
-        # Emituj sygnał żeby main_window zrobił probe
+        self._reconnecting = True
+        self.btn_lv.setEnabled(False)
+        self.btn_lv.setText("Connecting...")
         self.reconnect_requested.emit()
-        # Po probe set_camera_ready() zaktualizuje _camera_ready
-        # Jeśli aparat dostępny, auto-start LV
         QTimer.singleShot(500, self._auto_start_after_reconnect)
 
     def _auto_start_after_reconnect(self):
-        """Auto-start LV po udanym reconnect."""
+        """Auto-start LV po udanym reconnect. Jeśli aparat nadal niedostępny — wróć do RECONNECT."""
+        self._reconnecting = False
         if self._camera_ready and not (self.lv_thread and self.lv_thread.isRunning()):
             self._start_lv()
+        else:
+            # Aparat nadal odłączony — pokaż RECONNECT ponownie
+            self._needs_reconnect = True
+            self.btn_lv.setText("RECONNECT")
+            self.btn_lv.setEnabled(True)
 
     def _start_lv(self):
         """Inicjalizuje i uruchamia interfejs gphoto."""
@@ -556,15 +651,13 @@ class CameraView(QWidget):
         )
 
     def _stop_lv(self):
-        """Zatrzymuje wątek i czyści widok. Terminate w tle — nie blokuje UI."""
+        """Zatrzymuje wątek. keep_running=False → run() kończy się naturalnie
+        → _safe_camera_exit() zwalnia USB → finished emitowany → START aktywny."""
         dead_thread = self.lv_thread
         self.lv_thread = None
         self.exposure_ctrl.gphoto = None
         self.image_ctrl.gphoto = None
         self.focus_ctrl.gphoto = None
-        if dead_thread:
-            dead_thread.keep_running = False
-            QTimer.singleShot(100, lambda: self._cleanup_thread(dead_thread))
 
         self.exposure_ctrl.setEnabled(False)
         self.image_ctrl.setEnabled(False)
@@ -574,9 +667,19 @@ class CameraView(QWidget):
         self.lv_screen.setStyleSheet(
             "background: #3d3d3d; border: 2px solid #555; color: white;"
         )
-        self.btn_lv.setText("START LIVE VIEW")
-        self.btn_lv.setStyleSheet("")
         self.btn_cap.setEnabled(False)
+        self.btn_lv.setEnabled(False)
+        self.btn_lv.setText("Stopping...")
+
+        if dead_thread:
+            self._stopping = True
+            dead_thread.keep_running = False
+            # Gdy run() zakończy się (po _safe_camera_exit), odblokuj przycisk
+            dead_thread.finished.connect(self._on_thread_finished)
+            # Safety net: force-terminate po 8s gdyby capture_preview wisiał
+            QTimer.singleShot(8000, lambda: self._force_terminate(dead_thread))
+        else:
+            self._on_thread_finished()
 
     def _on_lv_error(self, error_msg):
         """Obsługa błędów live view."""
@@ -587,10 +690,6 @@ class CameraView(QWidget):
         self.exposure_ctrl.gphoto = None
         self.image_ctrl.gphoto = None
         self.focus_ctrl.gphoto = None
-
-        if dead_thread:
-            dead_thread.keep_running = False
-            QTimer.singleShot(100, lambda: self._cleanup_thread(dead_thread))
 
         self.exposure_ctrl.setEnabled(False)
         self.image_ctrl.setEnabled(False)
@@ -603,19 +702,41 @@ class CameraView(QWidget):
         )
 
         self._needs_reconnect = True
-        self.btn_lv.setEnabled(True)
-        self.btn_lv.setText("RECONNECT")
+        self.btn_lv.setEnabled(False)
         self.btn_lv.setStyleSheet("")
+        self.btn_lv.setText("Waiting...")
 
-    def _cleanup_thread(self, thread):
-        """Czeka na zakończenie wątku w tle (nie blokuje UI)."""
+        if dead_thread:
+            self._stopping = True
+            dead_thread.keep_running = False
+            if dead_thread.isRunning():
+                # Wątek żyje — czekamy na finished
+                dead_thread.finished.connect(self._on_thread_finished)
+                QTimer.singleShot(8000, lambda: self._force_terminate(dead_thread))
+            else:
+                # Wątek już zakończył run() zanim zdążyliśmy się podpiąć
+                self._on_thread_finished()
+        else:
+            self._on_thread_finished()
+
+    def _force_terminate(self, thread):
+        """Ostateczność: terminate jeśli wątek nie zakończył się sam.
+        Bez wait() — nie blokuje UI. USB może pozostać zablokowane."""
         try:
-            thread.wait(5000)
             if thread.isRunning():
                 thread.terminate()
-                thread.wait(1000)
         except RuntimeError:
             pass
+
+    def _on_thread_finished(self):
+        """Wywoływane gdy wątek gphoto zakończył run() — USB zwolnione."""
+        self._stopping = False
+        if self._needs_reconnect:
+            self.btn_lv.setText("RECONNECT")
+            self.btn_lv.setEnabled(True)  # Zawsze — user musi móc spróbować
+        else:
+            self.btn_lv.setText("START LIVE VIEW")
+            self.btn_lv.setEnabled(self._camera_ready)
 
     # --- CAPTURE ---
 

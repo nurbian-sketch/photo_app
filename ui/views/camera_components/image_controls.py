@@ -3,7 +3,7 @@ os.environ.setdefault('LANGUAGE', 'C')
 
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QGroupBox, QLabel, QSizePolicy
 from PyQt6.QtCore import Qt, QSettings, QTimer, QCoreApplication
-from PyQt6.QtGui import QPainter, QLinearGradient, QColor
+from PyQt6.QtGui import QPainter, QLinearGradient, QColor, QIcon
 from ui.widgets.slider_with_scale import SliderWithScale
 from ui.widgets.labeled_combo_box import LabeledComboBox
 import logging
@@ -22,6 +22,38 @@ ALO_CODE_MAP = {
     'x2':  'high',
     # Wszystko inne (długi string z nawiasem) → 'standard'
 }
+
+# Mapowanie: kod WB (z aparatu, LANGUAGE=C) → plik ikony
+_WB_ICON_DIR = os.path.join('assets', 'icons', 'wb')
+
+WB_ICON_MAP = {
+    'Auto':              'wb_awb.png',
+    'AWB White':         'wb_awbw.png',
+    'Daylight':          'wb_daylight.png',
+    'Shadow':            'wb_shadow.png',
+    'Cloudy':            'wb_cloudy.png',
+    'Tungsten':          'wb_tungsten.png',
+    'Fluorescent':       'wb_fluorescent.png',
+    'Flash':             'wb_flash.png',
+    'Custom':            'wb_custom.png',
+    'Color Temperature': 'wb_user_defined.png',
+    # Alternatywne nazwy spotykane na różnych firmware
+    'Kelvin':            'wb_user_defined.png',
+    'PC-1':              'wb_custom.png',
+    'PC-2':              'wb_custom.png',
+    'PC-3':              'wb_custom.png',
+}
+
+
+def _wb_icon(code: str):
+    """Zwraca QIcon dla kodu WB lub None jeśli brak pliku."""
+    filename = WB_ICON_MAP.get(code)
+    if not filename:
+        return None
+    path = os.path.join(_WB_ICON_DIR, filename)
+    if not os.path.exists(path):
+        return None
+    return QIcon(path)
 
 
 class ColorTempGradient(QWidget):
@@ -211,6 +243,19 @@ class ImageControls(QWidget):
         """Kod → display."""
         return self._code_map.get(param, {}).get(code, code)
 
+    # ─────────────────────────── IKONY WB
+
+    def _apply_wb_icons(self, codes: list):
+        """Ustawia ikony w wb_combo wg kodów aparatu. Wywołać po update_items()."""
+        icon_dict = {}
+        for code in codes:
+            icon = _wb_icon(code)
+            if icon:
+                display = self._to_display('whitebalance', code)
+                icon_dict[display] = icon
+        if icon_dict:
+            self.wb_combo.set_item_icons(icon_dict)
+
     # ─────────────────────────── LOGIKA BLOKAD
 
     def _on_wb_changed(self, display_text):
@@ -314,6 +359,10 @@ class ImageControls(QWidget):
                 combo.setCurrentText(display_current)
                 combo.blockSignals(False)
 
+            # Ikony WB — po update_items (które czyści combo)
+            if param == 'whitebalance':
+                self._apply_wb_icons(codes)
+
         # Temperatura kolorów
         ct_data = settings.get('colortemperature')
         if ct_data:
@@ -381,6 +430,10 @@ class ImageControls(QWidget):
                 combo.update_items(display_items)
                 if display_current:
                     combo.setCurrentText(display_current)
+
+            # Ikony WB przy przywracaniu stanu
+            if param == 'whitebalance':
+                self._apply_wb_icons(codes)
 
         # CT
         ct_choices = self._settings.value("image/colortemperature/choices")
