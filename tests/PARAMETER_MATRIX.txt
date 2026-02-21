@@ -1,0 +1,93 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    CANON EOS RP - PARAMETER STATE MATRIX                     ║
+║                         Shooting Modes: M / Av / Tv / P                      ║
+╔══════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────┬─────────┬─────────┬─────────┬─────────┐
+│ PARAMETER               │ Manual  │   Av    │   Tv    │    P    │
+├─────────────────────────┼─────────┼─────────┼─────────┼─────────┤
+│ EXPOSURE TRIANGLE       │         │         │         │         │
+├─────────────────────────┼─────────┼─────────┼─────────┼─────────┤
+│ ISO                     │ ✅ (28) │ ✅ (28) │ ✅ (28) │ ✅ (28) │
+│ Aperture                │ ✅ (19) │ ✅ (19) │ 🔒 auto │ 🔒 auto │
+│ Shutter Speed           │ ✅ (52) │ 🔒 auto │ ✅ (52) │ 🔒 auto │
+│ Exposure Compensation   │ 🔒  0   │ ✅ (19) │ ✅ (19) │ ✅ (19) │
+├─────────────────────────┼─────────┼─────────┼─────────┼─────────┤
+│ WHITE BALANCE           │         │         │         │         │
+├─────────────────────────┼─────────┼─────────┼─────────┼─────────┤
+│ White Balance           │ ✅ (10) │ ✅ (10) │ ✅ (10) │ ✅ (10) │
+│ Color Temperature       │ ✅ (76) │ ✅ (76) │ ✅ (76) │ ✅ (76) │
+├─────────────────────────┼─────────┼─────────┼─────────┼─────────┤
+│ IMAGE SETTINGS          │         │         │         │         │
+├─────────────────────────┼─────────┼─────────┼─────────┼─────────┤
+│ Image Format            │ ✅ (23) │ ✅ (23) │ ✅ (23) │ ✅ (23) │
+│ Picture Style           │ ✅ (11) │ ✅ (11) │ ✅ (11) │ ✅ (11) │
+├─────────────────────────┼─────────┼─────────┼─────────┼─────────┤
+│ AUTO FOCUS              │         │         │         │         │
+├─────────────────────────┼─────────┼─────────┼─────────┼─────────┤
+│ AF Method               │ ✅  (6) │ ✅  (6) │ ✅  (6) │ ✅  (6) │
+│ Continuous AF           │ ✅  (2) │ ✅  (2) │ ✅  (2) │ ✅  (2) │
+├─────────────────────────┼─────────┼─────────┼─────────┼─────────┤
+│ OTHER                   │         │         │         │         │
+├─────────────────────────┼─────────┼─────────┼─────────┼─────────┤
+│ Drive Mode              │ ✅  (6) │ ✅  (6) │ ✅  (6) │ ✅  (6) │
+│ Auto Lighting Optimizer │ ✅  (4) │ ✅  (4) │ ✅  (4) │ ✅  (4) │
+└─────────────────────────┴─────────┴─────────┴─────────┴─────────┘
+
+LEGEND:
+  ✅ (N)  = Editable, N choices available
+  🔒 auto = Locked (auto-controlled by camera)
+  🔒  0   = Locked at value 0 (manual mode)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+KEY OBSERVATIONS:
+
+1. EXPOSURE TRIANGLE CONTROL:
+   ┌──────────┬──────────┬─────────┬─────────┐
+   │   Mode   │   ISO    │ Aperture│ Shutter │
+   ├──────────┼──────────┼─────────┼─────────┤
+   │ Manual   │ ✅ Full  │ ✅ Full │ ✅ Full │
+   │ Av       │ ✅ Full  │ ✅ Full │ 🔒 Auto │
+   │ Tv       │ ✅ Full  │ 🔒 Auto │ ✅ Full │
+   │ P        │ ✅ Full  │ 🔒 Auto │ 🔒 Auto │
+   └──────────┴──────────┴─────────┴─────────┘
+
+2. EXPOSURE COMPENSATION:
+   - Manual: LOCKED (you control everything directly)
+   - Av/Tv/P: EDITABLE (adjust auto-exposure)
+
+3. ALWAYS EDITABLE (regardless of mode):
+   • ISO (28 choices)
+   • White Balance (10 choices)
+   • Color Temperature (76 choices)
+   • Image Format (23 choices)
+   • Picture Style (11 choices)
+   • AF Method (6 choices)
+   • Continuous AF (On/Off)
+   • Drive Mode (6 choices)
+   • Auto Lighting Optimizer (4 choices)
+
+═══════════════════════════════════════════════════════════════════════════════
+
+APPLICATION CONSTRAINTS (USER REQUIREMENTS):
+
+1. ISO: Limited to max 800
+   Available: [100, 200, 400, 800]
+
+2. SHUTTER SPEED: Sensible ranges only
+   Without Flash: 1/10 - 1/1000
+   With Flash:    1/60 - 1/125
+
+3. IMAGE FORMAT: Simplified to 3 choices
+   [RAW, JPEG, RAW+JPEG]
+
+4. PICTURE STYLE: 
+   - Auto-set to "None" when RAW format selected
+   - Show tooltip warning
+
+5. DRIVE MODE:
+   - Auto-configured to "Timer 2 sec" (required for remote)
+   - Not shown in UI (background setting)
+
+═══════════════════════════════════════════════════════════════════════════════
