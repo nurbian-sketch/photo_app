@@ -3,8 +3,8 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QSplitter, QSizePolicy, QDialog
 )
-from PyQt6.QtCore import Qt, QSettings, pyqtSignal, QTimer
-from PyQt6.QtGui import QPixmap, QTransform
+from PyQt6.QtCore import Qt, QSettings
+from PyQt6.QtGui import QPixmap
 
 from core.gphoto_interface import GPhotoInterface
 
@@ -13,84 +13,10 @@ from ui.views.camera_components.image_controls import ImageControls
 from ui.views.camera_components.autofocus_controls import AutofocusControls
 
 
-
-def _read_exif(path: str) -> dict:
-    """Czyta podstawowe dane EXIF. Zwraca dict z polami lub '' gdy brak."""
-    r = {'shutter':'','aperture':'','iso':'','focal':'','date':'','dims':'','size':'','camera':''}
-    try:
-        from PIL import Image
-        from PIL.ExifTags import TAGS
-        img = Image.open(path)
-        w, h = img.size
-        r['dims'] = f"{w}\u00d7{h}"
-        r['size'] = f"{os.path.getsize(path)/(1024*1024):.1f}\u00a0MB"
-
-        # getexif() — główny IFD (Make, Model, DateTime, dims)
-        exif_obj = img.getexif()
-        print(f"EXIF DEBUG: getexif len={len(exif_obj)}, bool={bool(exif_obj)}")
-        if not exif_obj:
-            print("EXIF DEBUG: exif_obj empty → returning")
-            return r
-        exif = {TAGS.get(k, k): v for k, v in exif_obj.items()}
-        print(f"EXIF DEBUG: main IFD keys={list(exif.keys())[:5]}")
-
-        # ExifIFD (0x8769) — tu są ExposureTime, FNumber, ISO, FocalLength
-        from PIL.ExifTags import TAGS, IFD
-        try:
-            exif_ifd = exif_obj.get_ifd(0x8769)
-            print(f"EXIF DEBUG: ExifIFD len={len(exif_ifd)}, keys={[TAGS.get(k,k) for k in exif_ifd.keys()]}")
-            exif.update({TAGS.get(k, k): v for k, v in exif_ifd.items()})
-        except Exception as e:
-            print(f"EXIF DEBUG: ExifIFD error: {e}")
-
-        def frac(v):
-            if hasattr(v, 'numerator'):
-                return v.numerator, v.denominator
-            try:
-                return v[0], v[1]
-            except Exception:
-                return float(v), 1
-
-        exp = exif.get('ExposureTime')
-        if exp:
-            n, d = frac(exp)
-            if n and d:
-                ratio = d / n
-                r['shutter'] = f"1/{int(round(ratio))}s" if ratio >= 1 else f"{n/d:.1f}s"
-
-        fn = exif.get('FNumber')
-        if fn:
-            n, d = frac(fn)
-            if d: r['aperture'] = f"f/{n/d:.1f}"
-
-        iso = exif.get('ISOSpeedRatings') or exif.get('PhotographicSensitivity')
-        if iso:
-            r['iso'] = f"ISO\u00a0{iso}"
-
-        fl = exif.get('FocalLength')
-        if fl:
-            n, d = frac(fl)
-            if d: r['focal'] = f"{int(round(n/d))}mm"
-
-        date = exif.get('DateTimeOriginal') or exif.get('DateTime', '')
-        if date:
-            s = str(date)
-            r['date'] = s[:10].replace(':', '-') + ' ' + s[11:16]
-
-        make  = str(exif.get('Make',  '')).strip()
-        model = str(exif.get('Model', '')).strip()
-        if model:
-            r['camera'] = model if model.startswith(make) else (f"{make} {model}".strip() if make else model)
-
-    except Exception as e:
-        print(f"EXIF read error: {e}")
-        import traceback; traceback.print_exc()
-    return r
-
-# ─────────────────────────────── Popup podglądu zdjęcia
+# ─────────────────────────────────────────── Popup podglądu zdjęcia
 
 class CapturePreviewDialog(QDialog):
-    """Okno podglądu przechwyconego zdjęcia z kontrolkami zoom/pan/rotate."""
+    """Okno podglądu przechwyconego zdjęcia — niezależne od trybu okna/fullscreen."""
 
     def __init__(self, image_path, parent=None):
         super().__init__(parent)
@@ -103,326 +29,64 @@ class CapturePreviewDialog(QDialog):
             | Qt.WindowType.WindowMaximizeButtonHint
         )
 
-        # Ciemny motyw jak main window (#3d3d3d)
-        self.setStyleSheet("""
-            QDialog { background-color: #3d3d3d; }
-            QPushButton { 
-                background-color: #4a4a4a; 
-                color: #ccc; 
-                border: 1px solid #555;
-                border-radius: 3px;
-            }
-            QPushButton:hover { background-color: #5a5a5a; }
-            QPushButton:pressed { background-color: #3a3a3a; }
-            QLabel { color: #ccc; }
-        """)
-
-        self._image_path = image_path
-        self._original_pixmap = QPixmap(image_path)
-        self._pixmap = self._original_pixmap  # Po rotacji
-        self._rotation = 0  # 0, 90, 180, 270
-        self._zoom = 1.0
-        self._pan_offset = [0, 0]
-        self._drag_start = None
-        self._saved_geometry = None
-
-        self._init_ui()
-
-    def _init_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
 
-        # Image label - tło takie samo jak okno
         self._label = QLabel()
         self._label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._label.setStyleSheet("background: #3d3d3d;")
+        self._label.setStyleSheet("background: #1a1a1a;")
         self._label.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored
         )
-        self._label.setMouseTracking(True)
         layout.addWidget(self._label)
 
-        # Control bar - ten sam kolor co tło
-        control_bar = QWidget()
-        control_bar.setStyleSheet("background: #3d3d3d;")
-        control_layout = QHBoxLayout(control_bar)
-        control_layout.setContentsMargins(10, 5, 10, 5)
-        control_layout.setSpacing(8)
+        info = QLabel(image_path)
+        info.setStyleSheet("color: #aaa; padding: 4px; font-size: 11px;")
+        info.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(info)
 
-        # Rotation controls
-        btn_rotate_left = QPushButton("↶")
-        btn_rotate_left.setFixedSize(32, 32)
-        btn_rotate_left.setToolTip("Rotate left 90°")
-        btn_rotate_left.setStyleSheet("font-size: 16px;")
-        btn_rotate_left.clicked.connect(self._rotate_left)
-        control_layout.addWidget(btn_rotate_left)
-
-        btn_rotate_right = QPushButton("↷")
-        btn_rotate_right.setFixedSize(32, 32)
-        btn_rotate_right.setToolTip("Rotate right 90°")
-        btn_rotate_right.setStyleSheet("font-size: 16px;")
-        btn_rotate_right.clicked.connect(self._rotate_right)
-        control_layout.addWidget(btn_rotate_right)
-
-        # Separator
-        sep = QLabel("|")
-        sep.setStyleSheet("color: #555;")
-        control_layout.addWidget(sep)
-
-        # Zoom controls
-        btn_zoom_out = QPushButton("−")
-        btn_zoom_out.setFixedSize(32, 32)
-        btn_zoom_out.setStyleSheet("font-size: 18px; font-weight: bold;")
-        btn_zoom_out.clicked.connect(self._zoom_out)
-        control_layout.addWidget(btn_zoom_out)
-
-        self._zoom_label = QLabel("100%")
-        self._zoom_label.setFixedWidth(50)
-        self._zoom_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._zoom_label.setStyleSheet("color: #888;")
-        control_layout.addWidget(self._zoom_label)
-
-        btn_zoom_in = QPushButton("+")
-        btn_zoom_in.setFixedSize(32, 32)
-        btn_zoom_in.setStyleSheet("font-size: 18px; font-weight: bold;")
-        btn_zoom_in.clicked.connect(self._zoom_in)
-        control_layout.addWidget(btn_zoom_in)
-
-        btn_fit = QPushButton("Fit")
-        btn_fit.setFixedSize(50, 32)
-        btn_fit.clicked.connect(self._zoom_fit)
-        control_layout.addWidget(btn_fit)
-
-        btn_100 = QPushButton("1:1")
-        btn_100.setFixedSize(50, 32)
-        btn_100.clicked.connect(self._zoom_100)
-        control_layout.addWidget(btn_100)
-
-        # Spacer
-        control_layout.addStretch()
-
-        # File path
-        path_label = QLabel(self._image_path)
-        path_label.setStyleSheet("color: #555; font-size: 11px;")
-        control_layout.addWidget(path_label)
-
-        control_layout.addStretch()
-
-        # Close button
-        btn_close = QPushButton("Close")
-        btn_close.setFixedSize(80, 32)
-        btn_close.clicked.connect(self.close)
-        control_layout.addWidget(btn_close)
-
-        # EXIF bar — jedna linia z danymi zdjęcia
-        exif = _read_exif(self._image_path)
-        parts = [v for v in [
-            exif['camera'], exif['dims'], exif['size'],
-            exif['shutter'], exif['aperture'], exif['iso'],
-            exif['focal'], exif['date']
-        ] if v]
-        self._exif_bar = QLabel("   •   ".join(parts) if parts else "No EXIF data")
-        self._exif_bar.setStyleSheet(
-            "background: #222; color: #999; font-size: 11px; padding: 3px 10px;"
-        )
-        self._exif_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self._exif_bar)
-
-        layout.addWidget(control_bar)
-
-    def _rotate_left(self):
-        """Obrót o -90°."""
-        self._rotation = (self._rotation - 90) % 360
-        self._apply_rotation()
-
-    def _rotate_right(self):
-        """Obrót o +90°."""
-        self._rotation = (self._rotation + 90) % 360
-        self._apply_rotation()
-
-    def _apply_rotation(self):
-        """Aplikuje rotację do pixmapy."""
-        from PyQt6.QtGui import QTransform
-        transform = QTransform().rotate(self._rotation)
-        self._pixmap = self._original_pixmap.transformed(
-            transform, Qt.TransformationMode.SmoothTransformation
-        )
-        self._pan_offset = [0, 0]
-        self._zoom_fit()
-
-    def keyPressEvent(self, event):
-        """Obsługa F11 fullscreen i Escape."""
-        if event.key() == Qt.Key.Key_F11:
-            self._toggle_fullscreen()
-        elif event.key() == Qt.Key.Key_Escape:
-            if self.isFullScreen():
-                self._toggle_fullscreen()
-            else:
-                self.close()
-        elif event.key() == Qt.Key.Key_Left:
-            self._rotate_left()
-        elif event.key() == Qt.Key.Key_Right:
-            self._rotate_right()
-        else:
-            super().keyPressEvent(event)
-
-    def _toggle_fullscreen(self):
-        """Przełącza tryb pełnoekranowy."""
-        if self.isFullScreen():
-            self.showNormal()
-            if self._saved_geometry:
-                self.setGeometry(self._saved_geometry)
-        else:
-            self._saved_geometry = self.geometry()
-            self.showFullScreen()
-        QTimer.singleShot(50, self._zoom_fit)
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        QTimer.singleShot(50, self._zoom_fit)
+        self._pixmap = QPixmap(image_path)
+        self._update_preview()
 
     def _update_preview(self):
         if self._pixmap.isNull():
-            self._label.setText(f"Cannot load image:\n{self._image_path}")
+            self._label.setText("Cannot load image")
             return
-
-        # Oblicz rozmiar obrazu po zoom
-        img_w = int(self._pixmap.width() * self._zoom)
-        img_h = int(self._pixmap.height() * self._zoom)
-
-        if img_w < 1 or img_h < 1:
-            return
-
         scaled = self._pixmap.scaled(
-            img_w, img_h,
+            self._label.size(),
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation
         )
-
-        # Jeśli obraz mniejszy niż label — wycentruj
-        label_size = self._label.size()
-        if scaled.width() <= label_size.width() and scaled.height() <= label_size.height():
-            self._pan_offset = [0, 0]
-            self._label.setPixmap(scaled)
-        else:
-            # Przytnij do widocznego obszaru z uwzględnieniem pan
-            visible_w = min(scaled.width(), label_size.width())
-            visible_h = min(scaled.height(), label_size.height())
-
-            # Ogranicz pan do granic obrazu
-            max_pan_x = max(0, scaled.width() - label_size.width())
-            max_pan_y = max(0, scaled.height() - label_size.height())
-            self._pan_offset[0] = max(0, min(self._pan_offset[0], max_pan_x))
-            self._pan_offset[1] = max(0, min(self._pan_offset[1], max_pan_y))
-
-            cropped = scaled.copy(
-                int(self._pan_offset[0]), int(self._pan_offset[1]),
-                visible_w, visible_h
-            )
-            self._label.setPixmap(cropped)
-
-        self._zoom_label.setText(f"{int(self._zoom * 100)}%")
-
-    def _zoom_in(self):
-        self._zoom = min(self._zoom * 1.25, 10.0)
-        self._update_preview()
-
-    def _zoom_out(self):
-        self._zoom = max(self._zoom / 1.25, 0.1)
-        self._update_preview()
-
-    def _zoom_fit(self):
-        if self._pixmap.isNull():
-            return
-        label_size = self._label.size()
-        if label_size.width() < 10 or label_size.height() < 10:
-            QTimer.singleShot(100, self._zoom_fit)
-            return
-        scale_w = label_size.width() / self._pixmap.width()
-        scale_h = label_size.height() / self._pixmap.height()
-        self._zoom = min(scale_w, scale_h, 1.0)  # Nie powiększaj ponad 100%
-        self._pan_offset = [0, 0]
-        self._update_preview()
-
-    def _zoom_100(self):
-        self._zoom = 1.0
-        self._pan_offset = [0, 0]
-        self._update_preview()
+        self._label.setPixmap(scaled)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if self.isVisible():
-            self._update_preview()
-
-    def wheelEvent(self, event):
-        """Zoom kółkiem myszy."""
-        delta = event.angleDelta().y()
-        if delta > 0:
-            self._zoom_in()
-        elif delta < 0:
-            self._zoom_out()
-
-    def mousePressEvent(self, event):
-        """Rozpocznij pan."""
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._drag_start = event.pos()
-
-    def mouseMoveEvent(self, event):
-        """Pan podczas przeciągania."""
-        if self._drag_start is not None:
-            delta = event.pos() - self._drag_start
-            self._pan_offset[0] -= delta.x()
-            self._pan_offset[1] -= delta.y()
-            self._drag_start = event.pos()
-            self._update_preview()
-
-    def mouseReleaseEvent(self, event):
-        """Zakończ pan."""
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._drag_start = None
+        self._update_preview()
 
 
-# ─────────────────────────────── Widok kamery
+# ─────────────────────────────────────────── Widok kamery
 
 class CameraView(QWidget):
 
-    # Sygnał żądania ponownego połączenia z aparatem
-    reconnect_requested = pyqtSignal()
+    DEFAULT_CAPTURE_DIR = os.path.expanduser("~/Pictures/SessionsAssistant")
 
-    # Klucz QSettings — taki sam jak w PreferencesDialog
-    KEY_SESSION_DIR = "session/directory"
-    
-    # Domyślny katalog na sesje
-    DEFAULT_SESSION_DIR = os.path.expanduser("~/Obrazy/sessions")
+    # Stany przycisku LV
+    _LV_STATE_IDLE       = 'idle'       # START LIVE VIEW
+    _LV_STATE_RUNNING    = 'running'    # STOP LIVE VIEW
+    _LV_STATE_RECONNECT  = 'reconnect'  # RECONNECT LIVE VIEW
 
     def __init__(self, camera_service=None):
         super().__init__()
         self.cs = camera_service
         self.lv_thread = None
         self._camera_ready = False
-        self._needs_reconnect = False  # Flaga: było zerwane połączenie
-        self._stopping = False    # Wątek w trakcie zatrzymywania
-        self._reconnecting = False  # Trwa próba reconnect
+        self._lv_state = self._LV_STATE_IDLE
         self._settings = QSettings("Grzeza", "SessionsAssistant")
-        self._capture_dir = self._get_capture_directory()
-        self._preview_dialogs = []  # Referencje do otwartych podglądów
+        self._capture_dir = self._settings.value(
+            "capture/directory", self.DEFAULT_CAPTURE_DIR
+        )
+        self._preview_dialogs = []
         self._init_ui()
-
-    def _get_capture_directory(self) -> str:
-        """Pobiera katalog sesji z QSettings z migracją starej ścieżki."""
-        saved = self._settings.value(self.KEY_SESSION_DIR, "")
-        
-        # Migracja: stara domyślna ścieżka → nowa
-        if not saved or "Pictures/sessions" in saved or "Pictures/SessionsAssistant" in saved:
-            self._settings.setValue(self.KEY_SESSION_DIR, self.DEFAULT_SESSION_DIR)
-            return self.DEFAULT_SESSION_DIR
-        
-        return saved
-
-    def update_capture_directory(self):
-        """Odświeża katalog sesji z QSettings (po zmianie w Preferences)."""
-        self._capture_dir = self._get_capture_directory()
 
     def _init_ui(self):
         main_layout = QVBoxLayout(self)
@@ -432,7 +96,7 @@ class CameraView(QWidget):
         self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.main_splitter.setHandleWidth(12)
 
-        # ---- LEFT: Control Panel (2 columns) ----
+        # ---- LEFT: Control Panel (2 kolumny) ----
         control_panel = QWidget()
         control_panel.setMinimumWidth(760)
         control_layout = QHBoxLayout(control_panel)
@@ -493,9 +157,18 @@ class CameraView(QWidget):
         preview_layout = QVBoxLayout(preview_panel)
         preview_layout.setContentsMargins(0, 0, 0, 0)
 
+        # Connect button — widoczny tylko gdy brak aparatu
+        self.btn_connect = QPushButton("CONNECT CAMERA")
+        self.btn_connect.setFixedHeight(40)
+        self.btn_connect.setStyleSheet(
+            "font-weight: bold; background-color: #1565c0; color: white;"
+        )
+        self.btn_connect.setVisible(False)
+        preview_layout.addWidget(self.btn_connect)
+
         self.lv_screen = QLabel("LIVE VIEW OFF")
         self.lv_screen.setStyleSheet(
-            "background: #3d3d3d; border: 2px solid #555; color: white;"
+            "background: black; border: 2px solid #333; color: white;"
         )
         self.lv_screen.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lv_screen.setSizePolicy(
@@ -530,10 +203,9 @@ class CameraView(QWidget):
         self.btn_lv.clicked.connect(self._toggle_liveview)
         self.btn_cap.clicked.connect(self._on_capture_clicked)
 
-        # Wszystkie przyciski wyłączone do momentu wykrycia aparatu
         self._set_buttons_enabled(False)
 
-    # ─────────────────────────────── FRAME UPDATE
+    # ─────────────────────────────────────────── FRAME UPDATE
 
     def _update_frame(self, data, is_blinking):
         pixmap = QPixmap()
@@ -546,84 +218,81 @@ class CameraView(QWidget):
             self.lv_screen.setPixmap(scaled)
             if is_blinking:
                 self.lv_screen.setStyleSheet(
-                    "background: #3d3d3d; border: 2px solid #ff8a65;"
+                    "background: black; border: 2px solid #ff8a65;"
                 )
             else:
                 self.lv_screen.setStyleSheet(
-                    "background: #3d3d3d; border: 2px solid #555;"
+                    "background: black; border: 2px solid #333;"
                 )
 
-    # --- CAMERA READY STATE ---
+    # ─────────────────────────────────────────── CAMERA READY STATE
 
     def set_camera_ready(self, ready):
         """Ustawia stan gotowości aparatu — włącza/wyłącza przyciski."""
         self._camera_ready = ready
-
-        # Podczas reconnect nie zmieniamy btn_lv — _auto_start_after_reconnect to zrobi
-        if not self._reconnecting and not self._stopping:
-            if not ready:
-                self.btn_lv.setText("CONNECT CAMERA")
-                self.btn_lv.setStyleSheet("")
-                self.btn_lv.setEnabled(True)
-            elif not (self.lv_thread and self.lv_thread.isRunning()):
-                self.btn_lv.setText("START LIVE VIEW")
-                self.btn_lv.setStyleSheet("")
-                self.btn_lv.setEnabled(True)
-
-        if not (self.lv_thread and self.lv_thread.isRunning()):
+        self.btn_connect.setVisible(not ready)
+        if not self._lv_running():
             self._set_buttons_enabled(ready)
 
+    def _lv_running(self) -> bool:
+        """True gdy wątek LV jest aktywny."""
+        return self.lv_thread is not None and self.lv_thread.isRunning()
+
     def _set_buttons_enabled(self, enabled):
-        """Włącza/wyłącza przyciski zależne od aparatu.
-        Uwaga: btn_lv jest zawsze aktywny (CONNECT/START/STOP/RECONNECT)."""
-        # btn_lv NIE jest tutaj — zarządzany osobno w set_camera_ready()
-        self.btn_cap.setEnabled(enabled and self.lv_thread is not None
-                                and self.lv_thread.isRunning())
+        """Włącza/wyłącza przyciski zależne od aparatu."""
+        self.btn_lv.setEnabled(enabled)
+        self.btn_cap.setEnabled(enabled and self._lv_running())
         self.btn_save.setEnabled(enabled)
         self.btn_update.setEnabled(enabled)
 
-    # --- LIVE VIEW & GPHOTO LOGIC ---
+    # ─────────────────────────────────────────── LV STATE MACHINE
+
+    def _set_lv_state(self, state: str):
+        """
+        Centralny punkt zarządzania stanem przycisku LV.
+        Trzy stany: idle / running / reconnect.
+        """
+        self._lv_state = state
+
+        if state == self._LV_STATE_IDLE:
+            self.btn_lv.setText("START LIVE VIEW")
+            self.btn_lv.setStyleSheet("")
+            self.btn_lv.setEnabled(self._camera_ready)
+            self.btn_cap.setEnabled(False)
+
+        elif state == self._LV_STATE_RUNNING:
+            self.btn_lv.setText("STOP LIVE VIEW")
+            self.btn_lv.setStyleSheet(
+                "background-color: #c62828; color: white; font-weight: bold;"
+            )
+            self.btn_lv.setEnabled(True)
+            self.btn_cap.setEnabled(True)
+
+        elif state == self._LV_STATE_RECONNECT:
+            self.btn_lv.setText("RECONNECT LIVE VIEW")
+            self.btn_lv.setStyleSheet(
+                "background-color: #e65100; color: white; font-weight: bold;"
+            )
+            self.btn_lv.setEnabled(True)
+            self.btn_cap.setEnabled(False)
 
     def _toggle_liveview(self):
-        """Przełącza stan wątku interfejsu gphoto.
-        RECONNECT = probe + auto-start LV."""
-        if self.lv_thread and self.lv_thread.isRunning():
-            # LV aktywne → zatrzymaj
+        """Przełącza stan LV — obsługuje wszystkie trzy stany przycisku."""
+        if self._lv_state == self._LV_STATE_RUNNING:
             self._stop_lv()
-        elif self._needs_reconnect:
-            # Zerwane połączenie → probe i jeśli OK to od razu start LV
-            self._needs_reconnect = False
-            self._try_reconnect()
-        elif not self._camera_ready:
-            # Brak aparatu → tylko probe (bez auto-start)
-            self.reconnect_requested.emit()
         else:
-            # Aparat gotowy → uruchom LV
+            # idle lub reconnect — oba startują od nowa
             self._start_lv()
 
-    def _try_reconnect(self):
-        """Próbuje reconnect: probe + auto-start LV."""
-        self._reconnecting = True
-        self.btn_lv.setEnabled(False)
-        self.btn_lv.setText("Connecting...")
-        self.reconnect_requested.emit()
-        QTimer.singleShot(500, self._auto_start_after_reconnect)
-
-    def _auto_start_after_reconnect(self):
-        """Auto-start LV po udanym reconnect. Jeśli aparat nadal niedostępny — wróć do RECONNECT."""
-        self._reconnecting = False
-        if self._camera_ready and not (self.lv_thread and self.lv_thread.isRunning()):
-            self._start_lv()
-        else:
-            # Aparat nadal odłączony — pokaż RECONNECT ponownie
-            self._needs_reconnect = True
-            self.btn_lv.setText("RECONNECT")
-            self.btn_lv.setEnabled(True)
+    # ─────────────────────────────────────────── START / STOP LV
 
     def _start_lv(self):
-        """Inicjalizuje i uruchamia interfejs gphoto."""
-        self.btn_lv.setEnabled(False)  # Blokada wielokrotnego kliknięcia
+        """Inicjalizuje i uruchamia wątek gphoto. Działa zarówno przy
+        pierwszym starcie jak i przy reconnect."""
+        self.btn_lv.setEnabled(False)  # blokada wielokrotnego kliknięcia
 
+        # Fix #3 — zawsze tworzymy nowy wątek; poprzedni jest już zatrzymany
+        # (przez _stop_lv lub przez error_occurred → lv_thread=None)
         self.lv_thread = GPhotoInterface()
 
         self.exposure_ctrl.gphoto = self.lv_thread
@@ -636,117 +305,84 @@ class CameraView(QWidget):
         self.lv_thread.frame_received.connect(self._update_frame)
         self.lv_thread.error_occurred.connect(self._on_lv_error)
         self.lv_thread.image_captured.connect(self._on_image_captured)
-        self.lv_thread.capture_failed.connect(self._on_capture_failed)
+
+        # Fix #3 — sygnał finished czyści referencję po cichym zakończeniu wątku
+        self.lv_thread.finished.connect(self._on_thread_finished)
 
         self.lv_thread.start()
 
         self.exposure_ctrl.setEnabled(True)
         self.image_ctrl.setEnabled(True)
         self.focus_ctrl.setEnabled(True)
-        self.btn_lv.setEnabled(True)  # Teraz działa jako STOP
-        self.btn_cap.setEnabled(True)  # Capture dostępny podczas LV
-        self.btn_lv.setText("STOP LIVE VIEW")
-        self.btn_lv.setStyleSheet(
-            "background-color: #c62828; color: white; font-weight: bold;"
-        )
+        self._set_lv_state(self._LV_STATE_RUNNING)
 
     def _stop_lv(self):
-        """Zatrzymuje wątek. keep_running=False → run() kończy się naturalnie
-        → _safe_camera_exit() zwalnia USB → finished emitowany → START aktywny."""
-        dead_thread = self.lv_thread
-        self.lv_thread = None
+        """Zatrzymuje wątek i czyści widok."""
+        if self.lv_thread:
+            self.lv_thread.stop()
+            self.lv_thread = None
+
+        self._cleanup_controls()
+        self._set_lv_state(self._LV_STATE_IDLE)
+        self._set_lv_screen_off()
+
+    def _cleanup_controls(self):
+        """Odłącza gphoto od kontrolek i wyłącza je."""
         self.exposure_ctrl.gphoto = None
         self.image_ctrl.gphoto = None
         self.focus_ctrl.gphoto = None
-
         self.exposure_ctrl.setEnabled(False)
         self.image_ctrl.setEnabled(False)
         self.focus_ctrl.setEnabled(False)
-        self.lv_screen.clear()
-        self.lv_screen.setText("LIVE VIEW OFF")
-        self.lv_screen.setStyleSheet(
-            "background: #3d3d3d; border: 2px solid #555; color: white;"
-        )
-        self.btn_cap.setEnabled(False)
-        self.btn_lv.setEnabled(False)
-        self.btn_lv.setText("Stopping...")
 
-        if dead_thread:
-            self._stopping = True
-            dead_thread.keep_running = False
-            # Gdy run() zakończy się (po _safe_camera_exit), odblokuj przycisk
-            dead_thread.finished.connect(self._on_thread_finished)
-            # Safety net: force-terminate po 8s gdyby capture_preview wisiał
-            QTimer.singleShot(8000, lambda: self._force_terminate(dead_thread))
-        else:
-            self._on_thread_finished()
+    def _set_lv_screen_off(self, message="LIVE VIEW OFF"):
+        """Resetuje ekran podglądu do stanu nieaktywnego."""
+        self.lv_screen.clear()
+        self.lv_screen.setText(message)
+        self.lv_screen.setStyleSheet(
+            "background: black; border: 2px solid #333; color: white;"
+        )
+
+    # ─────────────────────────────────────────── ERROR / RECONNECT
 
     def _on_lv_error(self, error_msg):
-        """Obsługa błędów live view."""
-        # Wątek zgłosił błąd i sam skończy run() — tylko odłączamy referencję.
-        # stop() z 4s sleep uruchamiamy w tle żeby nie blokować UI.
-        dead_thread = self.lv_thread
-        self.lv_thread = None
-        self.exposure_ctrl.gphoto = None
-        self.image_ctrl.gphoto = None
-        self.focus_ctrl.gphoto = None
+        """
+        Fix #3 — obsługa błędu krytycznego z wątku gphoto.
+        Wątek sam się zatrzymuje przed emisją sygnału,
+        więc tylko czyścimy stan UI i oferujemy reconnect.
+        """
+        if self.lv_thread:
+            self.lv_thread.stop()
+            self.lv_thread = None  # Fix #3 — kluczowe: nowy wątek przy reconnect
 
-        self.exposure_ctrl.setEnabled(False)
-        self.image_ctrl.setEnabled(False)
-        self.focus_ctrl.setEnabled(False)
-        self._set_buttons_enabled(False)
-
-        self.lv_screen.setText("Connection lost.\nClick to reconnect.")
+        self._cleanup_controls()
+        self._set_lv_screen_off(f"CONNECTION LOST\n{error_msg}")
         self.lv_screen.setStyleSheet(
-            "background: #3d3d3d; border: 2px solid #555; color: #888;"
+            "background: black; border: 2px solid #c62828; color: #c62828;"
         )
-
-        self._needs_reconnect = True
-        self.btn_lv.setEnabled(False)
-        self.btn_lv.setStyleSheet("")
-        self.btn_lv.setText("Waiting...")
-
-        if dead_thread:
-            self._stopping = True
-            dead_thread.keep_running = False
-            if dead_thread.isRunning():
-                # Wątek żyje — czekamy na finished
-                dead_thread.finished.connect(self._on_thread_finished)
-                QTimer.singleShot(8000, lambda: self._force_terminate(dead_thread))
-            else:
-                # Wątek już zakończył run() zanim zdążyliśmy się podpiąć
-                self._on_thread_finished()
-        else:
-            self._on_thread_finished()
-
-    def _force_terminate(self, thread):
-        """Ostateczność: terminate jeśli wątek nie zakończył się sam.
-        Bez wait() — nie blokuje UI. USB może pozostać zablokowane."""
-        try:
-            if thread.isRunning():
-                thread.terminate()
-        except RuntimeError:
-            pass
+        # Fix #3 — stan reconnect: przycisk aktywny, kliknięcie → _start_lv()
+        self._set_lv_state(self._LV_STATE_RECONNECT)
 
     def _on_thread_finished(self):
-        """Wywoływane gdy wątek gphoto zakończył run() — USB zwolnione."""
-        self._stopping = False
-        if self._needs_reconnect:
-            self.btn_lv.setText("RECONNECT")
-            self.btn_lv.setEnabled(True)  # Zawsze — user musi móc spróbować
-        else:
-            self.btn_lv.setText("START LIVE VIEW")
-            self.btn_lv.setEnabled(self._camera_ready)
+        """
+        Fix #3 — wątek zakończył się (normalnie lub przez stop()).
+        Jeśli nie było error_occurred, UI może być w stanie running —
+        wtedy cicho przechodzimy do idle.
+        """
+        if self._lv_state == self._LV_STATE_RUNNING:
+            # Wątek skończył bez błędu (np. keep_running=False z zewnątrz)
+            self.lv_thread = None
+            self._cleanup_controls()
+            self._set_lv_state(self._LV_STATE_IDLE)
+            self._set_lv_screen_off()
 
-    # --- CAPTURE ---
+    # ─────────────────────────────────────────── CAPTURE
 
     def _on_capture_clicked(self):
         """Kolejkuje zdjęcie na wątku gphoto."""
-        if self.lv_thread and self.lv_thread.isRunning():
-            self.btn_cap.setEnabled(False)  # Blokada wielokrotnego kliknięcia
+        if self._lv_running():
+            self.btn_cap.setEnabled(False)
             self.btn_cap.setText("CAPTURING...")
-            # Upewnij się że mamy aktualny katalog
-            self.update_capture_directory()
             self.lv_thread.capture_photo(self._capture_dir)
 
     def _on_image_captured(self, file_path):
@@ -757,52 +393,35 @@ class CameraView(QWidget):
 
         dialog = CapturePreviewDialog(file_path, parent=None)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        dialog.destroyed.connect(lambda: self._preview_dialogs.remove(dialog)
-                                 if dialog in self._preview_dialogs else None)
+        dialog.destroyed.connect(
+            lambda: self._preview_dialogs.remove(dialog)
+            if dialog in self._preview_dialogs else None
+        )
         self._preview_dialogs.append(dialog)
         dialog.show()
 
-    def _on_capture_failed(self, error_msg):
-        """Obsługa błędu capture — NIE zabija sesji LV."""
-        print(f"Capture failed: {error_msg}")
-        # Tylko reset przycisku — LV samo się odzyska
-        self.btn_cap.setEnabled(True)
-        self.btn_cap.setText("CAPTURE PHOTO")
-
-    # --- LEAVE / ENTER ---
+    # ─────────────────────────────────────────── LEAVE / ENTER
 
     def on_leave(self):
         """Wywoływane przy opuszczeniu widoku Camera.
-        Zamyka sesję PTP i resetuje UI do stanu początkowego."""
-        if self.lv_thread and self.lv_thread.isRunning():
+        Zatrzymuje LV i resetuje UI do stanu początkowego."""
+        if self._lv_running():
             self._stop_lv()
-        # Reset UI niezależnie od stanu (np. po RECONNECT)
-        self.lv_thread = None
-        self._needs_reconnect = False  # Reset flagi przy opuszczeniu widoku
-        self.exposure_ctrl.gphoto = None
-        self.image_ctrl.gphoto = None
-        self.focus_ctrl.gphoto = None
-        self.exposure_ctrl.setEnabled(False)
-        self.image_ctrl.setEnabled(False)
-        self.focus_ctrl.setEnabled(False)
-        self.lv_screen.clear()
-        self.lv_screen.setText("LIVE VIEW OFF")
-        self.lv_screen.setStyleSheet(
-            "background: #3d3d3d; border: 2px solid #555; color: white;"
-        )
-        self.btn_lv.setText("START LIVE VIEW")
-        self.btn_lv.setStyleSheet("")
-        self.btn_cap.setEnabled(False)
+        else:
+            # Upewnij się że kontrolki są wyłączone nawet przy reconnect state
+            self._cleanup_controls()
+            self.lv_thread = None
+
+        self._set_lv_state(self._LV_STATE_IDLE)
+        self._set_lv_screen_off()
         self._set_buttons_enabled(self._camera_ready)
 
-    def close_all_previews(self):
-        """Zamyka wszystkie otwarte okna podglądu zdjęć."""
-        for dialog in list(self._preview_dialogs):
-            try:
-                dialog.close()
-            except Exception:
-                pass
-        self._preview_dialogs.clear()
+    def is_lv_active(self) -> bool:
+        """
+        Fix #8 — publiczna metoda dla MainWindow._probe_camera().
+        Zwraca True gdy sesja PTP jest aktywna.
+        """
+        return self._lv_running()
 
     def _on_update_clicked(self):
         """Zbiera ustawienia i wysyła (zachowano dla kompatybilności)."""

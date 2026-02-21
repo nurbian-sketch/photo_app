@@ -16,7 +16,6 @@ from ui.views.camera_view import CameraView
 # --- Widgety pomocnicze ---
 from ui.widgets.view_switcher import ViewSwitcher
 from core.camera_probe import CameraProbe
-from ui.dialogs.preferences_dialog import PreferencesDialog
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +23,8 @@ logger = logging.getLogger(__name__)
 class MainWindow(QMainWindow):
     def __init__(self, camera_on=False, sd_on=False):
         super().__init__()
-        
-        # 1. PARAMETRY I USTAWIENIA (Inicjalizacja krytyczna)
+
+        # 1. PARAMETRY I USTAWIENIA
         self.camera_ready = camera_on
         self.sd_ready = sd_on
         self.settings = QSettings("Grzeza", "SessionsAssistant")
@@ -33,31 +32,30 @@ class MainWindow(QMainWindow):
         self.translator = QTranslator()
         self.current_language = "en"
         self._current_view_name = None
-        
+
         self.setWindowTitle(self.tr("Sessions Assistant 0.99"))
 
-        # 2. PASEK STANU I IKONY (24px, 4px od dołu)
+        # 2. PASEK STANU I IKONY
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage(self.tr("Ready"))
 
         self.status_icons_widget = QWidget()
         self.status_icons_widget.setStyleSheet("background: transparent; border: none;")
-        
+
         icons_layout = QHBoxLayout(self.status_icons_widget)
-        # Margines dół = 4px, aby ikony nie dotykały krawędzi ekranu
         icons_layout.setContentsMargins(5, 0, 10, 4)
-        icons_layout.setSpacing(12) 
-        
-        self.icon_camera = QLabel() 
+        icons_layout.setSpacing(12)
+
+        self.icon_camera = QLabel()
         self.icon_sd_card = QLabel()
         self.icon_camera.setStyleSheet("background: transparent;")
         self.icon_sd_card.setStyleSheet("background: transparent;")
-        
+
         icons_layout.addWidget(self.icon_camera)
         icons_layout.addWidget(self.icon_sd_card)
         self.status_bar.addPermanentWidget(self.status_icons_widget)
-        
+
         # 3. INICJALIZACJA WIDOKÓW
         self.session_view = SessionView()
         self.darkroom_view = DarkroomView()
@@ -80,10 +78,8 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
 
         # 4. FINALIZACJA STANU
-        # Ustawiamy ikony na podstawie danych ze splasha
         self.set_status_icons(camera=self.camera_ready, sd=self.sd_ready)
-        
-        # Logika wyboru widoku startowego
+
         if self.camera_ready and self.sd_ready:
             start_view = "Camera"
         elif self.camera_ready:
@@ -92,10 +88,10 @@ class MainWindow(QMainWindow):
             start_view = "Session"
 
         self.change_view(start_view)
-        self.switcher.select_view(start_view) # Synchronizacja switchera
+        self.switcher.select_view(start_view)
 
-        # Reconnect signal → ponowny probe + auto-start LV
-        self.camera_view.reconnect_requested.connect(
+        # Connect camera button → ponowny probe
+        self.camera_view.btn_connect.clicked.connect(
             lambda: self._probe_camera(enforce_fv=True)
         )
 
@@ -103,38 +99,51 @@ class MainWindow(QMainWindow):
         self.setup_menu()
 
         # Połączenia akcji SessionView
-        self.session_view.btn_action1.clicked.connect(lambda: self.status_bar.showMessage(self.tr("Action 1 executed")))
-        self.session_view.btn_action2.clicked.connect(lambda: self.status_bar.showMessage(self.tr("Action 2 executed")))
-        self.session_view.btn_action3.clicked.connect(lambda: self.status_bar.showMessage(self.tr("Action 3 executed")))
+        self.session_view.btn_action1.clicked.connect(
+            lambda: self.status_bar.showMessage(self.tr("Action 1 executed"))
+        )
+        self.session_view.btn_action2.clicked.connect(
+            lambda: self.status_bar.showMessage(self.tr("Action 2 executed"))
+        )
+        self.session_view.btn_action3.clicked.connect(
+            lambda: self.status_bar.showMessage(self.tr("Action 3 executed"))
+        )
 
     def _make_status_pixmap(self, file_name, active=True):
-        """Tworzy pixmapę 24px: kolorową lub wyszarzoną w locie"""
+        """Tworzy pixmapę 24px: kolorową lub wyszarzoną w locie."""
         path = os.path.join("assets", "icons", file_name)
         if not os.path.exists(path):
             return QPixmap()
 
-        pix = QPixmap(path).scaled(24, 24, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-        
+        pix = QPixmap(path).scaled(
+            24, 24,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation
+        )
+
         if active:
             return pix
 
-        # Wersja nieaktywna: szara i półprzezroczysta
         img = pix.toImage().convertToFormat(QImage.Format.Format_Grayscale8)
         gray_pix = QPixmap.fromImage(img)
-        
+
         out_pix = QPixmap(gray_pix.size())
         out_pix.fill(Qt.GlobalColor.transparent)
-        
+
         painter = QPainter(out_pix)
-        painter.setOpacity(0.3) 
+        painter.setOpacity(0.3)
         painter.drawPixmap(0, 0, gray_pix)
         painter.end()
         return out_pix
 
     def set_status_icons(self, camera=False, sd=False):
-        """Aktualizuje ikony graficzne w pasku stanu"""
-        self.icon_camera.setPixmap(self._make_status_pixmap("camera.svg", active=camera))
-        self.icon_sd_card.setPixmap(self._make_status_pixmap("sdcard.png", active=sd))
+        """Aktualizuje ikony graficzne w pasku stanu."""
+        self.icon_camera.setPixmap(
+            self._make_status_pixmap("camera.svg", active=camera)
+        )
+        self.icon_sd_card.setPixmap(
+            self._make_status_pixmap("sdcard.png", active=sd)
+        )
 
     def setup_menu(self):
         menu_bar = QMenuBar()
@@ -143,13 +152,6 @@ class MainWindow(QMainWindow):
         # FILE MENU
         file_menu = menu_bar.addMenu(self.tr("File"))
 
-        pref_action = QAction(self.tr("Preferences..."), self)
-        pref_action.setShortcut(QKeySequence("Ctrl+,"))
-        pref_action.triggered.connect(self._show_preferences)
-        file_menu.addAction(pref_action)
-
-        file_menu.addSeparator()
-
         exit_action = QAction(self.tr("Exit"), self)
         exit_action.setShortcut(QKeySequence("Ctrl+Q"))
         exit_action.triggered.connect(self.close)
@@ -157,10 +159,16 @@ class MainWindow(QMainWindow):
 
         # VIEW MENU
         view_menu = menu_bar.addMenu(self.tr("View"))
-        for name, key in [("Pictures", "Ctrl+1"), ("Camera", "Ctrl+2"), ("Session", "Ctrl+3")]:
+        for name, key in [
+            ("Pictures", "Ctrl+1"),
+            ("Camera",   "Ctrl+2"),
+            ("Session",  "Ctrl+3"),
+        ]:
             action = QAction(self.tr(name), self)
             action.setShortcut(QKeySequence(key))
-            action.triggered.connect(lambda checked, n=name: self.switcher.select_view(n))
+            action.triggered.connect(
+                lambda checked, n=name: self.switcher.select_view(n)
+            )
             view_menu.addAction(action)
 
         menu_bar.setStyleSheet("""
@@ -175,83 +183,60 @@ class MainWindow(QMainWindow):
     def change_view(self, name):
         prev = self._current_view_name
 
-        # --- Opuszczamy Camera: zamykamy sesję PTP ---
+        # Opuszczamy Camera: zamykamy sesję PTP
         if prev == "Camera":
             self.camera_view.on_leave()
 
-        # --- Przełączamy widget ---
+        # Przełączamy widget
         mapping = {
             "Pictures": self.darkroom_view,
-            "Camera": self.camera_view,
-            "Session": self.session_view
+            "Camera":   self.camera_view,
+            "Session":  self.session_view,
         }
         self.central_stack.setCurrentWidget(mapping[name])
         self._current_view_name = name
 
-        # --- Jeden probe: status + tryb w jednym połączeniu ---
+        # Probe: status + tryb w jednym połączeniu
         self._probe_camera(enforce_fv=(name == "Camera"))
 
     def _probe_camera(self, enforce_fv=False):
-        """Jedno połączenie: odświeża status ikon + opcjonalnie wymusza Fv."""
+        """
+        Jedno połączenie: odświeża status ikon + opcjonalnie wymusza Fv.
+
+        Fix #8 — pomijamy probe gdy LV jest aktywne:
+        dwie sesje PTP na jednym porcie USB mogą ze sobą kolidować.
+        """
+        # Fix #8 — nie rób probe gdy GPhotoInterface trzyma port USB
+        if self.camera_view.is_lv_active():
+            logger.debug("_probe_camera: pominięto — LV aktywne")
+            return
+
         try:
             with CameraProbe() as probe:
                 if not probe.connected:
                     self.camera_ready = False
                     self.sd_ready = False
-                    # Komunikat w status bar tylko gdy jesteśmy w Camera view
-                    if self._current_view_name == "Camera":
-                        self.status_bar.showMessage(
-                            self.tr("Could not find camera"), 5000
-                        )
                 else:
                     self.camera_ready = True
                     storage = probe.check_storage()
                     self.sd_ready = storage['ok']
-                    
-                    # Pokaż info o znalezionym aparacie
-                    model = probe.model or "Camera"
 
                     if enforce_fv:
                         mode = probe.get_mode()
-                        if mode and mode != 'Fv':
-                            # Tryb znany i różny od Fv - zmień
+                        if mode != 'Fv':
                             logger.info(f"Tryb {mode} → wymuszam Fv")
                             if probe.set_fv_mode():
                                 self.status_bar.showMessage(
-                                    f"Found {model}. Mode: {mode} → Fv", 4000
+                                    f"Camera mode: {mode} → Fv", 3000
                                 )
                             else:
                                 self.status_bar.showMessage(
-                                    f"Found {model}. WARNING: Could not set Fv (was {mode})", 5000
+                                    "WARNING: Could not set Fv mode", 5000
                                 )
-                        elif mode == 'Fv':
-                            # Już w Fv
-                            self.status_bar.showMessage(
-                                f"Found {model} in Fv mode", 3000
-                            )
-                        else:
-                            # Tryb nieznany - spróbuj ustawić Fv
-                            logger.info("Tryb nieznany → wymuszam Fv")
-                            if probe.set_fv_mode():
-                                self.status_bar.showMessage(
-                                    f"Found {model}. Set Fv mode", 3000
-                                )
-                            else:
-                                self.status_bar.showMessage(
-                                    f"Found {model}. WARNING: Could not set Fv mode", 5000
-                                )
-                    else:
-                        self.status_bar.showMessage(
-                            f"Found {model}", 2000
-                        )
         except Exception as e:
             logger.warning(f"Camera probe error: {e}")
             self.camera_ready = False
             self.sd_ready = False
-            if self._current_view_name == "Camera":
-                self.status_bar.showMessage(
-                    self.tr("Could not find camera"), 5000
-                )
 
         self.set_status_icons(camera=self.camera_ready, sd=self.sd_ready)
         self.camera_view.set_camera_ready(self.camera_ready)
@@ -261,19 +246,22 @@ class MainWindow(QMainWindow):
             self.restoreGeometry(self.settings.value("geometry"))
         else:
             self.resize(1200, 800)
-            
+
         if self.settings.value("windowState"):
             self.restoreState(self.settings.value("windowState"))
-            
+
         if self.settings.value("darkroom_splitter"):
-            self.darkroom_view.splitter.restoreState(self.settings.value("darkroom_splitter"))
+            self.darkroom_view.splitter.restoreState(
+                self.settings.value("darkroom_splitter")
+            )
 
     def closeEvent(self, event):
-        self.camera_view.close_all_previews()  # Zamknij okna podglądu
         self.camera_view.on_leave()
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("windowState", self.saveState())
-        self.settings.setValue("darkroom_splitter", self.darkroom_view.splitter.saveState())
+        self.settings.setValue(
+            "darkroom_splitter", self.darkroom_view.splitter.saveState()
+        )
         super().closeEvent(event)
 
     def keyPressEvent(self, event):
@@ -294,15 +282,11 @@ class MainWindow(QMainWindow):
             self.showFullScreen()
 
     def show_about(self):
-        QMessageBox.information(self, self.tr("About"), self.tr("Sessions Assistant 0.99\nAuthor: Grzeza"))
-
-    def _show_preferences(self):
-        """Otwiera dialog preferencji."""
-        dialog = PreferencesDialog(self)
-        if dialog.exec() == PreferencesDialog.DialogCode.Accepted:
-            # Odśwież katalog sesji w camera_view
-            self.camera_view.update_capture_directory()
-            self.status_bar.showMessage(self.tr("Preferences saved"), 2000)
+        QMessageBox.information(
+            self,
+            self.tr("About"),
+            self.tr("Sessions Assistant 0.99\nAuthor: Grzeza")
+        )
 
     def retranslateUi(self):
         self.setWindowTitle(self.tr("Sessions Assistant 0.99"))

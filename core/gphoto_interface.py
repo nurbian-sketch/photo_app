@@ -9,7 +9,6 @@ from PyQt6.QtCore import QThread, pyqtSignal, QMutex
 from collections import deque
 import time
 import logging
-import subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -19,15 +18,14 @@ class GPhotoInterface(QThread):
     settings_loaded = pyqtSignal(dict)
     error_occurred = pyqtSignal(str)
     image_captured = pyqtSignal(str)  # ścieżka do zapisanego pliku
-    capture_failed = pyqtSignal(str)  # błąd capture — NIE zabija sesji LV
 
     # Kody błędów gphoto2
-    ERR_USB = -52
-    ERR_TIMEOUT = -110
-    ERR_NO_SPACE = -53
-    ERR_IO = -7
-    ERR_BUSY = -110
-    ERR_GENERIC = -1
+    ERR_USB        = -52
+    ERR_TIMEOUT    = -110
+    ERR_NO_SPACE   = -53
+    ERR_IO         = -7
+    ERR_BUSY       = -110
+    ERR_GENERIC    = -1
 
     # Błędy USB — dłuższa pauza przed retry
     HEAVY_ERRORS = {ERR_USB, ERR_NO_SPACE}
@@ -35,16 +33,12 @@ class GPhotoInterface(QThread):
     # Błędy lżejsze — krótka pauza
     LIGHT_ERRORS = {ERR_TIMEOUT, ERR_BUSY, ERR_GENERIC, ERR_IO}
 
-    MAX_CONSECUTIVE_ERRORS = 20
-
-    # Timeout dla stop() — normalny vs podczas capture
-    STOP_TIMEOUT_MS = 3000
-    STOP_TIMEOUT_CAPTURE_MS = 15000
+    # Fix #4 — niski próg dla błędów ciężkich (każdy może trwać 3s)
+    MAX_CONSECUTIVE_ERRORS = 5
 
     def __init__(self):
         super().__init__()
         self.keep_running = False
-        self._capturing = False  # Flaga trwającego capture
         self.camera = None
         self.context = gp.Context()
         self.MAX_ISO = 1600
@@ -52,9 +46,8 @@ class GPhotoInterface(QThread):
         self.MAX_SHUTTER_VAL = 0.001  # 1/1000s
         self.mutex = QMutex()
         self.command_queue = deque(maxlen=32)
-        self._usb_bus_device = None  # Cache dla USB reset
 
-    # ─────────────────────────────────── CAMERA DETECTION
+    # ─────────────────────────────────────────── CAMERA DETECTION
 
     def _autodetect_camera(self):
         port_info_list = gp.PortInfoList()
@@ -66,12 +59,6 @@ class GPhotoInterface(QThread):
             raise Exception("Brak aparatu.")
         model, port = cameras[0]
         logger.info(f"Wykryto aparat: {model} na {port}")
-
-        # Cache USB bus:device dla ewentualnego resetu
-        # port format: "usb:001,004" → bus=001, dev=004
-        if port.startswith("usb:"):
-            self._usb_bus_device = port[4:]  # "001,004"
-
         self.camera = gp.Camera()
         self.camera.set_abilities(
             abilities_list[abilities_list.lookup_model(model)]
@@ -80,7 +67,36 @@ class GPhotoInterface(QThread):
             port_info_list[port_info_list.lookup_path(port)]
         )
 
-    # ─────────────────────────────────── VALUE PARSING
+    # ─────────────────────────────────────────── SESSION RESTART
+    # Fix #2 — restart sesji PTP bez ubijania wątku
+
+    def _restart_session(self):
+        """
+        Zamknięcie + ponowne otwarcie sesji PTP.
+        Wywoływane po wykryciu ciężkiego błędu (kod -1 z timeoutem >2s,
+        lub skumulowanie MAX_CONSECUTIVE_ERRORS).
+        """
+        logger.warning("Restart sesji PTP...")
+        try:
+            if self.camera:
+                self.camera.exit(self.context)
+        except Exception as e:
+            logger.debug(f"exit() przy restart: {e}")
+        finally:
+            self.camera = None
+
+        time.sleep(1.0)  # USB potrzebuje chwili po exit()
+
+        try:
+            self._autodetect_camera()
+            self.camera.init(self.context)
+            logger.info("Sesja PTP zrestartowana pomyślnie.")
+            return True
+        except Exception as e:
+            logger.error(f"Restart sesji nieudany: {e}")
+            return False
+
+    # ─────────────────────────────────────────── VALUE PARSING
 
     def _clean_value(self, val):
         v = str(val).lower()
@@ -95,7 +111,7 @@ class GPhotoInterface(QThread):
         except (ValueError, ZeroDivisionError):
             return 0
 
-    # ─────────────────────────────────── MAIN LOOP
+    # ─────────────────────────────────────────── MAIN LOOP
 
     def run(self):
         try:
@@ -106,7 +122,6 @@ class GPhotoInterface(QThread):
             for attempt in range(3):
                 try:
                     if attempt > 0:
-                        # Po nieudanym init() obiekt Camera jest uszkodzony
                         try:
                             self.camera.exit(self.context)
                         except Exception:
@@ -120,9 +135,7 @@ class GPhotoInterface(QThread):
                     break
                 except gp.GPhoto2Error as e:
                     last_err = e
-                    logger.warning(
-                        f"Init próba {attempt + 1}/3: błąd {e.code}"
-                    )
+                    logger.warning(f"Init próba {attempt + 1}/3: błąd {e.code}")
             else:
                 raise Exception(
                     f"Nie udało się zainicjalizować aparatu "
@@ -146,7 +159,7 @@ class GPhotoInterface(QThread):
 
             if initial_config:
                 self.settings_loaded.emit(initial_config)
-            
+
             if missing:
                 logger.warning(
                     f"Nie udało się pobrać: {missing} po 5 próbach"
@@ -154,9 +167,6 @@ class GPhotoInterface(QThread):
 
             self.keep_running = True
             consecutive_errors = 0
-
-            # EOS RP potrzebuje chwili po init() zanim odpowie na capture_preview
-            time.sleep(1.0)
 
             while self.keep_running:
                 fps_sleep = 0.05
@@ -176,6 +186,7 @@ class GPhotoInterface(QThread):
                     self.mutex.unlock()
 
                 # --- Przechwycenie klatki live view ---
+                t_frame_start = time.monotonic()
                 try:
                     camera_file = gp.CameraFile()
                     self.camera.capture_preview(camera_file, self.context)
@@ -192,11 +203,39 @@ class GPhotoInterface(QThread):
                     consecutive_errors = 0
 
                 except gp.GPhoto2Error as e:
+                    elapsed_ms = (time.monotonic() - t_frame_start) * 1000
                     consecutive_errors += 1
                     logger.warning(
                         f"GPhoto2Error w pętli: code={e.code} "
+                        f"elapsed={elapsed_ms:.0f}ms "
                         f"(błąd {consecutive_errors}/{self.MAX_CONSECUTIVE_ERRORS})"
                     )
+
+                    # Fix #2 — -1 z timeoutem >2s = aparat zajęty po capture,
+                    # restart sesji zamiast czekania na MAX_CONSECUTIVE_ERRORS
+                    if e.code == self.ERR_GENERIC and elapsed_ms > 2000:
+                        logger.warning(
+                            "Błąd -1 z timeoutem >2s — restart sesji PTP"
+                        )
+                        self.mutex.lock()
+                        try:
+                            dropped = len(self.command_queue)
+                            self.command_queue.clear()
+                            if dropped:
+                                logger.info(f"Wyczyszczono {dropped} komend")
+                        finally:
+                            self.mutex.unlock()
+
+                        if self._restart_session():
+                            consecutive_errors = 0
+                            fps_sleep = 0.5
+                            continue
+                        else:
+                            self.error_occurred.emit(
+                                "Nie można zrestartować sesji PTP."
+                            )
+                            self.keep_running = False
+                            break
 
                     # Czyścimy kolejkę — stare komendy nie pomogą
                     self.mutex.lock()
@@ -210,15 +249,6 @@ class GPhotoInterface(QThread):
 
                     if e.code in self.HEAVY_ERRORS:
                         fps_sleep = 1.5
-                        # USB zerwany — nie czekaj 20 prób, zakończ szybko
-                        if consecutive_errors >= 5:
-                            self.error_occurred.emit(
-                                f"USB disconnected (error {e.code}). Przerywam."
-                            )
-                            self.keep_running = False
-                            break
-                    elif e.code in self.LIGHT_ERRORS:
-                        fps_sleep = 0.5
                     else:
                         fps_sleep = 0.5
 
@@ -246,7 +276,6 @@ class GPhotoInterface(QThread):
             self.error_occurred.emit(str(e))
 
         finally:
-            self._capturing = False  # Reset flagi przy wyjściu
             self._safe_camera_exit()
 
     def _safe_camera_exit(self):
@@ -260,7 +289,7 @@ class GPhotoInterface(QThread):
             finally:
                 self.camera = None
 
-    # ─────────────────────────────────── CONFIG READ
+    # ─────────────────────────────────────────── CONFIG READ
 
     def _get_filtered_config(self):
         try:
@@ -274,7 +303,6 @@ class GPhotoInterface(QThread):
                     w = config.get_child_by_name(name)
                     raw_choices = list(w.get_choices())
 
-                    # Jeśli brak opcji — pomijamy, by nie czyścić UI
                     if not raw_choices:
                         continue
 
@@ -302,17 +330,12 @@ class GPhotoInterface(QThread):
                     results[name] = {"current": curr, "choices": choices}
 
                 except gp.GPhoto2Error as e:
-                    logger.debug(
-                        f"Parametr {name} niedostępny: {e.code}"
-                    )
+                    logger.debug(f"Parametr {name} niedostępny: {e.code}")
                     continue
                 except Exception as e:
-                    logger.warning(
-                        f"Błąd odczytu parametru {name}: {e}"
-                    )
+                    logger.warning(f"Błąd odczytu parametru {name}: {e}")
                     continue
 
-            # Odczyt image + AF params z tego samego drzewa config
             for name in [
                 'whitebalance', 'colortemperature', 'picturestyle',
                 'alomode', 'imageformat',
@@ -345,7 +368,7 @@ class GPhotoInterface(QThread):
             logger.exception("Nieoczekiwany błąd konfiguracji")
             return {}
 
-    # ─────────────────────────────────── PARAM UPDATE (API)
+    # ─────────────────────────────────────────── PARAM UPDATE (API)
 
     def update_camera_param(self, name, value):
         """
@@ -376,129 +399,90 @@ class GPhotoInterface(QThread):
 
     def _execute_capture(self, save_dir):
         """
-        Wykonuje zdjęcie i pobiera plik BEZPOŚREDNIO do komputera.
-        Plik NIE jest zapisywany na karcie SD aparatu.
+        Wykonuje zdjęcie i pobiera plik z aparatu.
         Wywoływane WEWNĄTRZ pętli roboczej.
         """
         import os
         from datetime import datetime
 
-        self._capturing = True  # ← Flaga: capture w toku
-        original_target = None
-
         try:
-            # 1. Przełącz capturetarget na RAM (nie kartę SD)
-            try:
-                config = self.camera.get_config(self.context)
-                target_widget = config.get_child_by_name('capturetarget')
-                original_target = target_widget.get_value()
-
-                # Zawsze używamy Memory card — Internal RAM powoduje zawieszenie USB
-                choices = list(target_widget.get_choices())
-                card_option = None
-                for choice in choices:
-                    if 'card' in choice.lower() or 'memory' in choice.lower() or 'sd' in choice.lower():
-                        card_option = choice
-                        break
-
-                if card_option and original_target != card_option:
-                    print(f">>> CAPTURE: switching target {original_target} → {card_option}")
-                    target_widget.set_value(card_option)
-                    self.camera.set_config(config, self.context)
-                    time.sleep(0.1)
-                else:
-                    print(f">>> CAPTURE: target already '{original_target}'")
-                    original_target = None  # Nie przywracaj później
-
-            except Exception as e:
-                logger.warning(f"Could not set capturetarget: {e}")
-                # Kontynuuj mimo błędu — capture może działać z domyślnym targetem
-
-            # 2. Wykonaj zdjęcie
             print(">>> CAPTURE: trigger")
             file_path = self.camera.capture(
                 gp.GP_CAPTURE_IMAGE, self.context
             )
             print(f"<<< CAPTURE: {file_path.folder}/{file_path.name}")
 
-            # 3. Pobierz plik z aparatu (z RAM lub karty)
-            camera_file = gp.CameraFile()
-            self.camera.file_get(
+            camera_file = self.camera.file_get(
                 file_path.folder, file_path.name,
-                gp.GP_FILE_TYPE_NORMAL, camera_file, self.context
+                gp.GP_FILE_TYPE_NORMAL, self.context
             )
-
-            # 4. Zapisz lokalnie: save_dir/captures/YYYYMMDD_HHMMSS_IMG_xxxx.CR3
-            captures_dir = os.path.join(save_dir, "captures")
-            os.makedirs(captures_dir, exist_ok=True)
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"{timestamp}_{file_path.name}"
-            local_path = os.path.join(captures_dir, filename)
+            local_path = os.path.join(save_dir, filename)
 
+            os.makedirs(save_dir, exist_ok=True)
             camera_file.save(local_path)
             print(f"<<< SAVED: {local_path}")
 
-            # 5. Usuń plik z aparatu (zwolnij RAM/kartę)
-            try:
-                self.camera.file_delete(
-                    file_path.folder, file_path.name, self.context
-                )
-                print(f"<<< DELETED from camera: {file_path.name}")
-            except Exception as e:
-                logger.debug(f"Could not delete from camera (may be normal): {e}")
-
             self.image_captured.emit(local_path)
 
-            # 6. Po capture aparat wychodzi z LV — restart preview
-            time.sleep(0.3)
-            try:
-                recovery = gp.CameraFile()
-                self.camera.capture_preview(recovery, self.context)
-                print("<<< LV recovered after capture")
-            except Exception:
-                print("<<< LV recovery failed — next frame will retry")
+            # Fix #1 — LV recovery z retry do 3s (S09: pierwsze OK po ~2023ms)
+            print(">>> LV recovery po capture...")
+            recovered = False
+            for attempt in range(10):
+                time.sleep(0.3)
+                try:
+                    recovery = gp.CameraFile()
+                    self.camera.capture_preview(recovery, self.context)
+                    print(f"<<< LV recovered (próba {attempt + 1})")
+                    recovered = True
+                    break
+                except Exception as exc:
+                    print(f"<<< LV recovery próba {attempt + 1} nieudana: {exc}")
+
+            if not recovered:
+                logger.warning(
+                    "LV recovery nieudany po 10 próbach (~3s) — "
+                    "następna klatka wykryje stan i zrestartuje sesję"
+                )
 
             return True
 
         except gp.GPhoto2Error as e:
-            logger.warning(f"Capture failed: gphoto2 error {e.code}")
-            # NIE emituj error_occurred — to zabiłoby sesję LV!
-            # capture_failed to "miękki" błąd, LV będzie próbować się odzyskać
-            self.capture_failed.emit(f"Capture failed (error {e.code}). Retrying...")
+            # Fix #5 — obsługa -110 timeout (brak AF, MF, cap)
+            if e.code == self.ERR_TIMEOUT:
+                logger.warning(
+                    "Capture timeout -110 — restart sesji PTP"
+                )
+                if not self._restart_session():
+                    self.keep_running = False
+                    self.error_occurred.emit(
+                        "Capture timeout. Sesja USB uszkodzona — rozłącz aparat."
+                    )
+            else:
+                logger.warning(f"Capture failed: gphoto2 error {e.code}")
+                self.error_occurred.emit(f"Capture failed: error {e.code}")
             return False
 
         except Exception as e:
             logger.exception(f"Unexpected capture error: {e}")
-            self.capture_failed.emit(f"Capture error: {e}")
+            self.error_occurred.emit(f"Capture error: {e}")
             return False
-
-        finally:
-            self._capturing = False  # ← Zawsze resetuj flagę
-
-            # Przywróć oryginalny capturetarget (jeśli zmienialiśmy)
-            if original_target:
-                try:
-                    config = self.camera.get_config(self.context)
-                    target_widget = config.get_child_by_name('capturetarget')
-                    target_widget.set_value(original_target)
-                    self.camera.set_config(config, self.context)
-                    print(f"<<< CAPTURE: restored target → {original_target}")
-                except Exception as e:
-                    logger.warning(f"Could not restore capturetarget: {e}")
 
     def _execute_update(self, name, value) -> bool:
         """
         Wysyła parametr do aparatu. Zwraca True przy sukcesie.
-        Wywoływane WEWNĄTRZ pętli roboczej (mutex już zablokowany).
-        Przy błędzie NIE zatrzymuje live view — próbuje odzyskać sesję.
+        Wywoływane WEWNĄTRZ pętli roboczej.
         """
+        # Fix #6 — licznik nieudanych recovery
+        _recovery_failures = 0
+
         try:
             config = self.camera.get_config(self.context)
             widget = config.get_child_by_name(name)
             target = str(value)
 
-            # Auto → 00ff tylko dla parametrów exposure
             if target == 'Auto' and name in self.EXPOSURE_PARAMS:
                 target = next(
                     (c for c in widget.get_choices()
@@ -517,96 +501,37 @@ class GPhotoInterface(QThread):
                 f"Nie udało się ustawić {name}={value}: "
                 f"gphoto2 error {e.code}"
             )
-            # Próba odzyskania live view po błędzie set_config
+            # Fix #6 — recovery capture_preview z kontrolą błędów
             try:
                 time.sleep(0.3)
                 recovery_file = gp.CameraFile()
                 self.camera.capture_preview(recovery_file, self.context)
                 logger.debug("Recovery capture_preview OK")
-            except Exception:
-                logger.warning("Recovery capture_preview failed")
+            except Exception as exc:
+                logger.warning(f"Recovery capture_preview failed: {exc}")
+                _recovery_failures += 1
+                if _recovery_failures >= 3:
+                    logger.error(
+                        "Recovery nieudany 3x — sesja USB niestabilna"
+                    )
+                    self.keep_running = False
+                    self.error_occurred.emit(
+                        "Sesja USB niestabilna — rozłącz i podłącz aparat."
+                    )
             return False
 
         except Exception as e:
             logger.exception(f"Nieoczekiwany błąd ustawiania {name}={value}")
             return False
 
-    # ─────────────────────────────────── USB RESET FALLBACK
-
-    def _try_usb_reset(self):
-        """
-        Fallback: próbuje zresetować port USB po wymuszonym terminate().
-        Wymaga pakietu usbutils (usbreset) lub sudo.
-        """
-        if not self._usb_bus_device:
-            logger.warning("USB reset: brak informacji o porcie USB")
-            return False
-
-        try:
-            # Format: "001,004" → bus=001, device=004
-            parts = self._usb_bus_device.split(',')
-            if len(parts) != 2:
-                logger.warning(f"USB reset: nieprawidłowy format portu: {self._usb_bus_device}")
-                return False
-
-            bus, dev = parts[0], parts[1]
-            usb_path = f"/dev/bus/usb/{bus}/{dev}"
-
-            # Metoda 1: usbreset (z pakietu usbutils)
-            # Wymaga: sudo apt install usbutils
-            # oraz dodania użytkownika do grupy z dostępem do USB
-            try:
-                result = subprocess.run(
-                    ['usbreset', usb_path],
-                    capture_output=True,
-                    timeout=5
-                )
-                if result.returncode == 0:
-                    logger.info(f"USB reset OK: {usb_path}")
-                    time.sleep(1.0)  # Czas na re-enumerację
-                    return True
-                else:
-                    logger.warning(f"USB reset failed: {result.stderr.decode()}")
-            except FileNotFoundError:
-                logger.debug("usbreset nie znaleziony, próbuję alternatywnej metody")
-            except subprocess.TimeoutExpired:
-                logger.warning("USB reset timeout")
-
-            # Metoda 2: Unbind/rebind przez sysfs (wymaga sudo lub odpowiednich uprawnień)
-            # To jest bardziej agresywne ale nie wymaga dodatkowych narzędzi
-            logger.info("USB reset: próba unbind/rebind przez sysfs")
-            # Nie implementujemy tutaj — wymaga root lub skomplikowanej konfiguracji udev
-
-            return False
-
-        except Exception as e:
-            logger.warning(f"USB reset error: {e}")
-            return False
-
-    # ─────────────────────────────────── STOP
+    # ─────────────────────────────────────────── STOP
 
     def stop(self):
-        """
-        Bezpieczne zatrzymanie wątku.
-        Czeka dłużej jeśli capture jest w toku.
-        """
+        """Bezpieczne zatrzymanie wątku."""
         self.keep_running = False
-
-        # Zawsze krótki timeout — nie czekamy na zakończenie capture.
-        # Przy terminate USB zostaje zablokowany; recovery czeka 4s.
-        if self._capturing:
-            logger.warning("Stop requested during capture — forcing terminate")
-
-        self.wait(self.STOP_TIMEOUT_MS)
-
+        # Fix #7 — krótszy wait, terminate jako fallback
+        self.wait(1000)
         if self.isRunning():
-            logger.warning(
-                f"Wątek gphoto nie zakończył się w {self.STOP_TIMEOUT_MS}ms — terminate"
-            )
+            logger.warning("Wątek gphoto nie zakończył się w 1s — terminate")
             self.terminate()
-            self.wait(1000)
-
-            # USB needs time to recover after forced terminate
-            logger.info("Czekam 4s na zwolnienie portu USB...")
-            time.sleep(4.0)
-            logger.info("USB recovery sleep done")
+            self.wait(500)
