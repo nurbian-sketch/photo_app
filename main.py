@@ -1,6 +1,6 @@
 import sys
 from PyQt6.QtWidgets import QApplication, QSplashScreen
-from PyQt6.QtGui import QPixmap
+from PyQt6.QtGui import QPixmap, QIcon
 from ui.main_window import MainWindow
 from core.initializer import AppInitializer
 
@@ -9,8 +9,11 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
 
+    # Ikona aplikacji
+    app.setWindowIcon(QIcon("assets/icons/face-gen.png"))
+
     # Grafika startowa
-    pixmap = QPixmap("assets/pictures/startup-picture.jpg")
+    pixmap = QPixmap("assets/pictures/startup-picture-3.jpg")
     splash = QSplashScreen(pixmap)
     splash.show()
 

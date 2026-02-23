@@ -65,11 +65,13 @@ class ColorTempGradient(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         gradient = QLinearGradient(0, 0, self.width(), 0)
-        gradient.setColorAt(0.0, QColor(255, 60, 0))
-        gradient.setColorAt(0.2, QColor(255, 190, 110))
+        # Gradient pokazuje efekt na zdjęciu (nie kolor źródła światła):
+        # 2500K → obraz zimny/niebieski, 10000K → obraz ciepły/pomarańczowy
+        gradient.setColorAt(0.0, QColor(80, 150, 255))
+        gradient.setColorAt(0.2, QColor(180, 210, 255))
         gradient.setColorAt(0.5, QColor(255, 255, 255))
-        gradient.setColorAt(0.8, QColor(180, 210, 255))
-        gradient.setColorAt(1.0, QColor(80, 150, 255))
+        gradient.setColorAt(0.8, QColor(255, 190, 110))
+        gradient.setColorAt(1.0, QColor(255, 60, 0))
         painter.setBrush(gradient)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawRect(0, 0, self.width(), self.height())

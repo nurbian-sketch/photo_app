@@ -200,25 +200,25 @@ class DarkroomView(QWidget):
         self.btn_toggle_size.clicked.connect(self.toggle_thumb_size)
 
     def open_last_session(self):
-        """Otwiera najnowszy podfolder w katalogu sesji z preferencji"""
-        main_win = self.window()
-        if not hasattr(main_win, 'get_session_base_path'):
-            return
-            
-        base_path = main_win.get_session_base_path()
+        """Otwiera najnowszy podfolder w katalogu sesji, pomijając captures subdir."""
+        from ui.preferences_dialog import PreferencesDialog
+        base_path = PreferencesDialog.get_session_directory()
+        captures_name = PreferencesDialog.get_captures_subdir()
+
         if not base_path or not os.path.exists(base_path):
             return
-
         try:
-            subdirs = [os.path.join(base_path, d) for d in os.listdir(base_path) 
-                       if os.path.isdir(os.path.join(base_path, d))]
+            subdirs = [
+                os.path.join(base_path, d)
+                for d in os.listdir(base_path)
+                if os.path.isdir(os.path.join(base_path, d))
+                and d != captures_name          # pomijamy katalog captures
+            ]
             if not subdirs:
                 return
-
             latest_dir = max(subdirs, key=os.path.getmtime)
             self.load_images(latest_dir)
-            
-            # Automatyczny podgląd pierwszego elementu
+
             if self.list_widget.count() > 0:
                 first_item = self.list_widget.item(0)
                 self.list_widget.setCurrentItem(first_item)
@@ -227,9 +227,10 @@ class DarkroomView(QWidget):
             print(f"Error loading last session: {e}")
 
     def open_folder(self):
-        default_path = os.path.expanduser("~/Obrazy/sessions")
+        from ui.preferences_dialog import PreferencesDialog
+        default_path = PreferencesDialog.get_session_directory()
         folder = QFileDialog.getExistingDirectory(
-            self, 
+            self,
             self.tr("Select photo folder"),
             default_path
         )
@@ -237,20 +238,23 @@ class DarkroomView(QWidget):
             self.current_dir = folder
             self.load_images(folder)
 
+    # Rozszerzenia obsługiwane w liście miniatur
+    IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.cr3', '.cr2', '.nef',
+                        '.arw', '.orf', '.rw2', '.dng')
+
     def load_images(self, folder):
         self.list_widget.clear()
-        self.image_label.clear()  # Wyczyść poprzedni podgląd
+        self.image_label.clear()
         self.image_label.setText(self.tr("No image"))
         self.current_image_path = None
-        
-        self.files = [
+
+        self.files = sorted(
             os.path.join(folder, f)
             for f in os.listdir(folder)
-            if f.lower().endswith((".jpg", ".jpeg", ".png"))
-        ]
-        self.files.sort() # Dodane sortowanie, by 'pierwsze' zdjęcie było przewidywalne
+            if f.lower().endswith(self.IMAGE_EXTENSIONS)
+        )
         self.load_index = 0
-        self.timer.start(30)  # 30ms batch loading (responsywność)
+        self.timer.start(30)
 
     def load_next_thumbnails(self):
         """Ładuje JEDNO zdjęcie per tick (responsywność)"""

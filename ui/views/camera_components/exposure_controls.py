@@ -1,6 +1,36 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QPushButton, QCheckBox, QSizePolicy, QSpacerItem
-from PyQt6.QtCore import QTimer, QSettings
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QPushButton,
+    QCheckBox, QSizePolicy, QSpacerItem
+)
+from PyQt6.QtGui import QIcon, QPixmap
+from PyQt6.QtCore import QTimer, QSettings, Qt, QSize
 from ui.widgets.slider_with_scale import SliderWithScale
+from ui.widgets.labeled_combo_box import LabeledComboBox
+import os
+
+
+# Mapowanie: wartość gphoto2 → (plik ikony, etykieta UI)
+METERING_MAP = {
+    'Evaluative':              ('metering_evaluative.png',      'Evaluative'),
+    'Partial':                 ('metering_partial.png',         'Partial'),
+    'Spot':                    ('metering_spot.png',            'Spot'),
+    'Center-weighted average': ('metering_center_weighted.png', 'Center-weighted'),
+}
+METERING_ICON_DIR = os.path.join('assets', 'icons', 'metering')
+ICON_SIZE = 20
+
+
+def _make_metering_icon(filename) -> QIcon:
+    path = os.path.join(METERING_ICON_DIR, filename)
+    if not os.path.exists(path):
+        return QIcon()
+    pix = QPixmap(path).scaled(
+        ICON_SIZE, ICON_SIZE,
+        Qt.AspectRatioMode.KeepAspectRatio,
+        Qt.TransformationMode.SmoothTransformation
+    )
+    return QIcon(pix)
+
 
 class ExposureControls(QWidget):
     # Stała skala exp comp dla Canon EOS RP (tryb Fv, 1/3 EV)
@@ -15,15 +45,16 @@ class ExposureControls(QWidget):
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         self.controls = {}
-        self.gphoto = None 
-        self.shutter_all = [] 
+        self.gphoto = None
+        self.shutter_all = []
         self.shutter_flash = ['1/30', '1/40', '1/50', '1/60', '1/80', '1/100', '1/125', '1/160']
-        self._pending_commands = {}  # key -> value (ostatnia wartość)
+        self._pending_commands = {}
         self._throttle_timer = QTimer()
         self._throttle_timer.setSingleShot(True)
-        self._throttle_timer.setInterval(150)  # 150ms debounce
+        self._throttle_timer.setInterval(150)
         self._throttle_timer.timeout.connect(self._flush_pending)
         self._settings = QSettings("Grzeza", "SessionsAssistant")
+        self._metering_codes = []  # kody gphoto2 w kolejności combo
         self._init_ui()
         self._restore_state()
 
@@ -44,9 +75,9 @@ class ExposureControls(QWidget):
         ]
 
         for key, label, has_auto in configs:
-            grid.addStretch(1)
+            grid.addStretch()
             row = QHBoxLayout()
-            
+
             if has_auto:
                 btn_auto = QPushButton("AUTO")
                 btn_auto.setFixedSize(65, 45)
@@ -69,13 +100,22 @@ class ExposureControls(QWidget):
             self.controls[key]["slider"] = slider
             grid.addLayout(row)
 
+        # ── Metering mode ──────────────────────────────────────
+        grid.addStretch()
+        self.metering_combo = LabeledComboBox("Metering", [])
+        self.metering_combo.combo.setIconSize(QSize(ICON_SIZE, ICON_SIZE))
+        self.metering_combo.currentTextChanged.connect(
+            lambda _: self._on_metering_changed(self.metering_combo.combo.currentIndex())
+        )
+        grid.addWidget(self.metering_combo)
+        # ───────────────────────────────────────────────────────
+
         layout.addWidget(group, 1)
         self.flash_check.toggled.connect(self._on_flash_toggled)
 
     # ─────────────────────────────── EXP COMP LOCK
 
     def _is_all_manual(self) -> bool:
-        """True gdy shutter, aperture i ISO sa wszystkie NIE-Auto."""
         for key in ('shutterspeed', 'aperture', 'iso'):
             if key in self.controls:
                 val = self.controls[key]["slider"].get_value()
@@ -84,7 +124,6 @@ class ExposureControls(QWidget):
         return True
 
     def _update_exp_comp_lock(self):
-        """Blokuje/odblokowuje suwak exp comp na podstawie stanu Auto."""
         ctrl = self.controls.get("exposurecompensation")
         if not ctrl:
             return
@@ -93,7 +132,6 @@ class ExposureControls(QWidget):
         if locked:
             slider.setLocked(True)
         else:
-            # Odblokowany — upewnij się że ma pełną skalę
             if len(slider.values) <= 1:
                 slider.update_values(self.EXP_COMP_SCALE)
                 slider.set_value('0')
@@ -115,14 +153,18 @@ class ExposureControls(QWidget):
     def _on_slider_moved(self, key, value):
         if self.controls[key]["auto"]:
             self._update_auto_visuals(key, value == "Auto")
-        # Zapamiętaj ostatnią wartość — wyślij po 150ms ciszy
         self._pending_commands[key] = value
-        self._throttle_timer.start()  # restart timer
+        self._throttle_timer.start()
         if key in ('shutterspeed', 'aperture', 'iso'):
             self._update_exp_comp_lock()
 
+    def _on_metering_changed(self, index):
+        if index < 0 or index >= len(self._metering_codes):
+            return
+        code = self._metering_codes[index]
+        self._pending_commands['meteringmode'] = code
+        self._throttle_timer.start()
     def _flush_pending(self):
-        """Wysyła tylko ostatnią wartość każdego parametru."""
         if not self.gphoto:
             self._pending_commands.clear()
             return
@@ -138,33 +180,63 @@ class ExposureControls(QWidget):
             btn.setChecked(is_auto)
             btn.blockSignals(False)
 
+    # ─────────────────────────────── METERING COMBO HELPERS
+
+    def _populate_metering_combo(self, codes: list, current: str):
+        """Wypełnia combo metering mode ikonami i ustawia aktualną wartość."""
+        combo = self.metering_combo.combo
+        combo.blockSignals(True)
+        combo.clear()
+        self._metering_codes = []
+
+        for code in codes:
+            info = METERING_MAP.get(code)
+            if info:
+                icon_file, label = info
+                combo.addItem(_make_metering_icon(icon_file), label)
+            else:
+                combo.addItem(code)
+            self._metering_codes.append(code)
+
+        if current in self._metering_codes:
+            combo.setCurrentIndex(self._metering_codes.index(current))
+
+        combo.blockSignals(False)
+
+    # ─────────────────────────────── SYNC
+
     def sync_with_camera(self, settings):
-        if not settings: return
-        
+        if not settings:
+            return
+
         for key, data in settings.items():
+            if key == 'meteringmode':
+                codes = data.get('choices', [])
+                current = data.get('current', '')
+                if codes:
+                    self._populate_metering_combo(codes, current)
+                continue
+
             if key in self.controls:
                 ctrl = self.controls[key]
                 new_choices = data.get("choices", [])
-                
-                if not new_choices: 
-                    continue 
 
-                # Exp comp: aparat zwraca choices=['0'], ignorujemy — 
-                # skala zarządzana przez UI (EXP_COMP_SCALE)
+                if not new_choices:
+                    continue
+
                 if key == "exposurecompensation":
                     continue
-                
+
                 if key == "shutterspeed":
                     self.shutter_all = new_choices
                     if self.flash_check.isChecked():
                         new_choices = [c for c in new_choices if c in self.shutter_flash or c == 'Auto']
-                
+
                 ctrl["slider"].update_values(new_choices)
                 ctrl["slider"].set_value(data["current"])
                 if ctrl["auto"]:
                     self._update_auto_visuals(key, data["current"] == "Auto")
 
-        # Po sync sprawdź stan blokady exp comp
         self._update_exp_comp_lock()
         self._save_state()
 
@@ -185,14 +257,17 @@ class ExposureControls(QWidget):
     # ─────────────────────────────── PERSISTENCE
 
     def _save_state(self):
-        """Zapisuje aktualny stan suwaków do QSettings."""
         for key, ctrl in self.controls.items():
             slider = ctrl["slider"]
             self._settings.setValue(f"exposure/{key}/choices", slider.values)
             self._settings.setValue(f"exposure/{key}/value", slider.get_value())
+        if self._metering_codes:
+            idx = self.metering_combo.combo.currentIndex()
+            if 0 <= idx < len(self._metering_codes):
+                self._settings.setValue("exposure/meteringmode/codes", self._metering_codes)
+                self._settings.setValue("exposure/meteringmode/current", self._metering_codes[idx])
 
     def _restore_state(self):
-        """Przywraca ostatni zapisany stan suwaków (wyłącznie wizualnie)."""
         for key, ctrl in self.controls.items():
             choices = self._settings.value(f"exposure/{key}/choices")
             value = self._settings.value(f"exposure/{key}/value")
@@ -204,3 +279,19 @@ class ExposureControls(QWidget):
                 if ctrl["auto"]:
                     self._update_auto_visuals(key, value == "Auto")
         self._update_exp_comp_lock()
+        codes = self._settings.value("exposure/meteringmode/codes")
+        current = self._settings.value("exposure/meteringmode/current")
+        if codes:
+            self._populate_metering_combo(codes, current or '')
+
+    # ─────────────────────────────── API
+
+    def get_settings(self) -> dict:
+        result = {}
+        for key, ctrl in self.controls.items():
+            result[key] = ctrl["slider"].get_value()
+        if self._metering_codes:
+            idx = self.metering_combo.combo.currentIndex()
+            if 0 <= idx < len(self._metering_codes):
+                result['meteringmode'] = self._metering_codes[idx]
+        return result

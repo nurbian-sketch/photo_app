@@ -59,9 +59,11 @@ class CameraProbe:
 
         except gp.GPhoto2Error as e:
             logger.warning(f"CameraProbe connect error: {e.code}")
+            self.camera = None  # upewnij się że connected == False
             return False
         except Exception as e:
             logger.warning(f"CameraProbe connect error: {e}")
+            self.camera = None
             return False
 
     def release(self):
@@ -101,26 +103,21 @@ class CameraProbe:
     def is_fv_mode(self) -> bool:
         return self.get_mode() == REQUIRED_MODE
 
-    def set_fv_mode(self) -> tuple:
-        """
-        Wymusza tryb Fv.
-        Zwraca (success: bool, old_mode: str).
-        old_mode to tryb PRZED zmianą (lub '' jeśli nie udało się odczytać).
-        Jeśli aparat był już w Fv — old_mode == 'Fv', success == True.
-        """
+    def set_fv_mode(self) -> bool:
+        """Wymusza tryb Fv. Zwraca True przy sukcesie."""
         try:
             config = self.camera.get_config(self.context)
             w = config.get_child_by_name('autoexposuremode')
             current = w.get_value()
             if current == REQUIRED_MODE:
-                return True, REQUIRED_MODE  # Już w Fv
+                return True
             w.set_value(REQUIRED_MODE)
             self.camera.set_config(config, self.context)
             logger.info(f"CameraProbe: tryb zmieniony {current} → {REQUIRED_MODE}")
-            return True, current
+            return True
         except Exception as e:
             logger.warning(f"CameraProbe: nie udało się ustawić Fv: {e}")
-            return False, ''
+            return False
 
     def get_battery(self) -> int:
         """Zwraca poziom baterii (0-100) lub -1."""
