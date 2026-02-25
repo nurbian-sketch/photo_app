@@ -1,7 +1,4 @@
 import os
-# Wymuszamy angielskie nazwy z libgphoto2 (gettext).
-# PyQt6 aktywuje systemowe locale (pl_PL), co powoduje
-# polskie tÅ‚umaczenia parametrÃ³w aparatu.
 os.environ['LANGUAGE'] = 'C'
 
 import gphoto2 as gp
@@ -10,7 +7,26 @@ from collections import deque
 import time
 import logging
 
-logger = logging.getLogger(__name__)
+
+def _setup_logger() -> logging.Logger:
+    log = logging.getLogger("gphoto")
+    if log.handlers:
+        return log
+    log.setLevel(logging.DEBUG)
+    fmt = logging.Formatter(
+        "%(asctime)s.%(msecs)03d  %(levelname)-5s  %(message)s",
+        datefmt="%H:%M:%S"
+    )
+    ch = logging.StreamHandler()
+    ch.setFormatter(fmt)
+    log.addHandler(ch)
+    fh = logging.FileHandler("log.txt", mode="a", encoding="utf-8")
+    fh.setFormatter(fmt)
+    log.addHandler(fh)
+    return log
+
+
+logger = _setup_logger()
 
 
 class GPhotoInterface(QThread):
@@ -153,9 +169,11 @@ class GPhotoInterface(QThread):
                     while self.command_queue:
                         name, value = self.command_queue.popleft()
                         if name == '__CAPTURE__':
+                            logger.info("[CAM ] BUSY  capture start")
                             self._execute_capture(value)
                             fps_sleep = 0.5
                         else:
+                            logger.debug(f"[CMD ] --> {name} = '{value}'")
                             self._execute_update(name, value)
                             fps_sleep = 0.15
                 finally:
@@ -167,9 +185,15 @@ class GPhotoInterface(QThread):
 
                 # --- Przechwycenie klatki live view ---
                 try:
+                    _t0 = time.monotonic()
                     camera_file = gp.CameraFile()
                     self.camera.capture_preview(camera_file, self.context)
                     file_data = camera_file.get_data_and_size()
+                    _lv_ms = int((time.monotonic() - _t0) * 1000)
+                    if _lv_ms > 300:
+                        logger.warning(f"[LV  ] slow frame: {_lv_ms} ms")
+                    else:
+                        logger.debug(f"[LV  ] frame ok: {_lv_ms} ms  ({len(file_data)} B)")
 
                     typ, ev_data = self.camera.wait_for_event(
                         10, self.context
@@ -183,6 +207,7 @@ class GPhotoInterface(QThread):
 
                 except gp.GPhoto2Error as e:
                     consecutive_errors += 1
+                    logger.warning(f"[USB ] ERROR code={e.code} consecutive={consecutive_errors}/{self.MAX_CONSECUTIVE_ERRORS}")
                     logger.warning(
                         f"GPhoto2Error w pÄ™tli: code={e.code} "
                         f"(bÅ‚Ä…d {consecutive_errors}/{self.MAX_CONSECUTIVE_ERRORS})"
@@ -374,38 +399,45 @@ class GPhotoInterface(QThread):
         from datetime import datetime
 
         try:
-            print(">>> CAPTURE: trigger")
+            _t_start = time.monotonic()
+            logger.info("[CAM ] BUSY  camera.capture() START")
             file_path = self.camera.capture(
                 gp.GP_CAPTURE_IMAGE, self.context
             )
-            print(f"<<< CAPTURE: {file_path.folder}/{file_path.name}")
+            _t_cap = time.monotonic()
+            logger.info(f"[CAM ] FREE  capture() done {int((_t_cap-_t_start)*1000)} ms  -> {file_path.folder}/{file_path.name}")
 
             # Pobierz plik z aparatu
+            logger.debug("[CAM ] BUSY  file_get() START")
             camera_file = gp.CameraFile()
             self.camera.file_get(
                 file_path.folder, file_path.name,
                 gp.GP_FILE_TYPE_NORMAL, camera_file, self.context
             )
+            _t_get = time.monotonic()
+            logger.info(f"[CAM ] FREE  file_get() done {int((_t_get-_t_cap)*1000)} ms")
 
-            # Nazwa: timestamp + oryginalna nazwa
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"{timestamp}_{file_path.name}"
             local_path = os.path.join(save_dir, filename)
 
             os.makedirs(save_dir, exist_ok=True)
             camera_file.save(local_path)
-            print(f"<<< SAVED: {local_path}")
+            _t_save = time.monotonic()
+            logger.info(f"[CAM ] SAVED {local_path}  ({int((_t_save-_t_get)*1000)} ms disk)")
 
             self.image_captured.emit(local_path)
 
-            # Po capture aparat wychodzi z LV â€” restart preview
+            # Po capture aparat wychodzi z LV - restart preview
+            logger.debug("[CAM ] BUSY  LV recovery (sleep 0.3s)")
             time.sleep(0.3)
             try:
                 recovery = gp.CameraFile()
+                _t_rec = time.monotonic()
                 self.camera.capture_preview(recovery, self.context)
-                print("<<< LV recovered after capture")
+                logger.info(f"[CAM ] FREE  LV recovered {int((time.monotonic()-_t_rec)*1000)} ms  total={int((time.monotonic()-_t_start)*1000)} ms")
             except Exception:
-                print("<<< LV recovery failed â€” next frame will retry")
+                logger.warning("[CAM ] WARN  LV recovery failed - next frame will retry")
 
             return True
 
@@ -445,10 +477,11 @@ class GPhotoInterface(QThread):
                     'Auto'
                 )
 
-            print(f">>> SEND {name} = '{target}'")
+            _t0 = time.monotonic()
+            logger.debug(f"[CMD ] BUSY  set_config {name} = '{target}'")
             widget.set_value(target)
             self.camera.set_config(config, self.context)
-            print(f"<<< OK {name} = '{target}'")
+            logger.info(f"[CMD ] FREE  set_config {name} = '{target}'  {int((time.monotonic()-_t0)*1000)} ms")
             return True
 
         except gp.GPhoto2Error as e:

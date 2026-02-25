@@ -1,10 +1,10 @@
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QListWidgetItem,
-    QLabel, QPushButton, QMessageBox, QFileDialog, QScrollArea, QSplitter,
+    QLabel, QPushButton, QMessageBox, QFileDialog, QScrollArea, QSizePolicy, QSplitter,
     QStyledItemDelegate, QStyle, QStyleOptionButton
 )
-from PyQt6.QtGui import QPixmap, QIcon, QImageReader, QPainter
-from PyQt6.QtCore import Qt, QSize, QTimer, QRect, QPoint
+from PyQt6.QtGui import QPixmap, QIcon, QImageReader, QPainter, QTransform
+from PyQt6.QtCore import Qt, QSize, QTimer, QRect, QPoint, pyqtSignal, QThread
 
 import os
 import hashlib
@@ -14,6 +14,185 @@ from core.darkcache.cache_manager import PreviewCache
 from core.darkcache.preview_generator import PreviewGenerator
 from core.darkcache.thumbnail_reader import ExifThumbnailReader
 from core.darkcache.service import DarkCacheService
+from ui.widgets.preview_panel import PreviewPanel
+
+# Rozszerzenia RAW — do filtrowania i wykrywania
+RAW_EXTENSIONS = {'.cr3', '.cr2', '.nef', '.arw', '.orf', '.rw2', '.dng'}
+
+
+# ─────────────────────────── Helpers EXIF / loader (wspólne z camera_view)
+
+def _is_raw(path: str) -> bool:
+    return os.path.splitext(path)[1].lower() in RAW_EXTENSIONS
+
+
+def _find_companion_jpg(raw_path: str) -> str | None:
+    base = os.path.splitext(raw_path)[0]
+    for ext in ('.jpg', '.JPG', '.jpeg', '.JPEG'):
+        c = base + ext
+        if os.path.exists(c):
+            return c
+    return None
+
+
+def _exiftool_extract_preview(path: str) -> str | None:
+    import subprocess, tempfile
+    try:
+        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+            tmp_path = tmp.name
+        with open(tmp_path, 'wb') as out_fh:
+            result = subprocess.run(
+                ['exiftool', '-b', '-PreviewImage', path],
+                stdout=out_fh, stderr=subprocess.PIPE, timeout=10,
+            )
+        if result.returncode == 0 and os.path.getsize(tmp_path) > 0:
+            return tmp_path
+        os.unlink(tmp_path)
+    except Exception:
+        pass
+    return None
+
+
+def _load_pixmap_from_path(path: str) -> QPixmap:
+    if not _is_raw(path):
+        pix = QPixmap(path)
+        return pix if not pix.isNull() else QPixmap()
+    jpg = _find_companion_jpg(path)
+    if jpg:
+        pix = QPixmap(jpg)
+        if not pix.isNull():
+            return pix
+    tmp_path = _exiftool_extract_preview(path)
+    if tmp_path:
+        pix = QPixmap(tmp_path)
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        if not pix.isNull():
+            return pix
+    return QPixmap()
+
+
+def _read_exif(path: str) -> dict:
+    r = {'shutter': '', 'aperture': '', 'iso': '', 'focal': '',
+         'date': '', 'dims': '', 'size': '', 'camera': '', 'orientation': 0}
+    try:
+        r['size'] = f"{os.path.getsize(path) / (1024 * 1024):.1f}\u00a0MB"
+        if _is_raw(path):
+            jpg = _find_companion_jpg(path)
+            if jpg:
+                _fill_exif_piexif(jpg, r)
+            else:
+                _fill_exif_exiftool_json(path, r)
+        else:
+            _fill_exif_piexif(path, r)
+    except Exception as e:
+        print(f"EXIF read error ({os.path.basename(path)}): {e}")
+    return r
+
+
+def _fill_exif_piexif(source_path: str, r: dict):
+    import piexif
+    exif = piexif.load(source_path)
+    ifd0 = exif.get('0th', {})
+    exif_ifd = exif.get('Exif', {})
+    r['orientation'] = {1: 0, 3: 180, 6: 90, 8: 270}.get(
+        ifd0.get(piexif.ImageIFD.Orientation, 1), 0)
+    reader = QImageReader(source_path)
+    sz = reader.size()
+    if sz.isValid():
+        r['dims'] = f"{sz.width()}\u00d7{sz.height()}"
+    def frac(v):
+        return (v[0], v[1]) if isinstance(v, tuple) and len(v) == 2 and v[1] else (int(v), 1)
+    exp = exif_ifd.get(piexif.ExifIFD.ExposureTime)
+    if exp:
+        n, d = frac(exp)
+        if n and d:
+            ratio = d / n
+            r['shutter'] = f"1/{int(round(ratio))}s" if ratio >= 1 else f"{n/d:.1f}s"
+    fn = exif_ifd.get(piexif.ExifIFD.FNumber)
+    if fn:
+        n, d = frac(fn)
+        if d:
+            r['aperture'] = f"f/{n/d:.1f}"
+    iso = exif_ifd.get(piexif.ExifIFD.ISOSpeedRatings)
+    if iso:
+        r['iso'] = f"ISO\u00a0{iso}"
+    fl = exif_ifd.get(piexif.ExifIFD.FocalLength)
+    if fl:
+        n, d = frac(fl)
+        if d:
+            r['focal'] = f"{int(round(n/d))}mm"
+    dt = (exif_ifd.get(piexif.ExifIFD.DateTimeOriginal)
+          or ifd0.get(piexif.ImageIFD.DateTime))
+    if dt:
+        s = dt.decode('ascii', errors='ignore') if isinstance(dt, bytes) else str(dt)
+        r['date'] = s[:10].replace(':', '-') + ' ' + s[11:16]
+    make = (ifd0.get(piexif.ImageIFD.Make) or b'').decode('ascii', errors='ignore').strip()
+    model_b = (ifd0.get(piexif.ImageIFD.Model) or b'').decode('ascii', errors='ignore').strip()
+    if model_b:
+        r['camera'] = model_b if model_b.startswith(make) else (
+            f"{make} {model_b}".strip() if make else model_b)
+
+
+def _fill_exif_exiftool_json(path: str, r: dict):
+    import subprocess, json
+    try:
+        result = subprocess.run(
+            ['exiftool', '-j', '-n',
+             '-Orientation', '-ImageWidth', '-ImageHeight',
+             '-ExposureTime', '-FNumber', '-ISO',
+             '-FocalLength', '-DateTimeOriginal', '-Make', '-Model', path],
+            capture_output=True, text=True, timeout=15)
+        if result.returncode != 0 or not result.stdout.strip():
+            return
+        data = json.loads(result.stdout)[0]
+        r['orientation'] = {1: 0, 3: 180, 6: 90, 8: 270}.get(
+            int(data.get('Orientation', 1)), 0)
+        w = data.get('ImageWidth')
+        h = data.get('ImageHeight')
+        if w and h:
+            r['dims'] = f"{int(w)}\u00d7{int(h)}"
+        exp = data.get('ExposureTime')
+        if exp:
+            v = float(exp)
+            if v > 0:
+                r['shutter'] = f"1/{int(round(1/v))}s" if v < 1 else f"{v:.1f}s"
+        fn = data.get('FNumber')
+        if fn:
+            r['aperture'] = f"f/{float(fn):.1f}"
+        iso = data.get('ISO')
+        if iso:
+            r['iso'] = f"ISO\u00a0{int(iso)}"
+        fl = data.get('FocalLength')
+        if fl:
+            r['focal'] = f"{int(round(float(fl)))}mm"
+        dt = str(data.get('DateTimeOriginal', ''))
+        if dt and len(dt) >= 16:
+            r['date'] = dt[:10].replace(':', '-') + ' ' + dt[11:16]
+        make = str(data.get('Make', '')).strip()
+        model_s = str(data.get('Model', '')).strip()
+        if model_s:
+            r['camera'] = model_s if model_s.startswith(make) else (
+                f"{make} {model_s}".strip() if make else model_s)
+    except Exception as e:
+        print(f"exiftool JSON error ({os.path.basename(path)}): {e}")
+
+
+class _ImageLoader(QThread):
+    """Laduje pixmape i EXIF w tle. Emituje loaded(pixmap, exif_dict)."""
+    loaded = pyqtSignal(object, dict)
+
+    def __init__(self, path: str):
+        super().__init__()
+        self._path = path
+
+    def run(self):
+        pixmap = _load_pixmap_from_path(self._path)
+        exif = _read_exif(self._path)
+        self.loaded.emit(pixmap, exif)
+
 
 
 
@@ -89,12 +268,19 @@ class CheckboxDelegate(QStyledItemDelegate):
 
 
 class DarkroomView(QWidget):
+
+    # Emitowany gdy user klika "SD Card" — MainWindow obsługuje pobieranie plików
+    sd_card_requested = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
         self.current_dir = None
         self.current_image_path = None  # Ścieżka do aktualnie wyświetlanego obrazu
         self.large_thumbs = False  # Domyślnie małe (thumbnail)
+        self._show_raw = False          # domyślnie pliki RAW ukryte
+        self._sd_card_ready = False     # True = karta SD wykryta w aparacie
+        self._loader = None              # Aktywny _ImageLoader
         
         # Cache directory
         self.cache_dir = os.path.expanduser("~/.cache/photo_app/previews")
@@ -128,8 +314,12 @@ class DarkroomView(QWidget):
         self.list_widget.setIconSize(QSize(160, 120))  # Domyślnie małe thumbnail
         self.list_widget.setGridSize(QSize(120, 160))  # Grid z paddingiem
         self.list_widget.setStyleSheet("QListWidget { background-color: #1e1e1e; }")  # Ciemniejsze tło
-        self.list_widget.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)  # Multi-select
+        self.list_widget.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
         self.list_widget.itemClicked.connect(self.show_image)
+        self.list_widget.currentItemChanged.connect(
+            lambda cur, prev: self.show_image(cur) if cur else None
+        )
+        self.list_widget.installEventFilter(self)  # nawigacja strzałkami
         
         # Custom delegate z checkboxami
         self.list_widget.setItemDelegate(CheckboxDelegate(self.list_widget))
@@ -139,47 +329,31 @@ class DarkroomView(QWidget):
         right_layout = QVBoxLayout(right_panel)
         right_layout.setContentsMargins(5,5,5,5)
 
-        self.image_label = QLabel(self.tr("No image"))
-        self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.image_label.setStyleSheet("background-color: #3d3d3d; color: white;")
-        self.image_label.setMinimumSize(400,300)
+        self.preview = PreviewPanel()
+        right_layout.addWidget(self.preview, 1)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(self.image_label)
-        right_layout.addWidget(scroll)
-
-        # --- NOWY UKŁAD PRZYCISKÓW ---
         controls_layout = QVBoxLayout()
+        controls_layout.setSpacing(6)
 
-        # Grupa 1: Handle Files
-        files_layout = QHBoxLayout()
+        # Jeden wiersz przycisków
+        row_layout = QHBoxLayout()
         self.btn_open = QPushButton(self.tr("Open Folder"))
         self.btn_last_session = QPushButton(self.tr("Last Session"))
-        self.btn_sd_card = QPushButton(self.tr("SD Card")) # TODO
-        
-        for btn in [self.btn_open, self.btn_last_session, self.btn_sd_card]:
-            btn.setMinimumHeight(35)
-            btn.setMaximumWidth(180)
-            files_layout.addWidget(btn)
-        files_layout.addStretch()
-
-        # Grupa 2: View Options
-        view_layout = QHBoxLayout()
         self.btn_toggle_size = QPushButton(self.tr("Large Thumbs"))
         self.btn_delete = QPushButton(self.tr("Delete Image(s)"))
-        self.btn_raw_preview = QPushButton(self.tr("RAW Preview"))   # TODO
-        self.btn_favorites = QPushButton(self.tr("Favorites Only")) # TODO
+        self.btn_sd_card = QPushButton(self.tr("SD Card"))
+        self.btn_raw_preview = QPushButton(self.tr("RAW: OFF"))
+        self.btn_favorites = QPushButton(self.tr("Favorites Only"))
         self.btn_favorites.setCheckable(True)
-
-        for btn in [self.btn_toggle_size, self.btn_delete, self.btn_raw_preview, self.btn_favorites]:
+        for btn in [self.btn_open, self.btn_last_session, self.btn_toggle_size,
+                    self.btn_delete, self.btn_sd_card, self.btn_raw_preview,
+                    self.btn_favorites]:
             btn.setMinimumHeight(35)
             btn.setMaximumWidth(180)
-            view_layout.addWidget(btn)
-        view_layout.addStretch()
+            row_layout.addWidget(btn)
+        row_layout.addStretch()
 
-        controls_layout.addLayout(files_layout)
-        controls_layout.addLayout(view_layout)
+        controls_layout.addLayout(row_layout)
         right_layout.addLayout(controls_layout)
 
         # QSplitter przypisany do self, aby main_window mógł go zapisać
@@ -198,10 +372,16 @@ class DarkroomView(QWidget):
         self.btn_last_session.clicked.connect(self.open_last_session)
         self.btn_delete.clicked.connect(self.delete_images)
         self.btn_toggle_size.clicked.connect(self.toggle_thumb_size)
+        self.btn_raw_preview.setCheckable(False)
+        self.btn_raw_preview.setVisible(False)  # pojawia sie tylko gdy sa pliki RAW
+        self.btn_raw_preview.clicked.connect(self._toggle_raw)
+        self.btn_sd_card.setVisible(False)      # pojawia się tylko gdy karta wykryta
+        self.btn_sd_card.clicked.connect(self.sd_card_requested.emit)
+        self.btn_favorites.setVisible(False)    # TODO
 
     def open_last_session(self):
         """Otwiera najnowszy podfolder w katalogu sesji, pomijając captures subdir."""
-        from ui.preferences_dialog import PreferencesDialog
+        from ui.dialogs.preferences_dialog import PreferencesDialog
         base_path = PreferencesDialog.get_session_directory()
         captures_name = PreferencesDialog.get_captures_subdir()
 
@@ -227,7 +407,7 @@ class DarkroomView(QWidget):
             print(f"Error loading last session: {e}")
 
     def open_folder(self):
-        from ui.preferences_dialog import PreferencesDialog
+        from ui.dialogs.preferences_dialog import PreferencesDialog
         default_path = PreferencesDialog.get_session_directory()
         folder = QFileDialog.getExistingDirectory(
             self,
@@ -238,73 +418,101 @@ class DarkroomView(QWidget):
             self.current_dir = folder
             self.load_images(folder)
 
-    # Rozszerzenia obsługiwane w liście miniatur
-    IMAGE_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.cr3', '.cr2', '.nef',
-                        '.arw', '.orf', '.rw2', '.dng')
+    # Rozszerzenia JPEG/PNG obsługiwane zawsze
+    JPEG_EXTENSIONS = ('.jpg', '.jpeg', '.png')
+    # Rozszerzenia RAW — wyświetlane zależnie od btn_raw_preview
+    RAW_EXTENSIONS_TUPLE = ('.cr3', '.cr2', '.nef', '.arw', '.orf', '.rw2', '.dng')
+
+    @property
+    def IMAGE_EXTENSIONS(self):
+        if self._show_raw:
+            return self.JPEG_EXTENSIONS + self.RAW_EXTENSIONS_TUPLE
+        return self.JPEG_EXTENSIONS
 
     def load_images(self, folder):
+        self.current_dir = folder
+        self.timer.stop()
         self.list_widget.clear()
-        self.image_label.clear()
-        self.image_label.setText(self.tr("No image"))
+        self.preview.clear()
         self.current_image_path = None
+
+        all_files = [f.lower() for f in os.listdir(folder)]
+        has_raw = any(
+            f.endswith(self.RAW_EXTENSIONS_TUPLE) for f in all_files
+        )
+        self.btn_raw_preview.setVisible(has_raw)
 
         self.files = sorted(
             os.path.join(folder, f)
             for f in os.listdir(folder)
             if f.lower().endswith(self.IMAGE_EXTENSIONS)
         )
-        self.load_index = 0
-        self.timer.start(30)
+
+        if not self.files:
+            return
+
+        # Pierwszy plik od razu — thumbnail + podglad
+        self._add_thumbnail_item(0)
+        self._select_and_show(0)
+
+        # Reszta w tle (timer)
+        self.load_index = 1
+        if len(self.files) > 1:
+            self.timer.start(30)
+
+    def _add_thumbnail_item(self, index: int):
+        """Dodaje jeden element do list_widget z miniatura."""
+        path = self.files[index]
+        pixmap = self.darkcache.get_pixmap(Path(path), self.large_thumbs)
+        icon = QIcon(pixmap) if pixmap and not pixmap.isNull() else QIcon()
+        item = QListWidgetItem(icon, os.path.basename(path))
+        item.setData(Qt.ItemDataRole.UserRole, path)
+        item.setData(Qt.ItemDataRole.UserRole + 1, False)
+        self.list_widget.addItem(item)
 
     def load_next_thumbnails(self):
-        """Ładuje JEDNO zdjęcie per tick (responsywność)"""
+        """Laduje JEDNO zdjecie per tick (responsywnosc)."""
         if self.load_index >= len(self.files):
             self.timer.stop()
-            # Po zakończeniu ładowania wszystkich, upewnij się że pierwszy jest wybrany jeśli nic nie wyświetlamy
-            if not self.current_image_path and self.list_widget.count() > 0:
-                self.show_image(self.list_widget.item(0))
             return
-        
-        path = self.files[self.load_index]
-        name = os.path.basename(path)
-        
-        pixmap = self.darkcache.get_pixmap(
-            Path(path),
-            self.large_thumbs
-        )
 
-   
-        if pixmap and not pixmap.isNull():
-            icon = QIcon(pixmap)
-        else:
-            # Fallback
-            icon = QIcon(path)
-        
-        item = QListWidgetItem(icon, name)
-        item.setData(Qt.ItemDataRole.UserRole, path)
-        item.setData(Qt.ItemDataRole.UserRole + 1, False)  # Checkbox unchecked
-        self.list_widget.addItem(item)
+        self._add_thumbnail_item(self.load_index)
         self.load_index += 1
 
     def show_image(self, item):
+        """Wyswietla podglad asynchronicznie przez _ImageLoader."""
         path = item.data(Qt.ItemDataRole.UserRole)
-        self.current_image_path = path  # Zapisz ścieżkę
+        self.current_image_path = path
+        self.preview.set_message(self.tr("Loading…"))
 
-        reader = QImageReader(path)
-        reader.setAutoTransform(True)
-        image = reader.read()
+        # Anuluj poprzedni loader — odlacz sygnal, poczekaj na zakonczenie
+        if self._loader and self._loader.isRunning():
+            try:
+                self._loader.loaded.disconnect()
+            except RuntimeError:
+                pass
+            self._loader.wait()
+        self._loader = None
 
-        if not image.isNull():
-            pixmap = QPixmap.fromImage(image)
-            self.image_label.setPixmap(
-                pixmap.scaled(
-                    self.image_label.size(),
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation
-                )
-            )
-        else:
-            self.image_label.setText(self.tr("Cannot open image"))
+        self._loader = _ImageLoader(path)
+        self._loader.loaded.connect(self._on_image_loaded)
+        self._loader.start()
+
+    def _on_image_loaded(self, pixmap: QPixmap, exif: dict):
+        """Callback z _ImageLoader — deleguje do PreviewPanel."""
+        self.preview.set_pixmap(pixmap, exif.get('orientation', 0))
+        self.preview.set_exif(exif)
+
+    def _select_and_show(self, index: int):
+        """Zaznacza element listy i wyświetla podgląd."""
+        item = self.list_widget.item(index)
+        if item:
+            self.list_widget.setCurrentItem(item)
+            self.show_image(item)
+
+    def eventFilter(self, obj, event):
+        """Przekazuje zdarzenia klawiatury do QListWidget — nawigacja po gridzie obsługiwana natywnie."""
+        return super().eventFilter(obj, event)
 
     def delete_images(self):
         """Usuń zaznaczone zdjęcia (checkboxy)"""
@@ -345,7 +553,7 @@ class DarkroomView(QWidget):
                     
                     # Jeśli to był aktualny podgląd - wyczyść
                     if path == self.current_image_path:
-                        self.image_label.setText(self.tr("No image"))
+                        self.preview.clear()
                         self.current_image_path = None
                         
                 except Exception as e:
@@ -364,31 +572,30 @@ class DarkroomView(QWidget):
             
             self.update_selection_count()
 
-    def resizeEvent(self, event):
-        """Przeskaluj aktualnie wyświetlany obraz przy zmianie rozmiaru okna"""
-        if self.current_image_path:
-            reader = QImageReader(self.current_image_path)
-            reader.setAutoTransform(True)
-            image = reader.read()
-            
-            if not image.isNull():
-                pixmap = QPixmap.fromImage(image)
-                self.image_label.setPixmap(
-                    pixmap.scaled(
-                        self.image_label.size(),
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation
-                    )
-                )
-        
-        super().resizeEvent(event)
+    # ─────────────────────────── RAW TOGGLE
+
+    def _toggle_raw(self):
+        """Przelacza widocznosc plikow RAW na liscie miniatur."""
+        self._show_raw = not self._show_raw
+        self.btn_raw_preview.setText(
+            self.tr("RAW: ON") if self._show_raw else self.tr("RAW: OFF")
+        )
+        if self.current_dir:
+            self.load_images(self.current_dir)
+
+    # ─────────────────────────── SD CARD
+
+    def set_sd_card_ready(self, ready: bool):
+        """Wywoływane przez MainWindow gdy probe wykryje / utraci kartę SD."""
+        self._sd_card_ready = ready
+        self.btn_sd_card.setVisible(ready)
 
     def retranslateUi(self):
         """Odświeżenie tekstów po zmianie języka"""
         self.btn_open.setText(self.tr("Open Folder"))
         self.btn_delete.setText(self.tr("Delete Image(s)"))
         if not self.current_image_path:
-            self.image_label.setText(self.tr("No image"))
+            self.preview.clear()
         self.update_selection_count()
     
     def update_selection_count(self):

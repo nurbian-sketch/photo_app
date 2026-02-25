@@ -137,3 +137,8 @@ class PreferencesDialog(QDialog):
             PreferencesDialog.KEY_SESSION_DIR,
             PreferencesDialog.DEFAULT_SESSION_DIR
         )
+
+    @staticmethod
+    def get_captures_subdir() -> str:
+        """Zwraca nazwę podkatalogu na zdjęcia z aparatu."""
+        return "captures"

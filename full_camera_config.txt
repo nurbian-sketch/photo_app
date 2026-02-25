@@ -1,0 +1,423 @@
+Pełna konfiguracja aparatu (84 opcji)
+============================================================
+
+actions/syncdatetimeutc
+  label : Synchronize camera date and time with PC (UTC)
+  wartość: 0
+  typ   : toggle [RW]
+
+actions/syncdatetime
+  label : Synchronize camera date and time with PC
+  wartość: 0
+  typ   : toggle [RW]
+
+actions/uilock
+  label : UI Lock
+  wartość: 2
+  typ   : toggle [RW]
+
+actions/popupflash
+  label : Popup Flash
+  wartość: 2
+  typ   : toggle [RW]
+
+actions/autofocusdrive
+  label : Drive Canon DSLR Autofocus
+  wartość: 0
+  typ   : toggle [RW]
+
+actions/manualfocusdrive
+  label : Drive Canon DSLR Manual focus
+  wartość: None
+  typ   : radio [RW]
+
+actions/cancelautofocus
+  label : Cancel Canon DSLR Autofocus
+  wartość: 0
+  typ   : toggle [RW]
+
+actions/eoszoom
+  label : Canon EOS Zoom
+  wartość: 0
+  typ   : text [RW]
+
+actions/eoszoomposition
+  label : Canon EOS Zoom Position
+  wartość: 0,0
+  typ   : text [RW]
+
+actions/viewfinder
+  label : Canon EOS Viewfinder
+  wartość: 0
+  typ   : toggle [RW]
+
+actions/eosremoterelease
+  label : Canon EOS Remote Release
+  wartość: None
+  typ   : radio [RW]
+
+actions/eosmoviemode
+  label : Movie Mode
+  wartość: 2
+  typ   : toggle [RW]
+
+actions/opcode
+  label : PTP Opcode
+  wartość: 0x1001,0xparam1,0xparam2
+  typ   : text [RW]
+
+settings/datetimeutc
+  label : Camera Date and Time
+  wartość: 1771967374
+  typ   : date [RW]
+
+settings/datetime
+  label : Camera Date and Time
+  wartość: 1771967374
+  typ   : date [RW]
+
+settings/output
+  label : Camera Output
+  wartość: TFT
+  typ   : radio [RW]
+
+settings/movierecordtarget
+  label : Recording Destination
+  wartość: SDRAM
+  typ   : radio [RW]
+
+settings/evfmode
+  label : EVF Mode
+  wartość: 1
+  typ   : radio [RW]
+
+settings/ownername
+  label : Owner Name
+  wartość: 
+  typ   : text [RW]
+
+settings/artist
+  label : Artist
+  wartość: 
+  typ   : text [RW]
+
+settings/copyright
+  label : Copyright
+  wartość: 
+  typ   : text [RW]
+
+settings/nickname
+  label : Nickname
+  wartość: EOSRP
+  typ   : text [RW]
+
+settings/customfuncex
+  label : Custom Functions Ex
+  wartość: 20,1,6,14,1,102,1,0,
+  typ   : text [RW]
+
+settings/focusarea
+  label : Focus Area
+  wartość: 2827638615
+  typ   : text [RW]
+
+settings/strobofiring
+  label : Strobo Firing
+  wartość: 1
+  typ   : radio [RO]
+
+settings/flashcharged
+  label : Flash Charging State
+  wartość: 0
+  typ   : text [RO]
+
+settings/oneshotrawon
+  label : One Shot Raw On
+  wartość: 0
+  typ   : text [RO]
+
+settings/autopoweroff
+  label : Auto Power Off
+  wartość: 0
+  typ   : radio [RW]
+
+settings/depthoffield
+  label : Depth of Field
+  wartość: 0
+  typ   : text [RW]
+
+settings/capturetarget
+  label : Capture Target
+  wartość: Memory card
+  typ   : radio [RW]
+
+settings/capture
+  label : Capture
+  wartość: 0
+  typ   : toggle [RW]
+
+settings/remotemode
+  label : Remote Mode
+  wartość: 0
+  typ   : text [RW]
+
+settings/eventmode
+  label : Event Mode
+  wartość: 0
+  typ   : text [RW]
+
+settings/testolc
+  label : Test OLC
+  wartość: 2
+  typ   : toggle [RW]
+
+status/serialnumber
+  label : Serial Number
+  wartość: 92532eba25194e009102af5a6f88022f
+  typ   : text [RO]
+
+status/manufacturer
+  label : Camera Manufacturer
+  wartość: Canon.Inc
+  typ   : text [RO]
+
+status/cameramodel
+  label : Camera Model
+  wartość: Canon EOS RP
+  typ   : text [RO]
+
+status/deviceversion
+  label : Device Version
+  wartość: 3-1.6.3
+  typ   : text [RO]
+
+status/vendorextension
+  label : Vendor Extension
+  wartość: 
+  typ   : text [RO]
+
+status/model
+  label : Camera Model
+  wartość: 2147484723
+  typ   : text [RO]
+
+status/batterylevel
+  label : Battery Level
+  wartość: 100%
+  typ   : text [RO]
+
+status/batterylevel
+  label : Battery Level
+  wartość: 100%
+  typ   : text [RO]
+
+status/mirrorlockstatus
+  label : Mirror Lock Status
+  wartość: 0
+  typ   : text [RO]
+
+status/mirrordownstatus
+  label : Mirror Down Status
+  wartość: 0
+  typ   : text [RO]
+
+status/lensname
+  label : Lens Name
+  wartość: EF16-35mm f/2.8L II USM
+  typ   : text [RO]
+
+status/eosserialnumber
+  label : Serial Number
+  wartość: 643021003493
+  typ   : text [RO]
+
+status/availableshots
+  label : Available Shots
+  wartość: 11903
+  typ   : text [RO]
+
+status/eosmovieswitch
+  label : Movie Switch
+  wartość: 0
+  typ   : text [RO]
+
+imgsettings/imageformat
+  label : Image Format
+  wartość: M
+  typ   : radio [RW]
+
+imgsettings/imageformatsd
+  label : Image Format SD
+  wartość: M
+  typ   : radio [RW]
+
+imgsettings/imageformatcf
+  label : Image Format CF
+  wartość: M
+  typ   : radio [RW]
+
+imgsettings/iso
+  label : ISO Speed
+  wartość: 1600
+  typ   : radio [RW]
+
+imgsettings/whitebalance
+  label : WhiteBalance
+  wartość: Color Temperature
+  typ   : radio [RW]
+
+imgsettings/colortemperature
+  label : Color Temperature
+  wartość: 2800
+  typ   : radio [RW]
+
+imgsettings/whitebalanceadjusta
+  label : WhiteBalance Adjust A
+  wartość: 0
+  typ   : radio [RW]
+
+imgsettings/whitebalanceadjustb
+  label : WhiteBalance Adjust B
+  wartość: 0
+  typ   : radio [RW]
+
+imgsettings/whitebalancexa
+  label : WhiteBalance X A
+  wartość: 0
+  typ   : radio [RO]
+
+imgsettings/whitebalancexb
+  label : WhiteBalance X B
+  wartość: 0
+  typ   : radio [RO]
+
+imgsettings/colorspace
+  label : Color Space
+  wartość: sRGB
+  typ   : radio [RW]
+
+capturesettings/zoomspeed
+  label : Zoom Speed
+  wartość: 0
+  typ   : text [RW]
+
+capturesettings/exposurecompensation
+  label : Exposure Compensation
+  wartość: 0
+  typ   : radio [RW]
+
+capturesettings/focusmode
+  label : Focus Mode
+  wartość: AI Servo
+  typ   : radio [RW]
+
+capturesettings/continuousaf
+  label : Continuous AF
+  wartość: On
+  typ   : radio [RW]
+
+capturesettings/aspectratio
+  label : Aspect Ratio
+  wartość: 3:2
+  typ   : radio [RW]
+
+capturesettings/afmethod
+  label : AF Method
+  wartość: LiveSpotAF
+  typ   : radio [RW]
+
+capturesettings/storageid
+  label : Storage Device
+  wartość: 00020001
+  typ   : text [RW]
+
+capturesettings/highisonr
+  label : High ISO Noise Reduction
+  wartość: Off
+  typ   : radio [RW]
+
+capturesettings/autoexposuremode
+  label : Canon Auto Exposure Mode
+  wartość: Fv
+  typ   : radio [RW]
+
+capturesettings/autoexposuremodedial
+  label : Canon Auto Exposure Mode Dial
+  wartość: Fv
+  typ   : radio [RW]
+
+capturesettings/drivemode
+  label : Drive Mode
+  wartość: Timer 2 sec
+  typ   : radio [RW]
+
+capturesettings/picturestyle
+  label : Picture Style
+  wartość: Fine detail
+  typ   : radio [RW]
+
+capturesettings/aperture
+  label : Aperture
+  wartość: Unknown value 00ff
+  typ   : radio [RW]
+
+capturesettings/shutterspeed
+  label : Shutter Speed
+  wartość: bulb
+  typ   : radio [RW]
+
+capturesettings/meteringmode
+  label : Metering Mode
+  wartość: Center-weighted average
+  typ   : radio [RW]
+
+capturesettings/liveviewsize
+  label : Live View Size
+  wartość: val 1
+  typ   : radio [RW]
+
+capturesettings/bracketmode
+  label : Bracket Mode
+  wartość: Unknown value 0000
+  typ   : radio [RW]
+
+capturesettings/aeb
+  label : Auto Exposure Bracketing
+  wartość: off
+  typ   : radio [RW]
+
+capturesettings/alomode
+  label : Auto Lighting Optimization
+  wartość: x1
+  typ   : radio [RW]
+
+capturesettings/movieservoaf
+  label : Movie Servo AF
+  wartość: Off
+  typ   : radio [RW]
+
+other/d402
+  label : Friendly Device Name
+  wartość: Canon EOS RP
+  typ   : text [RO]
+
+other/d407
+  label : Perceived Device Type
+  wartość: 1
+  typ   : text [RO]
+
+other/d406
+  label : Session Initiator Info
+  wartość: Unknown Initiator
+  typ   : text [RW]
+
+other/d303
+  label : PTP Property 0xd303
+  wartość: 1
+  typ   : text [RO]
+
+other/5001
+  label : Battery Level
+  wartość: 100
+  typ   : menu [RO]
+

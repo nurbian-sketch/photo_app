@@ -7,6 +7,8 @@ import piexif
 from PyQt6.QtGui import QPixmap, QTransform
 from PyQt6.QtCore import Qt
 
+from core.darkcache.thumbnail_reader import ExifThumbnailReader
+
 
 class PreviewGenerator:
     """
@@ -49,24 +51,22 @@ class PreviewGenerator:
     # ---------- helpers ----------
 
     def _apply_orientation(self, pixmap: QPixmap, path: Path) -> QPixmap:
+        angle = 0
         try:
-            exif = piexif.load(str(path))
-            orientation = exif.get("0th", {}).get(piexif.ImageIFD.Orientation)
-
-            transform = QTransform()
-            if orientation == 3:
-                transform.rotate(180)
-            elif orientation == 6:
-                transform.rotate(90)
-            elif orientation == 8:
-                transform.rotate(-90)
-
-            if orientation in (3, 6, 8):
-                pixmap = pixmap.transformed(transform)
-
+            if path.suffix.lower() == '.cr3':
+                angle = ExifThumbnailReader.read_cr3_orientation(path)
+            else:
+                exif = piexif.load(str(path))
+                orientation = exif.get('0th', {}).get(piexif.ImageIFD.Orientation)
+                angle = {3: 180, 6: 90, 8: 270}.get(orientation, 0)
         except Exception:
             pass
 
+        if angle:
+            pixmap = pixmap.transformed(
+                QTransform().rotate(angle),
+                Qt.TransformationMode.SmoothTransformation
+            )
         return pixmap
 
     def _crop_square(self, pixmap: QPixmap) -> QPixmap:

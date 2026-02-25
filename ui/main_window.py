@@ -131,6 +131,8 @@ class MainWindow(QMainWindow):
         self.camera_view.preview_list_changed.connect(self._update_preview_menu)
         # Komunikaty z camera_view do status bar
         self.camera_view.status_message.connect(self.status_bar.showMessage)
+        # Przycisk SD Card w DarkroomView
+        self.darkroom_view.sd_card_requested.connect(self._on_sd_card_requested)
 
 
         self.read_settings()
@@ -176,7 +178,14 @@ class MainWindow(QMainWindow):
 
         # FILE MENU
         file_menu = menu_bar.addMenu(self.tr("File"))
-        
+
+        pref_action = QAction(self.tr("Preferences..."), self)
+        pref_action.setShortcut(QKeySequence("Ctrl+,"))
+        pref_action.triggered.connect(self._show_preferences)
+        file_menu.addAction(pref_action)
+
+        file_menu.addSeparator()
+
         exit_action = QAction(self.tr("Exit"), self)
         exit_action.setShortcut(QKeySequence("Ctrl+Q"))
         exit_action.triggered.connect(self.close)
@@ -242,6 +251,7 @@ class MainWindow(QMainWindow):
         self.sd_ready = sd_ready
         self.set_status_icons(camera=camera_ready, sd=sd_ready)
         self.camera_view.set_camera_ready(camera_ready)
+        self.darkroom_view.set_sd_card_ready(sd_ready)
         # Powiadom camera_view o wyniku probe — umożliwia auto-start po RECONNECT
         self.camera_view.on_probe_completed(camera_ready)
         if camera_ready:
@@ -250,6 +260,23 @@ class MainWindow(QMainWindow):
             )
         else:
             self.status_bar.showMessage(self.tr("Camera not detected"), 4000)
+
+    def _on_sd_card_requested(self):
+        """Otwiera pliki z karty SD aparatu w DarkroomView.
+        Wymaga zatrzymanego Live View (USB musi być wolne)."""
+        if self.camera_view.is_lv_active():
+            self.status_bar.showMessage(
+                self.tr("Stop Live View first to access camera files"), 5000
+            )
+            return
+        # Pobierz pliki z karty przez gphoto2 do katalogu sesji
+        from ui.dialogs.camera_download_dialog import CameraDownloadDialog
+        from ui.dialogs.preferences_dialog import PreferencesDialog
+        dest = PreferencesDialog.get_session_directory()
+        dialog = CameraDownloadDialog(dest_dir=dest, parent=self)
+        if dialog.exec() and dialog.downloaded_dir:
+            self.darkroom_view.load_images(dialog.downloaded_dir)
+            self.switcher.select_view("Pictures")
 
     def _update_preview_menu(self, pairs):
         """Aktualizuje dynamiczne wpisy menu View dla okien podglądu."""
@@ -268,10 +295,19 @@ class MainWindow(QMainWindow):
         self._preview_separator.setVisible(bool(pairs))
 
     def read_settings(self):
+        screen = QApplication.primaryScreen().availableGeometry()
         if self.settings.value("geometry"):
             self.restoreGeometry(self.settings.value("geometry"))
+            geo = self.geometry()
+            w = min(geo.width(), screen.width())
+            h = min(geo.height(), screen.height())
+            x = max(screen.left(), min(geo.x(), screen.right() - w))
+            y = max(screen.top(), min(geo.y(), screen.bottom() - h))
+            self.setGeometry(x, y, w, h)
         else:
-            self.resize(1200, 800)
+            w = min(1100, screen.width() - 40)
+            h = min(720, screen.height() - 40)
+            self.resize(w, h)
             
         if self.settings.value("windowState"):
             self.restoreState(self.settings.value("windowState"))
@@ -303,6 +339,13 @@ class MainWindow(QMainWindow):
         else:
             self.saved_geometry = self.geometry()
             self.showFullScreen()
+
+    def _show_preferences(self):
+        from ui.dialogs.preferences_dialog import PreferencesDialog
+        dialog = PreferencesDialog(self)
+        if dialog.exec() == PreferencesDialog.DialogCode.Accepted:
+            self.camera_view.update_capture_directory()
+            self.status_bar.showMessage(self.tr("Preferences saved"), 2000)
 
     def show_about(self):
         QMessageBox.information(self, self.tr("About"), self.tr("Sessions Assistant 0.99\nAuthor: Grzeza"))

@@ -455,6 +455,54 @@ class ImageControls(QWidget):
 
     # ─────────────────────────── API
 
+    def apply_wb_temperature(self, kelvin: int):
+        """
+        Ustawia WB na Color Temperature i CT slider na podaną wartość.
+        Wywoływane przez CapturePreviewDialog.wb_applied po zatwierdzeniu pickera.
+        """
+        if not self._ct_code:
+            logger.warning("apply_wb_temperature: brak _ct_code — sync nie wykonany")
+            return
+
+        # Ustaw WB combo na Color Temperature
+        ct_display = self._to_display('whitebalance', self._ct_code)
+        self.wb_combo.blockSignals(True)
+        self.wb_combo.setCurrentText(ct_display)
+        self.wb_combo.blockSignals(False)
+
+        # Odblokuj CT slider
+        self._on_wb_changed(ct_display)
+
+        # Snap do dostępnych wartości CT
+        snapped = str(round(kelvin / 100) * 100)
+        if snapped not in self.ct_slider.values:
+            try:
+                snapped = min(
+                    self.ct_slider.values,
+                    key=lambda v: abs(int(v) - kelvin)
+                )
+            except (ValueError, TypeError):
+                pass
+
+        self.ct_slider.blockSignals(True)
+        self.ct_slider.set_value(snapped)
+        self.ct_slider.blockSignals(False)
+
+        try:
+            val = int(snapped)
+            hint = self._tr_ct_hint(val)
+            self.ct_hint.setText(f"{self.tr('Info')}: {hint} ({val}K)")
+        except Exception:
+            pass
+
+        # Wyślij do aparatu
+        if self.gphoto:
+            self.gphoto.update_camera_param('whitebalance', self._ct_code)
+            self.gphoto.update_camera_param('colortemperature', snapped)
+
+        self._save_state()
+        print(f"WB picker applied: Color Temperature {snapped}K")
+
     def get_settings(self):
         """Zwraca aktualny stan jako dict kodów aparatu."""
         result = {}

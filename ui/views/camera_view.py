@@ -90,96 +90,147 @@ def _load_pixmap_from_path(path: str) -> QPixmap:
 
 def _read_exif(path: str) -> dict:
     """
-    Czyta podstawowe dane EXIF przez piexif.
-    Dla RAW: companion JPG → exiftool preview temp JPEG → fallback pusty dict.
-    UWAGA: wywołuj tylko z wątku roboczego — może uruchamiać exiftool.
+    Czyta podstawowe dane EXIF.
+    JPEG / companion JPG → piexif (szybkie, prawidłowa orientacja).
+    RAW bez companion      → exiftool -j (prawdziwe wymiary sensora + orientacja).
+    UWAGA: wywołuj tylko z wątku roboczego.
     """
     r = {'shutter': '', 'aperture': '', 'iso': '', 'focal': '',
          'date': '', 'dims': '', 'size': '', 'camera': '', 'orientation': 0}
-    tmp_to_clean = None
     try:
-        import piexif
-
         r['size'] = f"{os.path.getsize(path) / (1024 * 1024):.1f}\u00a0MB"
-
-        # Źródło EXIF: companion JPG > exiftool temp > oryginał
-        exif_source = path
         if _is_raw(path):
             jpg = _find_companion_jpg(path)
             if jpg:
-                exif_source = jpg
+                _fill_exif_piexif(jpg, r)
             else:
-                tmp_to_clean = _exiftool_extract_preview(path)
-                if tmp_to_clean:
-                    exif_source = tmp_to_clean
-
-        exif = piexif.load(exif_source)
-        ifd0 = exif.get('0th', {})
-        exif_ifd = exif.get('Exif', {})
-
-        # Orientation
-        orientation_map = {1: 0, 3: 180, 6: 90, 8: 270}
-        r['orientation'] = orientation_map.get(
-            ifd0.get(piexif.ImageIFD.Orientation, 1), 0
-        )
-
-        # Dims — z danych obrazu (QImageReader nie blokuje)
-        from PyQt6.QtGui import QImageReader as _QIR
-        reader = _QIR(exif_source)
-        sz = reader.size()
-        if sz.isValid():
-            r['dims'] = f"{sz.width()}\u00d7{sz.height()}"
-
-        def frac(v):
-            if isinstance(v, tuple) and len(v) == 2 and v[1]:
-                return v[0], v[1]
-            return int(v), 1
-
-        exp = exif_ifd.get(piexif.ExifIFD.ExposureTime)
-        if exp:
-            n, d = frac(exp)
-            if n and d:
-                ratio = d / n
-                r['shutter'] = f"1/{int(round(ratio))}s" if ratio >= 1 else f"{n / d:.1f}s"
-
-        fn = exif_ifd.get(piexif.ExifIFD.FNumber)
-        if fn:
-            n, d = frac(fn)
-            if d:
-                r['aperture'] = f"f/{n / d:.1f}"
-
-        iso = exif_ifd.get(piexif.ExifIFD.ISOSpeedRatings)
-        if iso:
-            r['iso'] = f"ISO\u00a0{iso}"
-
-        fl = exif_ifd.get(piexif.ExifIFD.FocalLength)
-        if fl:
-            n, d = frac(fl)
-            if d:
-                r['focal'] = f"{int(round(n / d))}mm"
-
-        dt = (exif_ifd.get(piexif.ExifIFD.DateTimeOriginal)
-              or ifd0.get(piexif.ImageIFD.DateTime))
-        if dt:
-            s = dt.decode('ascii', errors='ignore') if isinstance(dt, bytes) else str(dt)
-            r['date'] = s[:10].replace(':', '-') + ' ' + s[11:16]
-
-        make = (ifd0.get(piexif.ImageIFD.Make) or b'').decode('ascii', errors='ignore').strip()
-        model = (ifd0.get(piexif.ImageIFD.Model) or b'').decode('ascii', errors='ignore').strip()
-        if model:
-            r['camera'] = model if model.startswith(make) else (
-                f"{make} {model}".strip() if make else model
-            )
-
+                _fill_exif_exiftool_json(path, r)
+        else:
+            _fill_exif_piexif(path, r)
     except Exception as e:
         print(f"EXIF read error ({os.path.basename(path)}): {e}")
-    finally:
-        if tmp_to_clean:
-            try:
-                os.unlink(tmp_to_clean)
-            except OSError:
-                pass
     return r
+
+
+def _fill_exif_piexif(source_path: str, r: dict):
+    """Wypełnia r danymi EXIF przez piexif (dla JPEG / companion JPG)."""
+    import piexif
+    exif = piexif.load(source_path)
+    ifd0 = exif.get('0th', {})
+    exif_ifd = exif.get('Exif', {})
+
+    orientation_map = {1: 0, 3: 180, 6: 90, 8: 270}
+    r['orientation'] = orientation_map.get(
+        ifd0.get(piexif.ImageIFD.Orientation, 1), 0
+    )
+
+    from PyQt6.QtGui import QImageReader as _QIR
+    reader = _QIR(source_path)
+    sz = reader.size()
+    if sz.isValid():
+        r['dims'] = f"{sz.width()}\u00d7{sz.height()}"
+
+    def frac(v):
+        if isinstance(v, tuple) and len(v) == 2 and v[1]:
+            return v[0], v[1]
+        return int(v), 1
+
+    exp = exif_ifd.get(piexif.ExifIFD.ExposureTime)
+    if exp:
+        n, d = frac(exp)
+        if n and d:
+            ratio = d / n
+            r['shutter'] = f"1/{int(round(ratio))}s" if ratio >= 1 else f"{n / d:.1f}s"
+
+    fn = exif_ifd.get(piexif.ExifIFD.FNumber)
+    if fn:
+        n, d = frac(fn)
+        if d:
+            r['aperture'] = f"f/{n / d:.1f}"
+
+    iso = exif_ifd.get(piexif.ExifIFD.ISOSpeedRatings)
+    if iso:
+        r['iso'] = f"ISO\u00a0{iso}"
+
+    fl = exif_ifd.get(piexif.ExifIFD.FocalLength)
+    if fl:
+        n, d = frac(fl)
+        if d:
+            r['focal'] = f"{int(round(n / d))}mm"
+
+    dt = (exif_ifd.get(piexif.ExifIFD.DateTimeOriginal)
+          or ifd0.get(piexif.ImageIFD.DateTime))
+    if dt:
+        s = dt.decode('ascii', errors='ignore') if isinstance(dt, bytes) else str(dt)
+        r['date'] = s[:10].replace(':', '-') + ' ' + s[11:16]
+
+    make = (ifd0.get(piexif.ImageIFD.Make) or b'').decode('ascii', errors='ignore').strip()
+    model_b = (ifd0.get(piexif.ImageIFD.Model) or b'').decode('ascii', errors='ignore').strip()
+    if model_b:
+        r['camera'] = model_b if model_b.startswith(make) else (
+            f"{make} {model_b}".strip() if make else model_b
+        )
+
+
+def _fill_exif_exiftool_json(path: str, r: dict):
+    """Wypełnia r danymi EXIF przez exiftool -j (dla RAW bez companion JPG).
+    Daje prawdziwe wymiary sensora i orientację z oryginalnego pliku RAW."""
+    import subprocess, json
+    try:
+        result = subprocess.run(
+            ['exiftool', '-j', '-n',
+             '-Orientation', '-ImageWidth', '-ImageHeight',
+             '-ExifImageWidth', '-ExifImageHeight',
+             '-ExposureTime', '-FNumber', '-ISO',
+             '-FocalLength', '-DateTimeOriginal',
+             '-Make', '-Model', path],
+            capture_output=True, text=True, timeout=15
+        )
+        if result.returncode != 0 or not result.stdout.strip():
+            return
+        data = json.loads(result.stdout)[0]
+
+        orientation_map = {1: 0, 3: 180, 6: 90, 8: 270}
+        r['orientation'] = orientation_map.get(int(data.get('Orientation', 1)), 0)
+
+        w = data.get('ImageWidth') or data.get('ExifImageWidth')
+        h = data.get('ImageHeight') or data.get('ExifImageHeight')
+        if w and h:
+            r['dims'] = f"{int(w)}\u00d7{int(h)}"
+
+        exp = data.get('ExposureTime')
+        if exp:
+            try:
+                v = float(exp)
+                if v > 0:
+                    r['shutter'] = (f"1/{int(round(1/v))}s" if v < 1 else f"{v:.1f}s")
+            except (ValueError, ZeroDivisionError):
+                pass
+
+        fn = data.get('FNumber')
+        if fn:
+            r['aperture'] = f"f/{float(fn):.1f}"
+
+        iso = data.get('ISO')
+        if iso:
+            r['iso'] = f"ISO\u00a0{int(iso)}"
+
+        fl = data.get('FocalLength')
+        if fl:
+            r['focal'] = f"{int(round(float(fl)))}mm"
+
+        dt = str(data.get('DateTimeOriginal', ''))
+        if dt and len(dt) >= 16:
+            r['date'] = dt[:10].replace(':', '-') + ' ' + dt[11:16]
+
+        make = str(data.get('Make', '')).strip()
+        model_s = str(data.get('Model', '')).strip()
+        if model_s:
+            r['camera'] = model_s if model_s.startswith(make) else (
+                f"{make} {model_s}".strip() if make else model_s
+            )
+    except Exception as e:
+        print(f"exiftool JSON error ({os.path.basename(path)}): {e}")
 
 
 # ─────────────────────────────── Async loader (nie blokuje UI)
@@ -203,10 +254,100 @@ class _ImageLoader(QThread):
         exif = _read_exif(self._path)
         self.loaded.emit(pixmap, exif)
 
+# ─────────────────────────────── WB Worker
+
+class _WBWorker(QThread):
+    """
+    Próbkuje piksel, przelicza korekcję WB i renderuje skorygowany preview.
+    Działa w tle — nie blokuje UI ani LV thread.
+    """
+    finished = pyqtSignal(object, int)   # (QPixmap_corrected, kelvin)
+
+    # Daylight locus: (Kelvin, R/B_ratio) — przybliżone wartości dla sRGB
+    DAYLIGHT_LOCUS = [
+        (2500, 3.0), (3000, 2.6), (3200, 2.3), (4000, 1.8),
+        (5000, 1.4), (5200, 1.3), (5500, 1.1), (6500, 0.85),
+        (7500, 0.72), (8000, 0.65), (10000, 0.50),
+    ]
+
+    def __init__(self, pixmap: QPixmap, sample_x: int, sample_y: int):
+        super().__init__()
+        self._pixmap = pixmap
+        self._sx = sample_x
+        self._sy = sample_y
+
+    def run(self):
+        try:
+            import numpy as np
+            from PyQt6.QtGui import QImage
+
+            img = self._pixmap.toImage().convertToFormat(QImage.Format.Format_RGB888)
+            w, h = img.width(), img.height()
+
+            ptr = img.bits()
+            ptr.setsize(h * w * 3)
+            arr = np.frombuffer(ptr, dtype=np.uint8).reshape((h, w, 3)).copy()
+
+            # Próbka 9×9 wokół klikniętego piksela
+            r = 4
+            x0 = max(0, self._sx - r);  x1 = min(w, self._sx + r + 1)
+            y0 = max(0, self._sy - r);  y1 = min(h, self._sy + r + 1)
+            sample = arr[y0:y1, x0:x1].astype(np.float32)
+
+            avg_r = float(np.mean(sample[:, :, 0]))
+            avg_g = float(np.mean(sample[:, :, 1]))
+            avg_b = float(np.mean(sample[:, :, 2]))
+
+            if avg_r < 1 or avg_g < 1 or avg_b < 1:
+                self.finished.emit(self._pixmap, 5500)
+                return
+
+            # Mnożniki: chcemy R=G=B (neutralny)
+            mult_r = avg_g / avg_r
+            mult_b = avg_g / avg_b
+
+            corrected = arr.astype(np.float32)
+            corrected[:, :, 0] *= mult_r
+            corrected[:, :, 2] *= mult_b
+            np.clip(corrected, 0, 255, out=corrected)
+            corrected_u8 = corrected.astype(np.uint8)
+
+            result_img = QImage(
+                corrected_u8.tobytes(), w, h, w * 3, QImage.Format.Format_RGB888
+            )
+            result_pixmap = QPixmap.fromImage(result_img)
+
+            kelvin = self._estimate_kelvin(avg_r / avg_b if avg_b > 1 else 1.0)
+            self.finished.emit(result_pixmap, kelvin)
+
+        except Exception as e:
+            print(f"WBWorker error: {e}")
+            self.finished.emit(self._pixmap, 5500)
+
+    def _estimate_kelvin(self, rb_ratio: float) -> int:
+        locus = self.DAYLIGHT_LOCUS
+        if rb_ratio >= locus[0][1]:
+            return locus[0][0]
+        if rb_ratio <= locus[-1][1]:
+            return locus[-1][0]
+        for i in range(len(locus) - 1):
+            k1, r1 = locus[i]
+            k2, r2 = locus[i + 1]
+            if r2 <= rb_ratio <= r1:
+                t = (rb_ratio - r2) / (r1 - r2)
+                return int(round(k2 + t * (k1 - k2)))
+        return 5500
+
+
+
+
+
 # ─────────────────────────────── Popup podglądu zdjęcia
 
 class CapturePreviewDialog(QDialog):
     """Okno podglądu przechwyconego zdjęcia z kontrolkami zoom/pan/rotate."""
+
+    wb_applied = pyqtSignal(int)   # Kelviny — dla image_controls.apply_wb_temperature
 
     def __init__(self, image_path, parent=None, close_all_callback=None):
         super().__init__(parent)
@@ -234,6 +375,12 @@ class CapturePreviewDialog(QDialog):
         self._pan_offset = [0, 0]
         self._drag_start = None
         self._saved_geometry = None
+
+        # WB picker state
+        self._wb_mode = False
+        self._wb_pixmap = None    # Skorygowany pixmap (visual preview)
+        self._wb_kelvin = None    # Oszacowana temperatura
+        self._wb_worker = None
 
         self._init_ui()
 
@@ -313,6 +460,35 @@ class CapturePreviewDialog(QDialog):
         btn_100.clicked.connect(self._zoom_100)
         control_layout.addWidget(btn_100)
 
+        # WB Picker separator + controls
+        sep_wb = QLabel("|")
+        sep_wb.setStyleSheet("color: #555;")
+        control_layout.addWidget(sep_wb)
+
+        self.btn_wb = QPushButton("Pick WB")
+        self.btn_wb.setFixedSize(80, 32)
+        self.btn_wb.setCheckable(True)
+        self.btn_wb.setToolTip(
+            "Click on a neutral white/grey area to pick white balance"
+        )
+        control_layout.addWidget(self.btn_wb)
+
+        self._wb_label = QLabel("")
+        self._wb_label.setFixedWidth(64)
+        self._wb_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._wb_label.setStyleSheet("color: #888; font-size: 11px;")
+        control_layout.addWidget(self._wb_label)
+
+        self.btn_wb_accept = QPushButton("Apply")
+        self.btn_wb_accept.setFixedSize(60, 32)
+        self.btn_wb_accept.setVisible(False)
+        control_layout.addWidget(self.btn_wb_accept)
+
+        self.btn_wb_cancel = QPushButton("Cancel")
+        self.btn_wb_cancel.setFixedSize(60, 32)
+        self.btn_wb_cancel.setVisible(False)
+        control_layout.addWidget(self.btn_wb_cancel)
+
         # Spacer
         control_layout.addStretch()
 
@@ -348,6 +524,110 @@ class CapturePreviewDialog(QDialog):
         layout.addWidget(self._exif_bar)
 
         layout.addWidget(control_bar)
+
+        # WB picker — obsługa kliknięcia na label
+        self.btn_wb.clicked.connect(self._toggle_wb_mode)
+        self.btn_wb_accept.clicked.connect(self._accept_wb)
+        self.btn_wb_cancel.clicked.connect(self._cancel_wb)
+        self._label.installEventFilter(self)
+
+    # ─────────────────────────────── WB PICKER
+
+    def _get_display_pixmap(self) -> QPixmap:
+        """Zwraca pixmapę do wyświetlenia: WB preview lub oryginał."""
+        if self._wb_pixmap and not self._wb_pixmap.isNull():
+            return self._wb_pixmap
+        return self._pixmap
+
+    def eventFilter(self, obj, event):
+        from PyQt6.QtCore import QEvent
+        if obj is self._label and self._wb_mode:
+            if event.type() == QEvent.Type.MouseButtonPress:
+                if event.button() == Qt.MouseButton.LeftButton:
+                    self._on_wb_pick(event.pos())
+                    return True
+        return super().eventFilter(obj, event)
+
+    def _toggle_wb_mode(self, checked):
+        self._wb_mode = checked
+        if checked:
+            self._label.setCursor(Qt.CursorShape.CrossCursor)
+            self._wb_label.setText("Click neutral")
+        else:
+            self._cancel_wb()
+
+    def _label_pos_to_pixmap_pos(self, label_pos) -> tuple[int, int] | None:
+        """Mapuje kliknięcie w QLabel na współrzędne piksela w self._pixmap."""
+        pix = self._get_display_pixmap()
+        if pix.isNull():
+            return None
+        lw = self._label.width()
+        lh = self._label.height()
+        pw = pix.width()
+        ph = pix.height()
+        img_w = int(pw * self._zoom)
+        img_h = int(ph * self._zoom)
+        cx = label_pos.x()
+        cy = label_pos.y()
+        if img_w <= lw and img_h <= lh:
+            # Obraz mieści się w label — jest wycentrowany przez AlignCenter
+            off_x = (lw - img_w) // 2
+            off_y = (lh - img_h) // 2
+            px = (cx - off_x) / self._zoom
+            py = (cy - off_y) / self._zoom
+        else:
+            # Obraz większy niż label — widoczny fragment od pan_offset
+            px = (cx + self._pan_offset[0]) / self._zoom
+            py = (cy + self._pan_offset[1]) / self._zoom
+        return (
+            int(max(0, min(px, pw - 1))),
+            int(max(0, min(py, ph - 1))),
+        )
+
+    def _on_wb_pick(self, label_pos):
+        pos = self._label_pos_to_pixmap_pos(label_pos)
+        if pos is None:
+            return
+        if self._wb_worker and self._wb_worker.isRunning():
+            return   # Poprzednie obliczenie jeszcze trwa
+        self._wb_label.setText("…")
+        self._wb_worker = _WBWorker(self._pixmap, pos[0], pos[1])
+        self._wb_worker.finished.connect(self._on_wb_computed)
+        self._wb_worker.start()
+
+    def _on_wb_computed(self, corrected_pixmap: QPixmap, kelvin: int):
+        self._wb_pixmap = corrected_pixmap
+        snapped = max(2500, min(10000, round(kelvin / 100) * 100))
+        self._wb_kelvin = snapped
+        self._wb_label.setText(f"{snapped} K")
+        self.btn_wb_accept.setVisible(True)
+        self.btn_wb_cancel.setVisible(True)
+
+        # Kursor półpełny — kolor próbki w bulwie
+        from PyQt6.QtGui import QColor
+        sample_color = QColor("#b0c8e8")  # neutralny błękit jako placeholder
+        self._label.setCursor(Qt.CursorShape.CrossCursor)
+
+        self._update_preview()
+
+    def _accept_wb(self):
+        if self._wb_kelvin is not None:
+            self.wb_applied.emit(self._wb_kelvin)
+        self._cancel_wb()
+
+    def _cancel_wb(self):
+        self._wb_mode = False
+        self._wb_pixmap = None
+        self._wb_kelvin = None
+        self.btn_wb.setChecked(False)
+        self.btn_wb.setStyleSheet("")
+        self.btn_wb_accept.setVisible(False)
+        self.btn_wb_cancel.setVisible(False)
+        self._wb_label.setText("")
+        self._label.unsetCursor()
+        self._update_preview()
+
+    # ─────────────────────────────── ROTATE
 
     def _rotate_left(self):
         """Obrót o -90°."""
@@ -424,39 +704,34 @@ class CapturePreviewDialog(QDialog):
         QTimer.singleShot(50, self._zoom_fit)
 
     def _update_preview(self):
-        if self._pixmap.isNull():
+        pixmap = self._get_display_pixmap()
+        if pixmap.isNull():
             self._label.setText(f"Cannot load image:\n{self._image_path}")
             return
 
-        # Oblicz rozmiar obrazu po zoom
-        img_w = int(self._pixmap.width() * self._zoom)
-        img_h = int(self._pixmap.height() * self._zoom)
+        img_w = int(pixmap.width() * self._zoom)
+        img_h = int(pixmap.height() * self._zoom)
 
         if img_w < 1 or img_h < 1:
             return
 
-        scaled = self._pixmap.scaled(
+        scaled = pixmap.scaled(
             img_w, img_h,
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation
         )
 
-        # Jeśli obraz mniejszy niż label — wycentruj
         label_size = self._label.size()
         if scaled.width() <= label_size.width() and scaled.height() <= label_size.height():
             self._pan_offset = [0, 0]
             self._label.setPixmap(scaled)
         else:
-            # Przytnij do widocznego obszaru z uwzględnieniem pan
             visible_w = min(scaled.width(), label_size.width())
             visible_h = min(scaled.height(), label_size.height())
-
-            # Ogranicz pan do granic obrazu
             max_pan_x = max(0, scaled.width() - label_size.width())
             max_pan_y = max(0, scaled.height() - label_size.height())
             self._pan_offset[0] = max(0, min(self._pan_offset[0], max_pan_x))
             self._pan_offset[1] = max(0, min(self._pan_offset[1], max_pan_y))
-
             cropped = scaled.copy(
                 int(self._pan_offset[0]), int(self._pan_offset[1]),
                 visible_w, visible_h
@@ -474,15 +749,16 @@ class CapturePreviewDialog(QDialog):
         self._update_preview()
 
     def _zoom_fit(self):
-        if self._pixmap.isNull():
+        pixmap = self._get_display_pixmap()
+        if pixmap.isNull():
             return
         label_size = self._label.size()
         if label_size.width() < 10 or label_size.height() < 10:
             QTimer.singleShot(100, self._zoom_fit)
             return
-        scale_w = label_size.width() / self._pixmap.width()
-        scale_h = label_size.height() / self._pixmap.height()
-        self._zoom = min(scale_w, scale_h, 1.0)  # Nie powiększaj ponad 100%
+        scale_w = label_size.width() / pixmap.width()
+        scale_h = label_size.height() / pixmap.height()
+        self._zoom = min(scale_w, scale_h, 1.0)
         self._pan_offset = [0, 0]
         self._update_preview()
 
@@ -526,6 +802,12 @@ class CapturePreviewDialog(QDialog):
 
 # ─────────────────────────────── Widok kamery
 
+# ─────────────────────────────── Profile Browser
+
+from ui.dialogs.profile_browser_dialog import ProfileBrowserDialog
+
+# ─────────────────────────────── Widok kamery
+
 class CameraView(QWidget):
 
     # Sygnał żądania ponownego połączenia z aparatem
@@ -541,6 +823,7 @@ class CameraView(QWidget):
     # Domyślny katalog na sesje
     DEFAULT_SESSION_DIR = os.path.expanduser("~/Obrazy/sessions")
     DEFAULT_CAPTURE_SUBDIR = "captures"  # zdjęcia trafiają do sessions/captures/
+    DEFAULT_PROFILES_SUBDIR = "camera_profiles"
 
     def __init__(self, camera_service=None):
         super().__init__()
@@ -552,6 +835,10 @@ class CameraView(QWidget):
         self._stopping = False    # Wątek w trakcie zatrzymywania
         self._reconnecting = False  # Trwa próba reconnect
         self._capture_blocked = False  # Capture zablokowany po błędzie — odblokuj na klatce
+        self._capture_secs = 0         # Licznik sekund oczekiwania na capture
+        self._capture_timer = QTimer()
+        self._capture_timer.setInterval(1000)
+        self._capture_timer.timeout.connect(self._on_capture_tick)
         # (brak timera reconnect — probe callback bezpośrednio wywołuje on_probe_completed)
         self._settings = QSettings("Grzeza", "SessionsAssistant")
         self._capture_dir = self._get_capture_directory()
@@ -697,6 +984,8 @@ class CameraView(QWidget):
         self.btn_cap.clicked.connect(self._on_capture_clicked)
         self.btn_lv_rotate_left.clicked.connect(self._rotate_lv_ccw)
         self.btn_lv_rotate_right.clicked.connect(self._rotate_lv_cw)
+        self.btn_save.clicked.connect(self._on_save_profile)
+        self.btn_load.clicked.connect(self._on_load_profile)
 
         # Wszystkie przyciski wyłączone do momentu wykrycia aparatu
         self._set_buttons_enabled(False)
@@ -881,6 +1170,8 @@ class CameraView(QWidget):
             "background: #3d3d3d; border: 2px solid #555; color: white;"
         )
         self.btn_cap.setEnabled(False)
+        self.btn_cap.setText("CAPTURE PHOTO")  # reset jeśli utknął na "CAPTURING..."
+        self._capture_timer.stop()
         self.btn_lv_rotate_left.setEnabled(False)
         self.btn_lv_rotate_right.setEnabled(False)
         self.btn_lv.setEnabled(False)
@@ -1003,27 +1294,39 @@ class CameraView(QWidget):
 
     # --- CAPTURE ---
 
+    def _on_capture_tick(self):
+        """Timer — aktualizuje tekst przycisku co sekundę podczas capture."""
+        self._capture_secs += 1
+        self.btn_cap.setText(f"CAPTURING... {self._capture_secs}s")
+
     def _on_capture_clicked(self):
         """Kolejkuje zdjęcie na wątku gphoto."""
         if self.lv_thread and self.lv_thread.isRunning():
             self.btn_cap.setEnabled(False)  # Blokada wielokrotnego kliknięcia
-            self.btn_cap.setText("CAPTURING...")
+            self.btn_cap.setText("CAPTURING... 0s")
             self.btn_lv.setEnabled(False)   # STOP niedostępny podczas capture — zablokuje USB
+            self._capture_secs = 0
+            self._capture_timer.start()
             self.update_capture_directory()
             self.lv_thread.capture_photo(self._capture_dir)
 
     def _on_image_captured(self, file_path):
         """Callback: zdjęcie zapisane — otwórz podgląd."""
         print(f"Image captured: {file_path}")
-        self.btn_cap.setEnabled(True)
+        self._capture_timer.stop()
         self.btn_cap.setText("CAPTURE PHOTO")
-        self.btn_lv.setEnabled(True)  # Odblokuj STOP po zakończeniu capture
+        # GUARD: sygnał jest queued — może dotrzeć po on_leave() które ustawiło lv_thread=None
+        # Jeśli LV już nie żyje — nie włączaj przycisku capture
+        lv_alive = self.lv_thread is not None and self.lv_thread.isRunning()
+        self.btn_cap.setEnabled(lv_alive)
+        self.btn_lv.setEnabled(lv_alive)  # Odblokuj STOP tylko gdy LV aktywne
 
         dialog = CapturePreviewDialog(
             file_path, parent=None,
             close_all_callback=self.close_all_previews
         )
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.wb_applied.connect(self.image_ctrl.apply_wb_temperature)
 
         def _on_dialog_closed():
             if dialog in self._preview_dialogs:
@@ -1042,13 +1345,13 @@ class CameraView(QWidget):
         self.preview_list_changed.emit(pairs)
 
     def _on_capture_failed(self, error_msg):
-        """Obsługa błędu capture — NIE zabija sesji LV.
-        Blokuje btn_cap do następnej udanej klatki (= USB stabilne)."""
+        """Obsługa błędu capture — NIE zabija sesji LV."""
         print(f"Capture failed: {error_msg}")
+        self._capture_timer.stop()
         self._capture_blocked = True
         self.btn_cap.setEnabled(False)
         self.btn_cap.setText("CAPTURE PHOTO")
-        self.btn_lv.setEnabled(True)   # STOP dostępny nawet po błędzie capture
+        self.btn_lv.setEnabled(True)
 
     # --- LEAVE / ENTER ---
 
@@ -1076,7 +1379,9 @@ class CameraView(QWidget):
         self.btn_lv.setText("START LIVE VIEW")
         self.btn_lv.setStyleSheet("")
         self.btn_lv.setEnabled(self._camera_ready)
+        self._capture_timer.stop()
         self.btn_cap.setEnabled(False)
+        self.btn_cap.setText("CAPTURE PHOTO")
         self.btn_lv_rotate_left.setEnabled(False)
         self.btn_lv_rotate_right.setEnabled(False)
         self._set_buttons_enabled(self._camera_ready)
@@ -1093,6 +1398,125 @@ class CameraView(QWidget):
             except Exception:
                 pass
         self._preview_dialogs.clear()
+
+    # ─────────────────────────────── CAMERA PROFILES
+
+    def _profiles_dir(self) -> str:
+        """Zwraca ścieżkę do katalogu camera_profiles/ obok katalogu sesji."""
+        base = self._settings.value(self.KEY_SESSION_DIR, self.DEFAULT_SESSION_DIR)
+        d = os.path.join(base, self.DEFAULT_PROFILES_SUBDIR)
+        os.makedirs(d, exist_ok=True)
+        return d
+
+    def _collect_current_settings(self) -> dict:
+        """Zbiera aktualne ustawienia ze wszystkich kontrolek."""
+        s = {}
+        s.update(self.exposure_ctrl.get_settings())
+        s.update(self.image_ctrl.get_settings())
+        s.update(self.focus_ctrl.get_settings())
+        return s
+
+    def _on_save_profile(self):
+        """Zapisuje bieżące ustawienia aparatu do pliku JSON w camera_profiles/."""
+        from PyQt6.QtWidgets import QInputDialog, QMessageBox
+        import json
+
+        name, ok = QInputDialog.getText(
+            self, "Save Camera Profile", "Profile name:"
+        )
+        if not ok or not name.strip():
+            return
+
+        name = name.strip()
+        # Sanitize — zostaw tylko bezpieczne znaki
+        safe = "".join(c for c in name if c.isalnum() or c in " _-()").strip()
+        if not safe:
+            QMessageBox.warning(self, "Save Profile", "Invalid profile name.")
+            return
+
+        path = os.path.join(self._profiles_dir(), f"{safe}.json")
+
+        if os.path.exists(path):
+            ans = QMessageBox.question(
+                self, "Overwrite?",
+                f"Profile '{safe}' already exists. Overwrite?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if ans != QMessageBox.StandardButton.Yes:
+                return
+
+        settings = self._collect_current_settings()
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"name": safe, "settings": settings}, f, indent=2)
+            self.status_message.emit(f"Profile saved: {safe}", 3000)
+            print(f"Profile saved: {path}")
+        except Exception as e:
+            QMessageBox.warning(self, "Save Profile", f"Error saving profile:\n{e}")
+
+    def _on_load_profile(self):
+        """Otwiera przeglądarkę profili w camera_profiles/."""
+        dialog = ProfileBrowserDialog(self._profiles_dir(), parent=self)
+        dialog.profile_selected.connect(self._apply_profile)
+        dialog.exec()
+
+    def _apply_profile(self, settings: dict):
+        """Aplikuje ustawienia z profilu do UI i aparatu."""
+        import json
+
+        # Exposure
+        for key in ('shutterspeed', 'aperture', 'iso', 'exposurecompensation'):
+            if key in settings:
+                ctrl = self.exposure_ctrl.controls.get(key)
+                if ctrl and ctrl["slider"]:
+                    ctrl["slider"].set_value(str(settings[key]))
+                    if ctrl["auto"]:
+                        self.exposure_ctrl._update_auto_visuals(
+                            key, settings[key] == "Auto"
+                        )
+                if self.lv_thread and self.lv_thread.isRunning():
+                    self.lv_thread.update_camera_param(key, settings[key])
+
+        # Image + AF — przez istniejące metody
+        img_keys = ('picturestyle', 'imageformat', 'alomode',
+                    'whitebalance', 'colortemperature')
+        af_keys  = ('focusmode', 'afmethod', 'continuousaf')
+
+        img_s = {k: v for k, v in settings.items() if k in img_keys}
+        af_s  = {k: v for k, v in settings.items() if k in af_keys}
+
+        if img_s:
+            # Budujemy pseudo-sync dict dla image_ctrl
+            pseudo = {k: {"current": v, "choices": []} for k, v in img_s.items()}
+            # colortemperature — slider potrzebuje samej wartości
+            if 'colortemperature' in img_s:
+                self.image_ctrl.ct_slider.set_value(str(img_s['colortemperature']))
+                pseudo.pop('colortemperature', None)
+            # Bezpośrednie ustawienie combosów (blockSignals — nie wysyłamy podwójnie)
+            for param, val in pseudo.items():
+                combo = self.image_ctrl._get_combo(param)
+                if combo:
+                    display = self.image_ctrl._to_display(param, str(val['current']))
+                    combo.blockSignals(True)
+                    combo.setCurrentText(display)
+                    combo.blockSignals(False)
+            if self.lv_thread and self.lv_thread.isRunning():
+                for k, v in img_s.items():
+                    self.lv_thread.update_camera_param(k, str(v))
+
+        if af_s:
+            for param, val in af_s.items():
+                combo = self.focus_ctrl._get_combo(param)
+                if combo:
+                    display = self.focus_ctrl._to_display(param, str(val))
+                    combo.blockSignals(True)
+                    combo.setCurrentText(display)
+                    combo.blockSignals(False)
+            if self.lv_thread and self.lv_thread.isRunning():
+                for k, v in af_s.items():
+                    self.lv_thread.update_camera_param(k, str(v))
+
+        self.status_message.emit("Profile loaded", 3000)
 
     def _on_update_clicked(self):
         """Zbiera ustawienia i wysyła (zachowano dla kompatybilności)."""
