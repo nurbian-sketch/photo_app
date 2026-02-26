@@ -133,6 +133,8 @@ class MainWindow(QMainWindow):
         self.camera_view.status_message.connect(self.status_bar.showMessage)
         # Przycisk SD Card w DarkroomView
         self.darkroom_view.sd_card_requested.connect(self._on_sd_card_requested)
+        # WB picker z DarkroomView → przełącz na Camera + aplikuj temperaturę
+        self.darkroom_view.wb_apply_requested.connect(self._on_darkroom_wb_apply)
 
 
         self.read_settings()
@@ -260,6 +262,14 @@ class MainWindow(QMainWindow):
             )
         else:
             self.status_bar.showMessage(self.tr("Camera not detected"), 4000)
+
+    def _on_darkroom_wb_apply(self, kelvin: int):
+        """WB picker z DarkroomView: aplikuje temperaturę WB i przełącza na Camera."""
+        self.camera_view.image_ctrl.apply_wb_temperature(kelvin)
+        self.switcher.select_view("Camera")
+        self.status_bar.showMessage(
+            self.tr(f"WB set to {kelvin} K — switch to Camera view"), 4000
+        )
 
     def _on_sd_card_requested(self):
         """Importuje pliki z karty SD aparatu — thumbnails pojawiaja sie na biezaco.

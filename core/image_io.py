@@ -267,6 +267,47 @@ def _fill_exif_exiftool_json(path: str, r: dict):
 
 # ─────────────────────────────── Asynchroniczny loader
 
+def _load_raw_no_companion(path: str) -> tuple:
+    """
+    Dla RAW bez companion JPG: ekstrahuje embedded JPEG raz,
+    czyta pixmapę i EXIF z tego samego pliku — prawidłowa orientacja.
+    """
+    r = {
+        'shutter': '', 'aperture': '', 'iso': '', 'focal': '',
+        'date': '', 'dims': '', 'size': '', 'camera': '', 'orientation': 0,
+    }
+    try:
+        r['size'] = f"{os.path.getsize(path) / (1024 * 1024):.1f}\u00a0MB"
+    except OSError:
+        pass
+
+    tmp_path = exiftool_extract_preview(path)
+    if not tmp_path:
+        return QPixmap(), r
+
+    pixmap = QPixmap(tmp_path)
+    try:
+        _fill_exif_piexif(tmp_path, r)
+    except Exception:
+        try:
+            _fill_exif_exiftool_json(path, r)
+        except Exception:
+            pass
+
+    # Rozmiar oryginalnego RAW, nie temp JPEG
+    try:
+        r['size'] = f"{os.path.getsize(path) / (1024 * 1024):.1f}\u00a0MB"
+    except OSError:
+        pass
+
+    try:
+        os.unlink(tmp_path)
+    except OSError:
+        pass
+
+    return pixmap if not pixmap.isNull() else QPixmap(), r
+
+
 class ImageLoader(QThread):
     """
     Ładuje pixmapę i EXIF w tle.
@@ -279,8 +320,11 @@ class ImageLoader(QThread):
         self._path = path
 
     def run(self):
-        pixmap = load_pixmap_from_path(self._path)
-        exif = read_exif(self._path)
+        if is_raw(self._path) and not find_companion_jpg(self._path):
+            pixmap, exif = _load_raw_no_companion(self._path)
+        else:
+            pixmap = load_pixmap_from_path(self._path)
+            exif = read_exif(self._path)
         self.loaded.emit(pixmap, exif)
 
 

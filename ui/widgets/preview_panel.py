@@ -1,7 +1,7 @@
 """
 PreviewPanel — wielokrotnego użytku widget podglądu zdjęcia.
 Zoom, pan, rotate, wheel, klawiatura, EXIF bar, auto-resize.
-Logika identyczna z CapturePreviewDialog z camera_view.py.
+Wbudowany WB picker z podglądem korekcji w miejscu.
 """
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSizePolicy
@@ -18,7 +18,12 @@ class PreviewPanel(QWidget):
         panel.set_exif(exif_dict)                — zaktualizuj pasek EXIF
         panel.set_message(text)                  — pokaż komunikat (loading/error)
         panel.clear()                            — wyczyść
+        panel.activate_wb_mode()                 — aktywuje tryb WB picker
+    Sygnały:
+        wb_applied(int kelvin)                   — użytkownik zaakceptował WB
     """
+
+    wb_applied = pyqtSignal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -30,6 +35,12 @@ class PreviewPanel(QWidget):
         self._zoom = 1.0
         self._pan_offset = [0, 0]
         self._drag_start = None
+
+        # Stan WB picker
+        self._wb_mode = False
+        self._wb_pixmap = None
+        self._wb_kelvin = None
+        self._wb_worker = None
 
         self._build_ui()
 
@@ -48,7 +59,7 @@ class PreviewPanel(QWidget):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
         self._label.setMouseTracking(True)
-        self._label.setMinimumSize(1, 1)  # zapobiega rozpychaniu okna przez duza pixmape
+        self._label.setMinimumSize(1, 1)
         layout.addWidget(self._label, 1)
 
         # EXIF bar
@@ -59,7 +70,7 @@ class PreviewPanel(QWidget):
         self._exif_bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self._exif_bar)
 
-        # Control bar — identyczna z CapturePreviewDialog
+        # Control bar
         control_bar = QWidget()
         control_bar.setStyleSheet("background: #3d3d3d;")
         ctrl = QHBoxLayout(control_bar)
@@ -108,19 +119,47 @@ class PreviewPanel(QWidget):
         btn_fit.clicked.connect(self._zoom_fit)
         ctrl.addWidget(btn_fit)
 
-        btn_100 = QPushButton("1:1")
-        btn_100.setFixedSize(50, 32)
-        btn_100.setToolTip("100% zoom [1]")
-        btn_100.clicked.connect(self._zoom_100)
-        ctrl.addWidget(btn_100)
+        sep_wb = QLabel("|")
+        sep_wb.setStyleSheet("color: #555;")
+        ctrl.addWidget(sep_wb)
+
+        # WB picker
+        self._btn_wb = QPushButton("Pick WB")
+        self._btn_wb.setFixedSize(70, 32)
+        self._btn_wb.setCheckable(True)
+        self._btn_wb.setToolTip("Click on a neutral white/grey area to pick white balance")
+        self._btn_wb.clicked.connect(self._toggle_wb_mode)
+        ctrl.addWidget(self._btn_wb)
+
+        self._wb_label = QLabel("")
+        self._wb_label.setFixedWidth(60)
+        self._wb_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._wb_label.setStyleSheet("color: #888; font-size: 11px;")
+        ctrl.addWidget(self._wb_label)
+
+        self._btn_wb_accept = QPushButton("Apply")
+        self._btn_wb_accept.setFixedSize(55, 32)
+        self._btn_wb_accept.setVisible(False)
+        self._btn_wb_accept.clicked.connect(self._accept_wb)
+        ctrl.addWidget(self._btn_wb_accept)
+
+        self._btn_wb_cancel = QPushButton("Cancel")
+        self._btn_wb_cancel.setFixedSize(55, 32)
+        self._btn_wb_cancel.setVisible(False)
+        self._btn_wb_cancel.clicked.connect(self._cancel_wb)
+        ctrl.addWidget(self._btn_wb_cancel)
 
         ctrl.addStretch()
         layout.addWidget(control_bar)
+
+        # Event filter — przechwytuje kliknięcia w trybie WB picker
+        self._label.installEventFilter(self)
 
     # ─────────────────────────── PUBLIC API
 
     def set_pixmap(self, pixmap: QPixmap, orientation: int = 0):
         """Załaduj obraz z opcjonalną orientacją EXIF."""
+        self._cancel_wb()
         self._original_pixmap = pixmap
         self._rotation = orientation
         self._apply_rotation()
@@ -142,11 +181,106 @@ class PreviewPanel(QWidget):
         self._exif_bar.setText("")
 
     def clear(self):
+        self._cancel_wb()
         self._original_pixmap = QPixmap()
         self._pixmap = QPixmap()
         self._label.clear()
         self._label.setText("No image")
         self._exif_bar.setText("")
+
+    def activate_wb_mode(self):
+        """Aktywuje tryb WB picker (wywoływane z DarkroomView)."""
+        if not self._pixmap.isNull():
+            self._btn_wb.setChecked(True)
+            self._toggle_wb_mode(True)
+
+    # ─────────────────────────── WB PICKER
+
+    def eventFilter(self, obj, event):
+        from PyQt6.QtCore import QEvent
+        if obj is self._label and self._wb_mode:
+            if event.type() == QEvent.Type.MouseButtonPress:
+                if event.button() == Qt.MouseButton.LeftButton:
+                    self._on_wb_pick(event.pos())
+                    return True
+        return super().eventFilter(obj, event)
+
+    def _toggle_wb_mode(self, checked: bool):
+        self._wb_mode = checked
+        if checked:
+            self._label.setCursor(Qt.CursorShape.CrossCursor)
+            self._wb_label.setText("Click neutral")
+        else:
+            self._cancel_wb()
+
+    def _on_wb_pick(self, label_pos):
+        """Próbkuje piksel w miejscu kliknięcia i uruchamia worker WB."""
+        from ui.widgets.photo_preview_dialog import _WBWorker
+        pix = (
+            self._wb_pixmap
+            if (self._wb_pixmap and not self._wb_pixmap.isNull())
+            else self._pixmap
+        )
+        if pix.isNull():
+            return
+        if self._wb_worker and self._wb_worker.isRunning():
+            return
+        pos = self._label_to_pixmap_pos(label_pos, pix)
+        if pos is None:
+            return
+        self._wb_label.setText("…")
+        self._wb_worker = _WBWorker(pix, pos[0], pos[1])
+        self._wb_worker.finished.connect(self._on_wb_computed)
+        self._wb_worker.start()
+
+    def _label_to_pixmap_pos(self, label_pos, pix: QPixmap):
+        """Mapuje współrzędne w _label na piksel w pixmapie."""
+        lw, lh = self._label.width(), self._label.height()
+        pw, ph = pix.width(), pix.height()
+        img_w = int(pw * self._zoom)
+        img_h = int(ph * self._zoom)
+        cx, cy = label_pos.x(), label_pos.y()
+        if img_w <= lw and img_h <= lh:
+            off_x = (lw - img_w) // 2
+            off_y = (lh - img_h) // 2
+            px = (cx - off_x) / self._zoom
+            py = (cy - off_y) / self._zoom
+        else:
+            px = (cx + self._pan_offset[0]) / self._zoom
+            py = (cy + self._pan_offset[1]) / self._zoom
+        return (
+            int(max(0, min(px, pw - 1))),
+            int(max(0, min(py, ph - 1))),
+        )
+
+    def _on_wb_computed(self, corrected_pixmap: QPixmap, kelvin: int):
+        if not self._wb_mode:
+            return  # WB mode anulowany podczas działania workera
+        self._wb_pixmap = corrected_pixmap
+        snapped = max(2500, min(10000, round(kelvin / 100) * 100))
+        self._wb_kelvin = snapped
+        self._wb_label.setText(f"{snapped} K")
+        self._btn_wb_accept.setVisible(True)
+        self._btn_wb_cancel.setVisible(True)
+        self._update_preview()
+
+    def _accept_wb(self):
+        if self._wb_kelvin is not None:
+            self.wb_applied.emit(self._wb_kelvin)
+        self._cancel_wb()
+
+    def _cancel_wb(self):
+        self._wb_mode = False
+        self._wb_pixmap = None
+        self._wb_kelvin = None
+        self._wb_worker = None
+        if hasattr(self, '_btn_wb'):
+            self._btn_wb.setChecked(False)
+            self._btn_wb_accept.setVisible(False)
+            self._btn_wb_cancel.setVisible(False)
+            self._wb_label.setText("")
+            self._label.unsetCursor()
+        self._update_preview()
 
     # ─────────────────────────── ROTATE
 
@@ -176,6 +310,12 @@ class PreviewPanel(QWidget):
 
     # ─────────────────────────── ZOOM
 
+    def _get_display_pixmap(self) -> QPixmap:
+        """Zwraca pixmapę do wyświetlenia: WB preview lub oryginał po rotacji."""
+        if self._wb_pixmap and not self._wb_pixmap.isNull():
+            return self._wb_pixmap
+        return self._pixmap
+
     def _zoom_in(self):
         self._zoom = min(self._zoom * 1.25, 10.0)
         self._update_preview()
@@ -196,21 +336,17 @@ class PreviewPanel(QWidget):
         self._pan_offset = [0, 0]
         self._update_preview()
 
-    def _zoom_100(self):
-        self._zoom = 1.0
-        self._pan_offset = [0, 0]
-        self._update_preview()
-
-    # ─────────────────────────── RENDER — identyczny z CapturePreviewDialog
+    # ─────────────────────────── RENDER
 
     def _update_preview(self):
-        if self._pixmap.isNull():
+        pixmap = self._get_display_pixmap()
+        if pixmap.isNull():
             return
-        img_w = int(self._pixmap.width() * self._zoom)
-        img_h = int(self._pixmap.height() * self._zoom)
+        img_w = int(pixmap.width() * self._zoom)
+        img_h = int(pixmap.height() * self._zoom)
         if img_w < 1 or img_h < 1:
             return
-        scaled = self._pixmap.scaled(
+        scaled = pixmap.scaled(
             img_w, img_h,
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation
@@ -233,7 +369,7 @@ class PreviewPanel(QWidget):
             self._label.setPixmap(cropped)
         self._zoom_label.setText(f"{int(self._zoom * 100)}%")
 
-    # ─────────────────────────── EVENTS — identyczne z CapturePreviewDialog
+    # ─────────────────────────── EVENTS
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -246,7 +382,6 @@ class PreviewPanel(QWidget):
         lh = self._label.height()
         if lw < 10 or lh < 10:
             return
-        # Jeśli byliśmy na Fit (lub pan=0) — przelicz Fit do nowego rozmiaru
         fit_zoom = min(lw / self._pixmap.width(), lh / self._pixmap.height())
         if self._pan_offset == [0, 0] or abs(self._zoom - fit_zoom) / max(fit_zoom, 0.001) < 0.02:
             self._zoom_fit()
@@ -260,7 +395,7 @@ class PreviewPanel(QWidget):
             self._zoom_out()
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton and not self._wb_mode:
             self._drag_start = event.pos()
 
     def mouseMoveEvent(self, event):
@@ -287,7 +422,5 @@ class PreviewPanel(QWidget):
             self._zoom_out()
         elif k == Qt.Key.Key_0:
             self._zoom_fit()
-        elif k == Qt.Key.Key_1:
-            self._zoom_100()
         else:
             super().keyPressEvent(event)
