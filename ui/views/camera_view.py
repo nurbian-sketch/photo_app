@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QSplitter, QSizePolicy, QDialog
 )
-from PyQt6.QtCore import Qt, QSettings, pyqtSignal, QTimer
+from PyQt6.QtCore import Qt, QSettings, pyqtSignal, QTimer, QThread
 from PyQt6.QtGui import QPixmap, QTransform
 
 from core.gphoto_interface import GPhotoInterface
@@ -14,245 +14,13 @@ from ui.views.camera_components.autofocus_controls import AutofocusControls
 
 
 
-RAW_EXTENSIONS = {'.cr3', '.cr2', '.nef', '.arw', '.orf', '.rw2', '.dng'}
-
-
-def _is_raw(path: str) -> bool:
-    return os.path.splitext(path)[1].lower() in RAW_EXTENSIONS
-
-
-def _find_companion_jpg(raw_path: str) -> str | None:
-    """Szuka pliku JPG o tej samej nazwie bazowej co plik RAW (RAW + L JPEG)."""
-    base = os.path.splitext(raw_path)[0]
-    for ext in ('.jpg', '.JPG', '.jpeg', '.JPEG'):
-        candidate = base + ext
-        if os.path.exists(candidate):
-            return candidate
-    return None
-
-
-def _exiftool_extract_preview(path: str) -> str | None:
-    """
-    Wyciąga embedded PreviewImage z pliku RAW do temp JPEG.
-    Zwraca ścieżkę do temp pliku (caller odpowiada za usunięcie) lub None.
-    """
-    import subprocess, tempfile
-    try:
-        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
-            tmp_path = tmp.name
-        with open(tmp_path, 'wb') as out_fh:
-            result = subprocess.run(
-                ['exiftool', '-b', '-PreviewImage', path],
-                stdout=out_fh,
-                stderr=subprocess.PIPE,
-                timeout=10,
-            )
-        if result.returncode == 0 and os.path.getsize(tmp_path) > 0:
-            return tmp_path
-        os.unlink(tmp_path)
-    except Exception as e:
-        print(f"exiftool error ({os.path.basename(path)}): {e}")
-    return None
-
-
-def _load_pixmap_from_path(path: str) -> QPixmap:
-    """
-    Ładuje pixmapę z pliku JPEG lub RAW.
-    Dla RAW: companion JPG (RAW+L) → exiftool PreviewImage.
-    UWAGA: wywołuj tylko z wątku roboczego — exiftool blokuje.
-    """
-    if not _is_raw(path):
-        pix = QPixmap(path)
-        return pix if not pix.isNull() else QPixmap()
-
-    # RAW + L JPEG — companion JPG w tym samym katalogu
-    jpg = _find_companion_jpg(path)
-    if jpg:
-        pix = QPixmap(jpg)
-        if not pix.isNull():
-            print(f"RAW+JPG companion: {os.path.basename(jpg)}")
-            return pix
-
-    # Embedded preview z RAW przez exiftool
-    tmp_path = _exiftool_extract_preview(path)
-    if tmp_path:
-        pix = QPixmap(tmp_path)
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        if not pix.isNull():
-            print(f"RAW preview via exiftool: {os.path.basename(path)}")
-            return pix
-
-    return QPixmap()
-
-
-def _read_exif(path: str) -> dict:
-    """
-    Czyta podstawowe dane EXIF.
-    JPEG / companion JPG → piexif (szybkie, prawidłowa orientacja).
-    RAW bez companion      → exiftool -j (prawdziwe wymiary sensora + orientacja).
-    UWAGA: wywołuj tylko z wątku roboczego.
-    """
-    r = {'shutter': '', 'aperture': '', 'iso': '', 'focal': '',
-         'date': '', 'dims': '', 'size': '', 'camera': '', 'orientation': 0}
-    try:
-        r['size'] = f"{os.path.getsize(path) / (1024 * 1024):.1f}\u00a0MB"
-        if _is_raw(path):
-            jpg = _find_companion_jpg(path)
-            if jpg:
-                _fill_exif_piexif(jpg, r)
-            else:
-                _fill_exif_exiftool_json(path, r)
-        else:
-            _fill_exif_piexif(path, r)
-    except Exception as e:
-        print(f"EXIF read error ({os.path.basename(path)}): {e}")
-    return r
-
-
-def _fill_exif_piexif(source_path: str, r: dict):
-    """Wypełnia r danymi EXIF przez piexif (dla JPEG / companion JPG)."""
-    import piexif
-    exif = piexif.load(source_path)
-    ifd0 = exif.get('0th', {})
-    exif_ifd = exif.get('Exif', {})
-
-    orientation_map = {1: 0, 3: 180, 6: 90, 8: 270}
-    r['orientation'] = orientation_map.get(
-        ifd0.get(piexif.ImageIFD.Orientation, 1), 0
-    )
-
-    from PyQt6.QtGui import QImageReader as _QIR
-    reader = _QIR(source_path)
-    sz = reader.size()
-    if sz.isValid():
-        r['dims'] = f"{sz.width()}\u00d7{sz.height()}"
-
-    def frac(v):
-        if isinstance(v, tuple) and len(v) == 2 and v[1]:
-            return v[0], v[1]
-        return int(v), 1
-
-    exp = exif_ifd.get(piexif.ExifIFD.ExposureTime)
-    if exp:
-        n, d = frac(exp)
-        if n and d:
-            ratio = d / n
-            r['shutter'] = f"1/{int(round(ratio))}s" if ratio >= 1 else f"{n / d:.1f}s"
-
-    fn = exif_ifd.get(piexif.ExifIFD.FNumber)
-    if fn:
-        n, d = frac(fn)
-        if d:
-            r['aperture'] = f"f/{n / d:.1f}"
-
-    iso = exif_ifd.get(piexif.ExifIFD.ISOSpeedRatings)
-    if iso:
-        r['iso'] = f"ISO\u00a0{iso}"
-
-    fl = exif_ifd.get(piexif.ExifIFD.FocalLength)
-    if fl:
-        n, d = frac(fl)
-        if d:
-            r['focal'] = f"{int(round(n / d))}mm"
-
-    dt = (exif_ifd.get(piexif.ExifIFD.DateTimeOriginal)
-          or ifd0.get(piexif.ImageIFD.DateTime))
-    if dt:
-        s = dt.decode('ascii', errors='ignore') if isinstance(dt, bytes) else str(dt)
-        r['date'] = s[:10].replace(':', '-') + ' ' + s[11:16]
-
-    make = (ifd0.get(piexif.ImageIFD.Make) or b'').decode('ascii', errors='ignore').strip()
-    model_b = (ifd0.get(piexif.ImageIFD.Model) or b'').decode('ascii', errors='ignore').strip()
-    if model_b:
-        r['camera'] = model_b if model_b.startswith(make) else (
-            f"{make} {model_b}".strip() if make else model_b
-        )
-
-
-def _fill_exif_exiftool_json(path: str, r: dict):
-    """Wypełnia r danymi EXIF przez exiftool -j (dla RAW bez companion JPG).
-    Daje prawdziwe wymiary sensora i orientację z oryginalnego pliku RAW."""
-    import subprocess, json
-    try:
-        result = subprocess.run(
-            ['exiftool', '-j', '-n',
-             '-Orientation', '-ImageWidth', '-ImageHeight',
-             '-ExifImageWidth', '-ExifImageHeight',
-             '-ExposureTime', '-FNumber', '-ISO',
-             '-FocalLength', '-DateTimeOriginal',
-             '-Make', '-Model', path],
-            capture_output=True, text=True, timeout=15
-        )
-        if result.returncode != 0 or not result.stdout.strip():
-            return
-        data = json.loads(result.stdout)[0]
-
-        orientation_map = {1: 0, 3: 180, 6: 90, 8: 270}
-        r['orientation'] = orientation_map.get(int(data.get('Orientation', 1)), 0)
-
-        w = data.get('ImageWidth') or data.get('ExifImageWidth')
-        h = data.get('ImageHeight') or data.get('ExifImageHeight')
-        if w and h:
-            r['dims'] = f"{int(w)}\u00d7{int(h)}"
-
-        exp = data.get('ExposureTime')
-        if exp:
-            try:
-                v = float(exp)
-                if v > 0:
-                    r['shutter'] = (f"1/{int(round(1/v))}s" if v < 1 else f"{v:.1f}s")
-            except (ValueError, ZeroDivisionError):
-                pass
-
-        fn = data.get('FNumber')
-        if fn:
-            r['aperture'] = f"f/{float(fn):.1f}"
-
-        iso = data.get('ISO')
-        if iso:
-            r['iso'] = f"ISO\u00a0{int(iso)}"
-
-        fl = data.get('FocalLength')
-        if fl:
-            r['focal'] = f"{int(round(float(fl)))}mm"
-
-        dt = str(data.get('DateTimeOriginal', ''))
-        if dt and len(dt) >= 16:
-            r['date'] = dt[:10].replace(':', '-') + ' ' + dt[11:16]
-
-        make = str(data.get('Make', '')).strip()
-        model_s = str(data.get('Model', '')).strip()
-        if model_s:
-            r['camera'] = model_s if model_s.startswith(make) else (
-                f"{make} {model_s}".strip() if make else model_s
-            )
-    except Exception as e:
-        print(f"exiftool JSON error ({os.path.basename(path)}): {e}")
-
-
-# ─────────────────────────────── Async loader (nie blokuje UI)
-
-from PyQt6.QtCore import QThread, pyqtSignal as _pyqtSignal
-
-
-class _ImageLoader(QThread):
-    """
-    Ładuje pixmapę i EXIF w tle.
-    Emituje loaded(pixmap, exif_dict) gdy gotowe.
-    """
-    loaded = _pyqtSignal(object, dict)   # QPixmap, dict
-
-    def __init__(self, path: str):
-        super().__init__()
-        self._path = path
-
-    def run(self):
-        pixmap = _load_pixmap_from_path(self._path)
-        exif = _read_exif(self._path)
-        self.loaded.emit(pixmap, exif)
+from core.image_io import (
+    RAW_EXTENSIONS,
+    is_raw as _is_raw,
+    load_pixmap_from_path as _load_pixmap_from_path,
+    read_exif as _read_exif,
+    ImageLoader as _ImageLoader,
+)
 
 # ─────────────────────────────── WB Worker
 
@@ -829,6 +597,7 @@ class CameraView(QWidget):
         super().__init__()
         self.cs = camera_service
         self.lv_thread = None
+        self._dead_thread = None    # Wątek po _on_lv_error — USB nadal zajęte do czasu finish
         self._camera_ready = False
         self._needs_reconnect = False  # Flaga: było zerwane połączenie
         self._error_stopped = False   # Flaga: wątek zatrzymany przez błąd (nie przez user)
@@ -1036,13 +805,24 @@ class CameraView(QWidget):
     BTN_STYLE_STOP = "background-color: #c62828; color: white; font-weight: bold;"
 
     def set_camera_ready(self, ready):
-        """Ustawia stan gotowości aparatu — włącza/wyłącza przyciski."""
+        """Ustawia stan gotowości aparatu — włącza/wyłącza przyciski i kontrolki."""
         self._camera_ready = ready
+
+        # Nie zmieniaj kontrolek gdy USB nadal zajęte przez umierający wątek
+        # lub gdy trwa zatrzymywanie — stan ustabilizuje się w _on_thread_finished
+        usb_busy = (
+            self._stopping
+            or (self._dead_thread is not None and self._dead_thread.isRunning())
+        )
+        if not usb_busy:
+            self.exposure_ctrl.setEnabled(ready)
+            self.image_ctrl.setEnabled(ready)
+            self.focus_ctrl.setEnabled(ready)
 
         # Nie nadpisujemy btn_lv gdy:
         # - trwa reconnect (_reconnecting)
         # - wątek jest zatrzymywany (_stopping)
-        # - jest oczekujący RECONNECT (_needs_reconnect) ← NOWE: chroni pomarańczowy kolor
+        # - jest oczekujący RECONNECT (_needs_reconnect) ← chroni pomarańczowy kolor
         if self._reconnecting or self._stopping or self._needs_reconnect:
             pass
         elif not ready:
@@ -1140,9 +920,7 @@ class CameraView(QWidget):
 
         self.lv_thread.start()
 
-        self.exposure_ctrl.setEnabled(True)
-        self.image_ctrl.setEnabled(True)
-        self.focus_ctrl.setEnabled(True)
+        # Kontrolki już aktywne (set_camera_ready) — tylko podpinamy gphoto
         self.btn_lv.setEnabled(True)  # Teraz działa jako STOP
         self.btn_cap.setEnabled(True)  # Capture dostępny podczas LV
         self.btn_lv_rotate_left.setEnabled(True)
@@ -1157,13 +935,11 @@ class CameraView(QWidget):
         self._capture_blocked = False
         dead_thread = self.lv_thread
         self.lv_thread = None
+        # Kontrolki pozostają aktywne — aparat nadal podłączony, LV tylko off
+        # gphoto = None → zmiany UI nie trafiają do aparatu (flush_pending je odrzuci)
         self.exposure_ctrl.gphoto = None
         self.image_ctrl.gphoto = None
         self.focus_ctrl.gphoto = None
-
-        self.exposure_ctrl.setEnabled(False)
-        self.image_ctrl.setEnabled(False)
-        self.focus_ctrl.setEnabled(False)
         self.lv_screen.clear()
         self.lv_screen.setText("LIVE VIEW OFF")
         self.lv_screen.setStyleSheet(
@@ -1205,9 +981,14 @@ class CameraView(QWidget):
                 dead_thread.capture_failed.disconnect()
             except RuntimeError:
                 pass
-            dead_thread.finished.connect(self._on_thread_finished)
-            # Safety net: force-terminate po 8s gdyby capture_preview wisiał
-            QTimer.singleShot(8000, lambda: self._force_terminate(dead_thread))
+            # Guard: jeśli wątek zakończył run() zanim dotarliśmy do connect(),
+            # sygnał finished już poleciał — wywołujemy callback ręcznie.
+            if dead_thread.isRunning():
+                dead_thread.finished.connect(self._on_thread_finished)
+                # Safety net: force-terminate po 4s gdyby capture_preview wisiał
+                QTimer.singleShot(4000, lambda: self._force_terminate(dead_thread))
+            else:
+                self._on_thread_finished()
         else:
             self._on_thread_finished()
 
@@ -1265,6 +1046,7 @@ class CameraView(QWidget):
 
         # Wątek sam skończy run() w tle — już odcięty od UI
         if dead_thread and dead_thread.isRunning():
+            self._dead_thread = dead_thread   # blokuje probe'y przez is_lv_active()
             dead_thread.keep_running = False
             # Wyczyść kolejkę — stare capture nie mogą odpalić po restart
             dead_thread.mutex.lock()
@@ -1272,7 +1054,8 @@ class CameraView(QWidget):
                 dead_thread.command_queue.clear()
             finally:
                 dead_thread.mutex.unlock()
-            QTimer.singleShot(9000, lambda: self._force_terminate(dead_thread))
+            dead_thread.finished.connect(self._on_dead_thread_finished)
+            QTimer.singleShot(4000, lambda: self._force_terminate(dead_thread))
 
     def _force_terminate(self, thread):
         """Ostateczność: terminate jeśli wątek nie zakończył się sam.
@@ -1282,6 +1065,10 @@ class CameraView(QWidget):
                 thread.terminate()
         except RuntimeError:
             pass
+
+    def _on_dead_thread_finished(self):
+        """Wywoływane gdy umierający wątek (po _on_lv_error) zwolnił USB."""
+        self._dead_thread = None
 
     def _on_thread_finished(self):
         """Wywoływane gdy user kliknął STOP i wątek zakończył run()."""
@@ -1362,6 +1149,7 @@ class CameraView(QWidget):
             self._stop_lv()
         # Reset UI niezależnie od stanu (np. po RECONNECT)
         self.lv_thread = None
+        self._dead_thread = None
         self._needs_reconnect = False  # Reset flag przy opuszczeniu widoku
         self._error_stopped = False
         self._reconnecting = False
@@ -1387,8 +1175,12 @@ class CameraView(QWidget):
         self._set_buttons_enabled(self._camera_ready)
 
     def is_lv_active(self) -> bool:
-        """True gdy sesja PTP aktywna — dla MainWindow._probe_camera() fix #8."""
-        return self.lv_thread is not None and self.lv_thread.isRunning()
+        """True gdy sesja PTP aktywna LUB gdy umierający wątek nadal trzyma USB."""
+        if self.lv_thread is not None and self.lv_thread.isRunning():
+            return True
+        if self._dead_thread is not None and self._dead_thread.isRunning():
+            return True
+        return False
 
     def close_all_previews(self):
         """Zamyka wszystkie otwarte okna podglądu zdjęć."""
@@ -1402,9 +1194,11 @@ class CameraView(QWidget):
     # ─────────────────────────────── CAMERA PROFILES
 
     def _profiles_dir(self) -> str:
-        """Zwraca ścieżkę do katalogu camera_profiles/ obok katalogu sesji."""
-        base = self._settings.value(self.KEY_SESSION_DIR, self.DEFAULT_SESSION_DIR)
-        d = os.path.join(base, self.DEFAULT_PROFILES_SUBDIR)
+        """Zwraca sciezke do katalogu camera_profiles/ w katalogu projektu."""
+        project_dir = os.path.dirname(os.path.abspath(__file__))
+        # Cofamy sie z ui/views/ do katalogu glownego projektu
+        project_root = os.path.dirname(os.path.dirname(project_dir))
+        d = os.path.join(project_root, self.DEFAULT_PROFILES_SUBDIR)
         os.makedirs(d, exist_ok=True)
         return d
 

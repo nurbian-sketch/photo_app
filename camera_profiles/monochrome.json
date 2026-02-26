@@ -1,0 +1,18 @@
+{
+  "name": "monochrome",
+  "settings": {
+    "shutterspeed": "Auto",
+    "aperture": "Auto",
+    "iso": "Auto",
+    "exposurecompensation": "0",
+    "meteringmode": "Partial",
+    "picturestyle": "Monochrome",
+    "imageformat": "M",
+    "alomode": "x1",
+    "whitebalance": "Color Temperature",
+    "colortemperature": "2500",
+    "focusmode": "AI Servo",
+    "afmethod": "LiveSpotAF",
+    "continuousaf": "On"
+  }
+}

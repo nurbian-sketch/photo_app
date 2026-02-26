@@ -48,6 +48,7 @@ class PreviewPanel(QWidget):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
         self._label.setMouseTracking(True)
+        self._label.setMinimumSize(1, 1)  # zapobiega rozpychaniu okna przez duza pixmape
         layout.addWidget(self._label, 1)
 
         # EXIF bar

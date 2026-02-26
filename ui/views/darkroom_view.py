@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QLabel, QPushButton, QMessageBox, QFileDialog, QScrollArea, QSizePolicy, QSplitter,
     QStyledItemDelegate, QStyle, QStyleOptionButton
 )
-from PyQt6.QtGui import QPixmap, QIcon, QImageReader, QPainter, QTransform
+from PyQt6.QtGui import QPixmap, QIcon, QPainter, QTransform
 from PyQt6.QtCore import Qt, QSize, QTimer, QRect, QPoint, pyqtSignal, QThread
 
 import os
@@ -16,182 +16,10 @@ from core.darkcache.thumbnail_reader import ExifThumbnailReader
 from core.darkcache.service import DarkCacheService
 from ui.widgets.preview_panel import PreviewPanel
 
-# Rozszerzenia RAW — do filtrowania i wykrywania
-RAW_EXTENSIONS = {'.cr3', '.cr2', '.nef', '.arw', '.orf', '.rw2', '.dng'}
-
-
-# ─────────────────────────── Helpers EXIF / loader (wspólne z camera_view)
-
-def _is_raw(path: str) -> bool:
-    return os.path.splitext(path)[1].lower() in RAW_EXTENSIONS
-
-
-def _find_companion_jpg(raw_path: str) -> str | None:
-    base = os.path.splitext(raw_path)[0]
-    for ext in ('.jpg', '.JPG', '.jpeg', '.JPEG'):
-        c = base + ext
-        if os.path.exists(c):
-            return c
-    return None
-
-
-def _exiftool_extract_preview(path: str) -> str | None:
-    import subprocess, tempfile
-    try:
-        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
-            tmp_path = tmp.name
-        with open(tmp_path, 'wb') as out_fh:
-            result = subprocess.run(
-                ['exiftool', '-b', '-PreviewImage', path],
-                stdout=out_fh, stderr=subprocess.PIPE, timeout=10,
-            )
-        if result.returncode == 0 and os.path.getsize(tmp_path) > 0:
-            return tmp_path
-        os.unlink(tmp_path)
-    except Exception:
-        pass
-    return None
-
-
-def _load_pixmap_from_path(path: str) -> QPixmap:
-    if not _is_raw(path):
-        pix = QPixmap(path)
-        return pix if not pix.isNull() else QPixmap()
-    jpg = _find_companion_jpg(path)
-    if jpg:
-        pix = QPixmap(jpg)
-        if not pix.isNull():
-            return pix
-    tmp_path = _exiftool_extract_preview(path)
-    if tmp_path:
-        pix = QPixmap(tmp_path)
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        if not pix.isNull():
-            return pix
-    return QPixmap()
-
-
-def _read_exif(path: str) -> dict:
-    r = {'shutter': '', 'aperture': '', 'iso': '', 'focal': '',
-         'date': '', 'dims': '', 'size': '', 'camera': '', 'orientation': 0}
-    try:
-        r['size'] = f"{os.path.getsize(path) / (1024 * 1024):.1f}\u00a0MB"
-        if _is_raw(path):
-            jpg = _find_companion_jpg(path)
-            if jpg:
-                _fill_exif_piexif(jpg, r)
-            else:
-                _fill_exif_exiftool_json(path, r)
-        else:
-            _fill_exif_piexif(path, r)
-    except Exception as e:
-        print(f"EXIF read error ({os.path.basename(path)}): {e}")
-    return r
-
-
-def _fill_exif_piexif(source_path: str, r: dict):
-    import piexif
-    exif = piexif.load(source_path)
-    ifd0 = exif.get('0th', {})
-    exif_ifd = exif.get('Exif', {})
-    r['orientation'] = {1: 0, 3: 180, 6: 90, 8: 270}.get(
-        ifd0.get(piexif.ImageIFD.Orientation, 1), 0)
-    reader = QImageReader(source_path)
-    sz = reader.size()
-    if sz.isValid():
-        r['dims'] = f"{sz.width()}\u00d7{sz.height()}"
-    def frac(v):
-        return (v[0], v[1]) if isinstance(v, tuple) and len(v) == 2 and v[1] else (int(v), 1)
-    exp = exif_ifd.get(piexif.ExifIFD.ExposureTime)
-    if exp:
-        n, d = frac(exp)
-        if n and d:
-            ratio = d / n
-            r['shutter'] = f"1/{int(round(ratio))}s" if ratio >= 1 else f"{n/d:.1f}s"
-    fn = exif_ifd.get(piexif.ExifIFD.FNumber)
-    if fn:
-        n, d = frac(fn)
-        if d:
-            r['aperture'] = f"f/{n/d:.1f}"
-    iso = exif_ifd.get(piexif.ExifIFD.ISOSpeedRatings)
-    if iso:
-        r['iso'] = f"ISO\u00a0{iso}"
-    fl = exif_ifd.get(piexif.ExifIFD.FocalLength)
-    if fl:
-        n, d = frac(fl)
-        if d:
-            r['focal'] = f"{int(round(n/d))}mm"
-    dt = (exif_ifd.get(piexif.ExifIFD.DateTimeOriginal)
-          or ifd0.get(piexif.ImageIFD.DateTime))
-    if dt:
-        s = dt.decode('ascii', errors='ignore') if isinstance(dt, bytes) else str(dt)
-        r['date'] = s[:10].replace(':', '-') + ' ' + s[11:16]
-    make = (ifd0.get(piexif.ImageIFD.Make) or b'').decode('ascii', errors='ignore').strip()
-    model_b = (ifd0.get(piexif.ImageIFD.Model) or b'').decode('ascii', errors='ignore').strip()
-    if model_b:
-        r['camera'] = model_b if model_b.startswith(make) else (
-            f"{make} {model_b}".strip() if make else model_b)
-
-
-def _fill_exif_exiftool_json(path: str, r: dict):
-    import subprocess, json
-    try:
-        result = subprocess.run(
-            ['exiftool', '-j', '-n',
-             '-Orientation', '-ImageWidth', '-ImageHeight',
-             '-ExposureTime', '-FNumber', '-ISO',
-             '-FocalLength', '-DateTimeOriginal', '-Make', '-Model', path],
-            capture_output=True, text=True, timeout=15)
-        if result.returncode != 0 or not result.stdout.strip():
-            return
-        data = json.loads(result.stdout)[0]
-        r['orientation'] = {1: 0, 3: 180, 6: 90, 8: 270}.get(
-            int(data.get('Orientation', 1)), 0)
-        w = data.get('ImageWidth')
-        h = data.get('ImageHeight')
-        if w and h:
-            r['dims'] = f"{int(w)}\u00d7{int(h)}"
-        exp = data.get('ExposureTime')
-        if exp:
-            v = float(exp)
-            if v > 0:
-                r['shutter'] = f"1/{int(round(1/v))}s" if v < 1 else f"{v:.1f}s"
-        fn = data.get('FNumber')
-        if fn:
-            r['aperture'] = f"f/{float(fn):.1f}"
-        iso = data.get('ISO')
-        if iso:
-            r['iso'] = f"ISO\u00a0{int(iso)}"
-        fl = data.get('FocalLength')
-        if fl:
-            r['focal'] = f"{int(round(float(fl)))}mm"
-        dt = str(data.get('DateTimeOriginal', ''))
-        if dt and len(dt) >= 16:
-            r['date'] = dt[:10].replace(':', '-') + ' ' + dt[11:16]
-        make = str(data.get('Make', '')).strip()
-        model_s = str(data.get('Model', '')).strip()
-        if model_s:
-            r['camera'] = model_s if model_s.startswith(make) else (
-                f"{make} {model_s}".strip() if make else model_s)
-    except Exception as e:
-        print(f"exiftool JSON error ({os.path.basename(path)}): {e}")
-
-
-class _ImageLoader(QThread):
-    """Laduje pixmape i EXIF w tle. Emituje loaded(pixmap, exif_dict)."""
-    loaded = pyqtSignal(object, dict)
-
-    def __init__(self, path: str):
-        super().__init__()
-        self._path = path
-
-    def run(self):
-        pixmap = _load_pixmap_from_path(self._path)
-        exif = _read_exif(self._path)
-        self.loaded.emit(pixmap, exif)
+from core.image_io import (
+    RAW_EXTENSIONS,
+    ImageLoader,
+)
 
 
 
@@ -206,13 +34,13 @@ class CheckboxDelegate(QStyledItemDelegate):
         self.checkbox_margin_y = 8  
 
     def paint(self, painter, option, index):
-        # Rysuj standardowy item (ikonę + tekst)
+        # Rysuj standardowy item (ikone + tekst)
         super().paint(painter, option, index)
-        
-        # Checkbox w lewym górnym rogu
+
+        # Checkbox pozycjonowany wzgledem lewego gornego rogu komórki
         checkbox_rect = QRect(
-            option.rect.left() + self.checkbox_margin_x,
-            option.rect.top() + self.checkbox_margin_y,
+            option.rect.left() + 12,
+            option.rect.top() + 5,
             self.checkbox_size,
             self.checkbox_size
         )
@@ -311,8 +139,8 @@ class DarkroomView(QWidget):
         self.list_widget = QListWidget()
         self.list_widget.setViewMode(QListWidget.ViewMode.IconMode)  # Multi-column
         self.list_widget.setResizeMode(QListWidget.ResizeMode.Adjust)  # Auto-adjust columns
-        self.list_widget.setIconSize(QSize(160, 120))  # Domyślnie małe thumbnail
-        self.list_widget.setGridSize(QSize(120, 160))  # Grid z paddingiem
+        self.list_widget.setIconSize(QSize(120, 120))  # Center crop 120x120
+        self.list_widget.setGridSize(QSize(140, 155))  # ikona + marginesy
         self.list_widget.setStyleSheet("QListWidget { background-color: #1e1e1e; }")  # Ciemniejsze tło
         self.list_widget.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
         self.list_widget.itemClicked.connect(self.show_image)
@@ -334,6 +162,12 @@ class DarkroomView(QWidget):
 
         controls_layout = QVBoxLayout()
         controls_layout.setSpacing(6)
+
+        # Label z nazwa i sciezka aktualnego katalogu
+        self.lbl_folder = QLabel("")
+        self.lbl_folder.setStyleSheet("color: #888; font-size: 11px; padding: 2px 4px;")
+        self.lbl_folder.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        controls_layout.addWidget(self.lbl_folder)
 
         # Jeden wiersz przycisków
         row_layout = QHBoxLayout()
@@ -380,29 +214,32 @@ class DarkroomView(QWidget):
         self.btn_favorites.setVisible(False)    # TODO
 
     def open_last_session(self):
-        """Otwiera najnowszy podfolder w katalogu sesji, pomijając captures subdir."""
+        """Otwiera najnowszy podfolder w katalogu sesji, pomijajac captures subdir.
+        Jesli brak podfolderow, otwiera base_path bezposrednio."""
         from ui.dialogs.preferences_dialog import PreferencesDialog
         base_path = PreferencesDialog.get_session_directory()
         captures_name = PreferencesDialog.get_captures_subdir()
 
-        if not base_path or not os.path.exists(base_path):
+        if not base_path:
             return
+
+        # Utwórz katalog domyslny jesli nie istnieje
+        os.makedirs(base_path, exist_ok=True)
+
         try:
+            all_ext = self.JPEG_EXTENSIONS + self.RAW_EXTENSIONS_TUPLE
             subdirs = [
                 os.path.join(base_path, d)
                 for d in os.listdir(base_path)
                 if os.path.isdir(os.path.join(base_path, d))
-                and d != captures_name          # pomijamy katalog captures
+                and d != captures_name
+                and any(
+                    f.lower().endswith(all_ext)
+                    for f in os.listdir(os.path.join(base_path, d))
+                )
             ]
-            if not subdirs:
-                return
-            latest_dir = max(subdirs, key=os.path.getmtime)
-            self.load_images(latest_dir)
-
-            if self.list_widget.count() > 0:
-                first_item = self.list_widget.item(0)
-                self.list_widget.setCurrentItem(first_item)
-                self.show_image(first_item)
+            target_dir = max(subdirs, key=os.path.getmtime) if subdirs else base_path
+            self.load_images(target_dir)
         except Exception as e:
             print(f"Error loading last session: {e}")
 
@@ -429,12 +266,17 @@ class DarkroomView(QWidget):
             return self.JPEG_EXTENSIONS + self.RAW_EXTENSIONS_TUPLE
         return self.JPEG_EXTENSIONS
 
-    def load_images(self, folder):
+    def load_images(self, folder, select_path: str = None):
+        """Laduje katalog. select_path — sciezka do przywrocenia selekcji po przeladowaniu."""
         self.current_dir = folder
         self.timer.stop()
         self.list_widget.clear()
         self.preview.clear()
         self.current_image_path = None
+
+        # Aktualizuj label z nazwa i sciezka katalogu
+        folder_name = os.path.basename(folder.rstrip("/"))
+        self.lbl_folder.setText(f"{folder_name}   —   {folder}")
 
         all_files = [f.lower() for f in os.listdir(folder)]
         has_raw = any(
@@ -451,13 +293,20 @@ class DarkroomView(QWidget):
         if not self.files:
             return
 
-        # Pierwszy plik od razu — thumbnail + podglad
-        self._add_thumbnail_item(0)
-        self._select_and_show(0)
+        # Wyznacz indeks do przywrocenia (lub 0)
+        select_index = 0
+        if select_path and select_path in self.files:
+            select_index = self.files.index(select_path)
 
-        # Reszta w tle (timer)
-        self.load_index = 1
-        if len(self.files) > 1:
+        # Dodaj synchronicznie do select_index wlacznie — item musi istniec przed setCurrentItem
+        for i in range(select_index + 1):
+            self._add_thumbnail_item(i)
+
+        self._select_and_show(select_index)
+
+        # Reszta miniatur w tle (timer)
+        self.load_index = select_index + 1
+        if self.load_index < len(self.files):
             self.timer.start(30)
 
     def _add_thumbnail_item(self, index: int):
@@ -479,6 +328,30 @@ class DarkroomView(QWidget):
         self._add_thumbnail_item(self.load_index)
         self.load_index += 1
 
+    def start_camera_import(self, dest_dir: str, worker):
+        """Importuje pliki z karty aparatu — thumbnails pojawiaja sie jeden po drugim."""
+        self.timer.stop()
+        self.list_widget.clear()
+        self.preview.clear()
+        self.current_image_path = None
+        self.files = []
+        self.current_dir = dest_dir
+
+        self.lbl_folder.setText(f"📷 Camera Import  —  {dest_dir}")
+
+        self._camera_worker = worker  # referencja — nie GC
+        worker.file_ready.connect(self._on_camera_file_ready)
+        worker.start()
+
+    def _on_camera_file_ready(self, local_path: str):
+        """Dodaje nowo pobrany plik z karty do listy miniatur.
+        Plik jest juz zapisany lokalnie — uzywa tej samej sciezki co _add_thumbnail_item."""
+        self.files.append(local_path)
+        # Identyczna sciezka jak normalny podglad — orientacja, cache, trim — wszystko razem
+        self._add_thumbnail_item(len(self.files) - 1)
+        if self.list_widget.count() == 1:
+            self._select_and_show(0)
+
     def show_image(self, item):
         """Wyswietla podglad asynchronicznie przez _ImageLoader."""
         path = item.data(Qt.ItemDataRole.UserRole)
@@ -494,7 +367,7 @@ class DarkroomView(QWidget):
             self._loader.wait()
         self._loader = None
 
-        self._loader = _ImageLoader(path)
+        self._loader = ImageLoader(path)
         self._loader.loaded.connect(self._on_image_loaded)
         self._loader.start()
 
@@ -576,12 +449,13 @@ class DarkroomView(QWidget):
 
     def _toggle_raw(self):
         """Przelacza widocznosc plikow RAW na liscie miniatur."""
+        prev_path = self.current_image_path
         self._show_raw = not self._show_raw
         self.btn_raw_preview.setText(
             self.tr("RAW: ON") if self._show_raw else self.tr("RAW: OFF")
         )
         if self.current_dir:
-            self.load_images(self.current_dir)
+            self.load_images(self.current_dir, select_path=prev_path)
 
     # ─────────────────────────── SD CARD
 
@@ -615,19 +489,18 @@ class DarkroomView(QWidget):
                 main_window.status_bar.showMessage(self.tr("Ready"))
     
     def toggle_thumb_size(self):
-        """Przełącz między małymi (thumbnail) a dużymi (preview) miniaturami"""
+        """Przelacz miedzy malymi (thumbnail) a duzymi (preview) miniaturami"""
+        prev_path = self.current_image_path
         self.large_thumbs = not self.large_thumbs
-        
-        # Zmień rozmiar ikon
+
         if self.large_thumbs:
             self.list_widget.setIconSize(QSize(240, 240))
-            self.list_widget.setGridSize(QSize(270, 270))
+            self.list_widget.setGridSize(QSize(260, 280))
             self.btn_toggle_size.setText(self.tr("Small Thumbs"))
         else:
-            self.list_widget.setIconSize(QSize(160, 120))
-            self.list_widget.setGridSize(QSize(120, 160))
+            self.list_widget.setIconSize(QSize(120, 120))
+            self.list_widget.setGridSize(QSize(140, 155))
             self.btn_toggle_size.setText(self.tr("Large Thumbs"))
-        
-        # Przeładuj katalog
+
         if self.current_dir:
-            self.load_images(self.current_dir)
+            self.load_images(self.current_dir, select_path=prev_path)

@@ -10,7 +10,7 @@ def main():
     app.setStyle('Fusion')
 
     # Ikona aplikacji
-    app.setWindowIcon(QIcon("assets/icons/face.png"))
+    app.setWindowIcon(QIcon("assets/icons/favicon/web-app-manifest-192x192.png"))
 
     # Grafika startowa
     pixmap = QPixmap("assets/pictures/startup-picture-3.jpg")
