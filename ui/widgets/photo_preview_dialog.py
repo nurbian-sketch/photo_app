@@ -12,95 +12,11 @@ import os
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget
 )
-from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QPixmap, QTransform
 
 from core.image_io import ImageLoader
-
-
-# ─────────────────────────────── WB Worker
-
-class _WBWorker(QThread):
-    """
-    Próbkuje piksel, przelicza korekcję WB i renderuje skorygowany preview.
-    Działa w tle — nie blokuje UI ani wątku LV.
-    """
-    finished = pyqtSignal(object, int)   # (QPixmap_corrected, kelvin)
-
-    # Daylight locus: (Kelvin, R/B_ratio) — przybliżone wartości dla sRGB
-    DAYLIGHT_LOCUS = [
-        (2500, 3.0), (3000, 2.6), (3200, 2.3), (4000, 1.8),
-        (5000, 1.4), (5200, 1.3), (5500, 1.1), (6500, 0.85),
-        (7500, 0.72), (8000, 0.65), (10000, 0.50),
-    ]
-
-    def __init__(self, pixmap: QPixmap, sample_x: int, sample_y: int):
-        super().__init__()
-        self._pixmap = pixmap
-        self._sx = sample_x
-        self._sy = sample_y
-
-    def run(self):
-        try:
-            import numpy as np
-            from PyQt6.QtGui import QImage
-
-            img = self._pixmap.toImage().convertToFormat(QImage.Format.Format_RGB888)
-            w, h = img.width(), img.height()
-
-            ptr = img.bits()
-            ptr.setsize(h * w * 3)
-            arr = np.frombuffer(ptr, dtype=np.uint8).reshape((h, w, 3)).copy()
-
-            # Próbka 9×9 wokół klikniętego piksela
-            r = 4
-            x0 = max(0, self._sx - r);  x1 = min(w, self._sx + r + 1)
-            y0 = max(0, self._sy - r);  y1 = min(h, self._sy + r + 1)
-            sample = arr[y0:y1, x0:x1].astype(np.float32)
-
-            avg_r = float(np.mean(sample[:, :, 0]))
-            avg_g = float(np.mean(sample[:, :, 1]))
-            avg_b = float(np.mean(sample[:, :, 2]))
-
-            if avg_r < 1 or avg_g < 1 or avg_b < 1:
-                self.finished.emit(self._pixmap, 5500)
-                return
-
-            # Mnożniki: chcemy R=G=B (neutralny)
-            mult_r = avg_g / avg_r
-            mult_b = avg_g / avg_b
-
-            corrected = arr.astype(np.float32)
-            corrected[:, :, 0] *= mult_r
-            corrected[:, :, 2] *= mult_b
-            np.clip(corrected, 0, 255, out=corrected)
-            corrected_u8 = corrected.astype(np.uint8)
-
-            result_img = QImage(
-                corrected_u8.tobytes(), w, h, w * 3, QImage.Format.Format_RGB888
-            )
-            result_pixmap = QPixmap.fromImage(result_img)
-
-            kelvin = self._estimate_kelvin(avg_r / avg_b if avg_b > 1 else 1.0)
-            self.finished.emit(result_pixmap, kelvin)
-
-        except Exception as e:
-            print(f"WBWorker error: {e}")
-            self.finished.emit(self._pixmap, 5500)
-
-    def _estimate_kelvin(self, rb_ratio: float) -> int:
-        locus = self.DAYLIGHT_LOCUS
-        if rb_ratio >= locus[0][1]:
-            return locus[0][0]
-        if rb_ratio <= locus[-1][1]:
-            return locus[-1][0]
-        for i in range(len(locus) - 1):
-            k1, r1 = locus[i]
-            k2, r2 = locus[i + 1]
-            if r2 <= rb_ratio <= r1:
-                t = (rb_ratio - r2) / (r1 - r2)
-                return int(round(k2 + t * (k1 - k2)))
-        return 5500
+from ui.widgets.preview_panel import _WBWorker
 
 
 # ─────────────────────────────── Dialog podglądu zdjęcia
