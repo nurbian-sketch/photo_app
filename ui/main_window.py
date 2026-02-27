@@ -232,12 +232,17 @@ class MainWindow(QMainWindow):
         self.central_stack.setCurrentWidget(mapping[name])
         self._current_view_name = name
 
-        # --- Jeden probe: status + tryb w jednym poÅ‚Ä…czeniu ---
-        self._probe_camera(enforce_fv=(name == "Camera"))
+        # --- Probe: Session view nie potrzebuje polaczenia z aparatem ---
+        if name == "Session":
+            self.set_status_icons(camera=self.camera_ready, sd=self.sd_ready)
+        else:
+            self._probe_camera(enforce_fv=(name == "Camera"))
 
     def _probe_camera(self, enforce_fv=False):
         """Uruchamia CameraProbe w tle — nie blokuje UI.
-        Pomija probe tylko gdy LV aktywne (USB zajęte) lub wątek się zamyka."""
+        Pomija probe gdy LV aktywne, wątek się zamyka lub sesja trwa (USB odłączone)."""
+        if self.session_view.is_session_active():
+            return  # Sesja aktywna — aparat bezprzewodowy, nie dotykaj USB
         if self.camera_view.is_lv_active():
             return  # LV trzyma USB — nie dotykaj
         if self.camera_view._stopping:
