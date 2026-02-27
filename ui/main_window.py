@@ -232,11 +232,7 @@ class MainWindow(QMainWindow):
         self.central_stack.setCurrentWidget(mapping[name])
         self._current_view_name = name
 
-        # --- Probe: Session view nie potrzebuje polaczenia z aparatem ---
-        if name == "Session":
-            self.set_status_icons(camera=self.camera_ready, sd=self.sd_ready)
-        else:
-            self._probe_camera(enforce_fv=(name == "Camera"))
+        self._probe_camera(enforce_fv=(name == "Camera"))
 
     def _probe_camera(self, enforce_fv=False):
         """Uruchamia CameraProbe w tle — nie blokuje UI.
