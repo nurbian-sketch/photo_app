@@ -140,10 +140,11 @@ class MainWindow(QMainWindow):
         self.read_settings()
         self.setup_menu()
 
-        # PoÅ‚Ä…czenia akcji SessionView
-        self.session_view.btn_action1.clicked.connect(lambda: self.status_bar.showMessage(self.tr("Action 1 executed")))
-        self.session_view.btn_action2.clicked.connect(lambda: self.status_bar.showMessage(self.tr("Action 2 executed")))
-        self.session_view.btn_action3.clicked.connect(lambda: self.status_bar.showMessage(self.tr("Action 3 executed")))
+        # Połączenia SessionView
+        self.session_view.status_message.connect(
+            lambda msg: self.status_bar.showMessage(msg, 5000)
+        )
+        self.session_view.session_finished.connect(self._on_session_finished)
 
     def _make_status_pixmap(self, file_name, active=True):
         """Tworzy pixmapÄ™ 24px: kolorowÄ… lub wyszarzonÄ… w locie"""
@@ -262,6 +263,16 @@ class MainWindow(QMainWindow):
             )
         else:
             self.status_bar.showMessage(self.tr("Camera not detected"), 4000)
+
+    def _on_session_finished(self, summary):
+        """
+        Callback po zakończeniu sesji.
+        Dla trybu CLIENT i HOME: auto-load folderu sesji w Darkroom.
+        """
+        from core.session_context import SessionMode
+        ctx = summary.context
+        if ctx.mode != SessionMode.PRIVATE and ctx.session_path:
+            self.darkroom_view.load_images(ctx.session_path)
 
     def _on_darkroom_wb_apply(self, kelvin: int):
         """WB picker z DarkroomView: aplikuje temperaturę WB i przełącza na Camera."""
