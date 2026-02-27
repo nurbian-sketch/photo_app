@@ -6,6 +6,46 @@ from PyQt6.QtCore import Qt
 
 
 _CR3_EXTENSIONS = {'.cr3'}
+_ORIENTATION_MAP = {1: 0, 3: 180, 6: 90, 8: 270}
+
+
+def _tiff_orientation_scan(data: bytes) -> int:
+    """
+    Skanuje binarne dane (np. pierwsze 512KB CR3) w poszukiwaniu tagu
+    Orientation (0x0112) w strukturze TIFF/EXIF. Bez subprocess, bez I/O.
+    """
+    import struct
+    offset = 0
+    while offset < len(data) - 8:
+        ii = data.find(b'II\x2a\x00', offset)
+        mm = data.find(b'MM\x00\x2a', offset)
+        candidates = [x for x in (ii, mm) if x >= 0]
+        if not candidates:
+            break
+        pos = min(candidates)
+        bo = '<' if data[pos:pos + 2] == b'II' else '>'
+        try:
+            ifd_offset = struct.unpack_from(bo + 'I', data, pos + 4)[0]
+            ifd_abs = pos + ifd_offset
+            if ifd_abs + 2 > len(data):
+                offset = pos + 1
+                continue
+            num_entries = struct.unpack_from(bo + 'H', data, ifd_abs)[0]
+            if not (1 <= num_entries <= 500):
+                offset = pos + 1
+                continue
+            for i in range(num_entries):
+                entry_abs = ifd_abs + 2 + i * 12
+                if entry_abs + 12 > len(data):
+                    break
+                tag = struct.unpack_from(bo + 'H', data, entry_abs)[0]
+                if tag == 0x0112:  # Orientation
+                    val = struct.unpack_from(bo + 'H', data, entry_abs + 8)[0]
+                    return _ORIENTATION_MAP.get(val, 0)
+        except Exception:
+            pass
+        offset = pos + 1
+    return 0
 
 
 class ExifThumbnailReader:
@@ -58,7 +98,16 @@ class ExifThumbnailReader:
             if pixmap.isNull():
                 return None
 
+            # Priorytet: companion JPG
             orientation = self.read_cr3_orientation(path)
+
+            # Fallback dla CR3 bez companion: skan TIFF/EXIF w binarnych danych
+            if orientation == 0 and not any(
+                path.with_suffix(s).exists()
+                for s in ('.JPG', '.jpg', '.JPEG', '.jpeg')
+            ):
+                orientation = _tiff_orientation_scan(data)
+
             return self._rotate(pixmap, orientation)
 
         except Exception:

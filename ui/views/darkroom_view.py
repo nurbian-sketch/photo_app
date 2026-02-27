@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QListWidgetItem,
     QLabel, QPushButton, QMessageBox, QFileDialog, QSizePolicy, QSplitter,
-    QStyledItemDelegate, QStyle, QStyleOptionButton
+    QStyledItemDelegate, QStyle, QStyleOptionButton, QApplication
 )
 from PyQt6.QtGui import QPixmap, QIcon
 from PyQt6.QtCore import Qt, QSize, QTimer, QRect, pyqtSignal
@@ -19,8 +19,12 @@ from ui.widgets.photo_preview_dialog import PhotoPreviewDialog
 from core.image_io import ImageLoader
 
 
+# Rola typu elementu listy: 'file', 'folder', 'parent'
+_ITEM_TYPE_ROLE = Qt.ItemDataRole.UserRole + 2
+
+
 class CheckboxDelegate(QStyledItemDelegate):
-    """Custom delegate z checkboxem w rogu miniatury."""
+    """Custom delegate z checkboxem w rogu miniatury (tylko dla plików)."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -30,6 +34,10 @@ class CheckboxDelegate(QStyledItemDelegate):
 
     def paint(self, painter, option, index):
         super().paint(painter, option, index)
+
+        # Checkbox tylko dla plików
+        if index.data(_ITEM_TYPE_ROLE) != 'file':
+            return
 
         checkbox_rect = QRect(
             option.rect.left() + 12,
@@ -57,6 +65,10 @@ class CheckboxDelegate(QStyledItemDelegate):
         )
 
     def editorEvent(self, event, model, option, index):
+        # Checkbox tylko dla plików
+        if index.data(_ITEM_TYPE_ROLE) != 'file':
+            return super().editorEvent(event, model, option, index)
+
         if event.type() == event.Type.MouseButtonRelease:
             checkbox_rect = QRect(
                 option.rect.left() + self.checkbox_margin_x,
@@ -88,13 +100,17 @@ class DarkroomView(QWidget):
     # Emitowany po zaakceptowaniu WB picker — MainWindow przełącza na Camera i aplikuje WB
     wb_apply_requested = pyqtSignal(int)  # kelvin
 
+    # Tryby wyświetlania plików
+    _VIEW_LABELS = ["JPG only", "JPG + RAW", "All files"]
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
         self.current_dir = None
         self.current_image_path = None
         self.large_thumbs = False
-        self._show_raw = False
+        self._view_mode = 0          # 0=JPG, 1=JPG+RAW, 2=All files
+        self._list_file_offset = 0   # ile elementów nav (.. + foldery) przed plikami
         self._sd_card_ready = False
         self._loader = None
 
@@ -163,7 +179,7 @@ class DarkroomView(QWidget):
         self.btn_toggle_size = QPushButton(self.tr("Large Thumbs"))
         self.btn_delete = QPushButton(self.tr("Delete Image(s)"))
         self.btn_sd_card = QPushButton(self.tr("SD Card"))
-        self.btn_raw_preview = QPushButton(self.tr("RAW: OFF"))
+        self.btn_raw_preview = QPushButton(self._VIEW_LABELS[0])
         self.btn_favorites = QPushButton(self.tr("Favorites Only"))
         self.btn_favorites.setCheckable(True)
 
@@ -194,9 +210,7 @@ class DarkroomView(QWidget):
         self.btn_last_session.clicked.connect(self.open_last_session)
         self.btn_delete.clicked.connect(self.delete_images)
         self.btn_toggle_size.clicked.connect(self.toggle_thumb_size)
-        self.btn_raw_preview.setCheckable(False)
-        self.btn_raw_preview.setVisible(False)
-        self.btn_raw_preview.clicked.connect(self._toggle_raw)
+        self.btn_raw_preview.clicked.connect(self._cycle_view_mode)
         self.btn_sd_card.setVisible(False)
         self.btn_sd_card.clicked.connect(self.sd_card_requested.emit)
         self.btn_favorites.setVisible(False)  # TODO
@@ -249,9 +263,9 @@ class DarkroomView(QWidget):
 
     @property
     def IMAGE_EXTENSIONS(self):
-        if self._show_raw:
+        if self._view_mode == 1:
             return self.JPEG_EXTENSIONS + self.RAW_EXTENSIONS_TUPLE
-        return self.JPEG_EXTENSIONS
+        return self.JPEG_EXTENSIONS  # tryb 0 i 2 — pliki images obsługiwane osobno
 
     # ─────────────────────────── Ładowanie obrazów
 
@@ -262,19 +276,41 @@ class DarkroomView(QWidget):
         self.list_widget.clear()
         self.preview.clear()
         self.current_image_path = None
+        self._list_file_offset = 0
 
         folder_name = os.path.basename(folder.rstrip("/"))
         self.lbl_folder.setText(f"{folder_name}   —   {folder}")
 
-        all_files = [f.lower() for f in os.listdir(folder)]
-        has_raw = any(f.endswith(self.RAW_EXTENSIONS_TUPLE) for f in all_files)
-        self.btn_raw_preview.setVisible(has_raw)
+        # Ikona ".." — wyjście do katalogu nadrzędnego (zawsze, gdy nie jesteśmy w root)
+        parent = os.path.dirname(folder.rstrip("/"))
+        if parent and parent != folder:
+            self._add_nav_item("..", parent)
+            self._list_file_offset += 1
 
-        self.files = sorted(
-            os.path.join(folder, f)
-            for f in os.listdir(folder)
-            if f.lower().endswith(self.IMAGE_EXTENSIONS)
-        )
+        # Podfoldery — tylko w trybie "All files"
+        if self._view_mode == 2:
+            subdirs = sorted(
+                d for d in os.listdir(folder)
+                if os.path.isdir(os.path.join(folder, d)) and not d.startswith('.')
+            )
+            for d in subdirs:
+                self._add_folder_item(d, os.path.join(folder, d))
+                self._list_file_offset += 1
+
+        # Lista plików do wyświetlenia
+        if self._view_mode == 2:
+            # Wszystkie pliki (obrazy z miniaturami, inne z placeholderem)
+            self.files = sorted(
+                os.path.join(folder, f)
+                for f in os.listdir(folder)
+                if os.path.isfile(os.path.join(folder, f))
+            )
+        else:
+            self.files = sorted(
+                os.path.join(folder, f)
+                for f in os.listdir(folder)
+                if f.lower().endswith(self.IMAGE_EXTENSIONS)
+            )
 
         if not self.files:
             return
@@ -292,14 +328,42 @@ class DarkroomView(QWidget):
         if self.load_index < len(self.files):
             self.timer.start(30)
 
+    def _add_nav_item(self, label: str, path: str):
+        """Dodaje element nawigacyjny '..' do listy."""
+        icon = QApplication.style().standardIcon(
+            QStyle.StandardPixmap.SP_FileDialogToParent
+        )
+        item = QListWidgetItem(icon, label)
+        item.setData(Qt.ItemDataRole.UserRole, path)
+        item.setData(Qt.ItemDataRole.UserRole + 1, False)
+        item.setData(_ITEM_TYPE_ROLE, 'parent')
+        item.setToolTip(path)
+        self.list_widget.addItem(item)
+
+    def _add_folder_item(self, name: str, path: str):
+        """Dodaje element folderu do listy."""
+        icon = QApplication.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon)
+        item = QListWidgetItem(icon, name)
+        item.setData(Qt.ItemDataRole.UserRole, path)
+        item.setData(Qt.ItemDataRole.UserRole + 1, False)
+        item.setData(_ITEM_TYPE_ROLE, 'folder')
+        item.setToolTip(path)
+        self.list_widget.addItem(item)
+
     def _add_thumbnail_item(self, index: int):
-        """Dodaje jeden element do list_widget z miniaturą."""
+        """Dodaje jeden element pliku do list_widget z miniaturą."""
         path = self.files[index]
-        pixmap = self.darkcache.get_pixmap(Path(path), self.large_thumbs)
+        ext = os.path.splitext(path)[1].lower()
+        is_image = ext in (self.JPEG_EXTENSIONS + self.RAW_EXTENSIONS_TUPLE)
+        if is_image:
+            pixmap = self.darkcache.get_pixmap(Path(path), self.large_thumbs)
+        else:
+            pixmap = None
         icon = QIcon(pixmap) if pixmap and not pixmap.isNull() else QIcon()
         item = QListWidgetItem(icon, os.path.basename(path))
         item.setData(Qt.ItemDataRole.UserRole, path)
         item.setData(Qt.ItemDataRole.UserRole + 1, False)
+        item.setData(_ITEM_TYPE_ROLE, 'file')
         self.list_widget.addItem(item)
 
     def load_next_thumbnails(self):
@@ -318,6 +382,7 @@ class DarkroomView(QWidget):
         self.current_image_path = None
         self.files = []
         self.current_dir = dest_dir
+        self._list_file_offset = 0
 
         self.lbl_folder.setText(f"📷 Camera Import  —  {dest_dir}")
 
@@ -332,11 +397,20 @@ class DarkroomView(QWidget):
         if self.list_widget.count() == 1:
             self._select_and_show(0)
 
-    # ─────────────────────────── Wyświetlanie podglądu
+    # ─────────────────────────── Wyświetlanie podglądu / nawigacja
 
     def show_image(self, item):
-        """Wyświetla podgląd asynchronicznie przez ImageLoader."""
+        """Wyświetla podgląd lub nawiguje do folderu/katalogu nadrzędnego."""
+        if item is None:
+            return
+        item_type = item.data(_ITEM_TYPE_ROLE)
         path = item.data(Qt.ItemDataRole.UserRole)
+
+        if item_type in ('folder', 'parent'):
+            self._navigate_to(path)
+            return
+
+        # Zwykły plik — załaduj podgląd
         self.current_image_path = path
         self.preview.set_message(self.tr("Loading…"))
 
@@ -352,14 +426,18 @@ class DarkroomView(QWidget):
         self._loader.loaded.connect(self._on_image_loaded)
         self._loader.start()
 
+    def _navigate_to(self, path: str):
+        """Przejdź do folderu — przeładuj widok."""
+        self.load_images(path)
+
     def _on_image_loaded(self, pixmap: QPixmap, exif: dict):
         """Callback z ImageLoader — deleguje do PreviewPanel."""
         self.preview.set_pixmap(pixmap, exif.get('orientation', 0))
         self.preview.set_exif(exif)
 
     def _select_and_show(self, index: int):
-        """Zaznacza element listy i wyświetla podgląd."""
-        item = self.list_widget.item(index)
+        """Zaznacza element pliku (z uwzględnieniem offsetu nav) i wyświetla podgląd."""
+        item = self.list_widget.item(self._list_file_offset + index)
         if item:
             self.list_widget.setCurrentItem(item)
             self.show_image(item)
@@ -367,13 +445,18 @@ class DarkroomView(QWidget):
     def eventFilter(self, obj, event):
         return super().eventFilter(obj, event)
 
-    # ─────────────────────────── WB Picker
+    # ─────────────────────────── WB Picker / podgląd pełny
 
     def _open_preview_dialog(self, item):
-        """Double-click na miniaturze — otwiera pełny podgląd."""
+        """Double-click — dla pliku otwiera pełny podgląd, dla folderu nawiguje."""
+        item_type = item.data(_ITEM_TYPE_ROLE)
         path = item.data(Qt.ItemDataRole.UserRole)
-        if path:
-            self._open_preview_dialog_for_path(path)
+        if not path:
+            return
+        if item_type in ('folder', 'parent'):
+            self._navigate_to(path)
+            return
+        self._open_preview_dialog_for_path(path)
 
     def _open_preview_dialog_for_path(self, path: str):
         """Otwiera PhotoPreviewDialog dla podanej ścieżki."""
@@ -389,11 +472,11 @@ class DarkroomView(QWidget):
     # ─────────────────────────── Usuwanie
 
     def delete_images(self):
-        """Usuń zaznaczone zdjęcia (checkboxy)."""
+        """Usuń zaznaczone zdjęcia (checkboxy) — tylko pliki."""
         to_delete = []
         for i in range(self.list_widget.count()):
             item = self.list_widget.item(i)
-            if item.data(Qt.ItemDataRole.UserRole + 1):
+            if item.data(_ITEM_TYPE_ROLE) == 'file' and item.data(Qt.ItemDataRole.UserRole + 1):
                 path = item.data(Qt.ItemDataRole.UserRole)
                 to_delete.append((i, item, path))
 
@@ -441,15 +524,13 @@ class DarkroomView(QWidget):
 
             self.update_selection_count()
 
-    # ─────────────────────────── RAW toggle
+    # ─────────────────────────── Tryb wyświetlania plików
 
-    def _toggle_raw(self):
-        """Przełącza widoczność plików RAW na liście miniatur."""
+    def _cycle_view_mode(self):
+        """Cykluje między trybami: JPG only → JPG+RAW → All files → JPG only."""
         prev_path = self.current_image_path
-        self._show_raw = not self._show_raw
-        self.btn_raw_preview.setText(
-            self.tr("RAW: ON") if self._show_raw else self.tr("RAW: OFF")
-        )
+        self._view_mode = (self._view_mode + 1) % 3
+        self.btn_raw_preview.setText(self._VIEW_LABELS[self._view_mode])
         if self.current_dir:
             self.load_images(self.current_dir, select_path=prev_path)
 
@@ -485,7 +566,8 @@ class DarkroomView(QWidget):
         """Aktualizacja licznika zaznaczonych plików w status bar."""
         count = sum(
             1 for i in range(self.list_widget.count())
-            if self.list_widget.item(i).data(Qt.ItemDataRole.UserRole + 1)
+            if self.list_widget.item(i).data(_ITEM_TYPE_ROLE) == 'file'
+            and self.list_widget.item(i).data(Qt.ItemDataRole.UserRole + 1)
         )
         main_window = self.window()
         if hasattr(main_window, 'status_bar'):

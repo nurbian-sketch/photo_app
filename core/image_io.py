@@ -221,7 +221,10 @@ def _fill_exif_exiftool_json(path: str, r: dict):
         data = json.loads(result.stdout)[0]
 
         orientation_map = {1: 0, 3: 180, 6: 90, 8: 270}
-        r['orientation'] = orientation_map.get(int(data.get('Orientation', 1)), 0)
+        orient_raw = data.get('Orientation')
+        r['orientation'] = orientation_map.get(
+            int(orient_raw) if orient_raw is not None else 1, 0
+        )
 
         w = data.get('ImageWidth') or data.get('ExifImageWidth')
         h = data.get('ImageHeight') or data.get('ExifImageHeight')
@@ -269,8 +272,8 @@ def _fill_exif_exiftool_json(path: str, r: dict):
 
 def _load_raw_no_companion(path: str) -> tuple:
     """
-    Dla RAW bez companion JPG: ekstrahuje embedded JPEG raz,
-    czyta pixmapę i EXIF z tego samego pliku — prawidłowa orientacja.
+    Dla RAW bez companion JPG: ekstrahuje embedded JPEG jako pixmapę,
+    EXIF czyta z oryginalnego pliku RAW przez exiftool (prawidłowe wymiary i orientacja).
     """
     r = {
         'shutter': '', 'aperture': '', 'iso': '', 'focal': '',
@@ -287,23 +290,12 @@ def _load_raw_no_companion(path: str) -> tuple:
 
     pixmap = QPixmap(tmp_path)
     try:
-        _fill_exif_piexif(tmp_path, r)
-    except Exception:
-        try:
-            _fill_exif_exiftool_json(path, r)
-        except Exception:
-            pass
-
-    # Rozmiar oryginalnego RAW, nie temp JPEG
-    try:
-        r['size'] = f"{os.path.getsize(path) / (1024 * 1024):.1f}\u00a0MB"
-    except OSError:
-        pass
-
-    try:
         os.unlink(tmp_path)
     except OSError:
         pass
+
+    # EXIF z oryginalnego CR3 — prawidłowe wymiary sensora, orientacja, dane aparatu
+    _fill_exif_exiftool_json(path, r)
 
     return pixmap if not pixmap.isNull() else QPixmap(), r
 
