@@ -131,8 +131,6 @@ class MainWindow(QMainWindow):
         self.camera_view.preview_list_changed.connect(self._update_preview_menu)
         # Komunikaty z camera_view do status bar
         self.camera_view.status_message.connect(self.status_bar.showMessage)
-        # Przycisk SD Card w DarkroomView
-        self.darkroom_view.sd_card_requested.connect(self._on_sd_card_requested)
         # WB picker z DarkroomView → przełącz na Camera + aplikuj temperaturę
         self.darkroom_view.wb_apply_requested.connect(self._on_darkroom_wb_apply)
 
@@ -282,43 +280,6 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage(
             self.tr(f"WB set to {kelvin} K — switch to Camera view"), 4000
         )
-
-    def _on_sd_card_requested(self):
-        """Importuje pliki z karty SD aparatu — thumbnails pojawiaja sie na biezaco.
-        Wymaga zatrzymanego Live View (USB musi byc wolne)."""
-        if self.camera_view.is_lv_active():
-            self.status_bar.showMessage(
-                self.tr("Stop Live View first to access camera files"), 5000
-            )
-            return
-
-        from datetime import datetime
-        from ui.dialogs.preferences_dialog import PreferencesDialog
-        from ui.camera_card_service import CameraCardWorker
-
-        base = PreferencesDialog.get_session_directory()
-        ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        dest = os.path.join(base, f"{ts}_camera")
-
-        self._card_worker = CameraCardWorker(dest_dir=dest)
-        self._card_worker.progress.connect(
-            lambda cur, total, fname: self.status_bar.showMessage(
-                f"Importing {cur + 1}/{total}: {fname}"
-            )
-        )
-        self._card_worker.finished.connect(self._on_camera_import_done)
-
-        self.darkroom_view.start_camera_import(dest, self._card_worker)
-        self.switcher.select_view("Pictures")
-
-    def _on_camera_import_done(self, dest_dir, error):
-        if error:
-            self.status_bar.showMessage(f"Import error: {error}", 6000)
-        else:
-            count = self.darkroom_view.list_widget.count()
-            self.status_bar.showMessage(
-                self.tr(f"Import complete: {count} files"), 4000
-            )
 
     def _update_preview_menu(self, pairs):
         """Aktualizuje dynamiczne wpisy menu View dla okien podglądu."""
