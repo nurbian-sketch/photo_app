@@ -27,11 +27,8 @@ from core.session_store import SessionStore
 
 logger = logging.getLogger(__name__)
 
-# Interwał pollingu USB podczas aktywnej sesji (sekundy)
-USB_POLL_INTERVAL = 5
-
-# Opóźnienie countdown przed startem (sekundy)
-COUNTDOWN_SEC = 5
+# Opóźnienie countdown przed startem — obsługuje dialog w SessionView, tu =0
+COUNTDOWN_SEC = 0
 
 # Timeout importu pojedynczego pliku (sekundy)
 IMPORT_FILE_TIMEOUT = 60
@@ -151,12 +148,14 @@ class SessionRunner(QThread):
     # ─────────────────────────── AKTYWNA SESJA
 
     def _run_active(self):
-        """Główna pętla sesji: tick timera + polling USB."""
+        """
+        Główna pętla sesji: tylko tick timera.
+        Brak komunikacji z aparatem — kamera używa modułu bezprzewodowego.
+        """
         self._set_state(SessionState.ACTIVE)
         self.context.started_at = datetime.now()
 
-        total_sec    = self.context.duration_sec
-        poll_counter = 0
+        total_sec = self.context.duration_sec
 
         while not self._stop_flag:
             elapsed   = int((datetime.now() - self.context.started_at).total_seconds())
@@ -164,41 +163,12 @@ class SessionRunner(QThread):
 
             self.timer_tick.emit(remaining, total_sec)
 
-            # Timeout
             if remaining == 0:
                 self._end_reason = EndReason.TIMEOUT
                 self._stop_flag  = True
                 break
 
-            # Polling USB co USB_POLL_INTERVAL sekund
-            poll_counter += 1
-            if poll_counter >= USB_POLL_INTERVAL:
-                poll_counter = 0
-                if self._detect_usb():
-                    logger.info("SessionRunner: wykryto USB — przerywam sesję")
-                    self._end_reason = EndReason.USB_DETECTED
-                    self._stop_flag  = True
-                    break
-
             time.sleep(1)
-
-    def _detect_usb(self) -> bool:
-        """
-        Próbuje wykryć aparat na USB.
-        Zwraca True jeśli aparat jest dostępny.
-        Nie inicjalizuje połączenia — tylko detekcja.
-        """
-        try:
-            context = gp.Context()
-            port_info_list = gp.PortInfoList()
-            port_info_list.load()
-            abilities_list = gp.CameraAbilitiesList()
-            abilities_list.load(context)
-            cameras = abilities_list.detect(port_info_list, context)
-            return len(cameras) > 0
-        except Exception as e:
-            logger.debug(f"SessionRunner USB poll error: {e}")
-            return False
 
     # ─────────────────────────── STOPPING
 

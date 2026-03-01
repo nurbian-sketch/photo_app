@@ -11,12 +11,12 @@ import os
 import re
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QSettings, pyqtSignal
+from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal
 from PyQt6.QtGui import QPixmap, QPainter, QFont, QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget,
     QLabel, QLineEdit, QPushButton, QSizePolicy,
-    QProgressBar, QGroupBox, QFrame,
+    QProgressBar, QGroupBox, QFrame, QDialog,
 )
 
 from core.session_context import (
@@ -40,6 +40,136 @@ EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 BG_ACTIVE      = os.path.join("assets", "pictures", "session-active.jpg")
 BG_FINISHED    = os.path.join("assets", "pictures", "session-finished.jpg")
 BG_INTERRUPTED = os.path.join("assets", "pictures", "session-interrupted.jpg")
+
+
+# ─────────────────────────── DIALOG PRZYGOTOWANIA SESJI
+
+def _lsusb_has_canon() -> bool:
+    """Sprawdza przez lsusb czy aparat Canon jest widoczny — bez gphoto2, bez sesji PTP."""
+    import subprocess
+    try:
+        r = subprocess.run(["lsusb"], capture_output=True, text=True, timeout=2)
+        return "Canon" in r.stdout
+    except Exception:
+        return False
+
+
+class _UsbDisconnectDialog(QDialog):
+    """
+    Dialog przygotowania sesji: prowadzi przez dwa kroki (OFF → ON).
+    Emituje status_changed(str) do paska stanu głównego okna.
+
+    Stany:
+        WAIT_DISCONNECT — oczekuje na odłączenie aparatu (krok 1)
+        WAIT_RECONNECT  — aparat zniknął, oczekuje na ponowne wykrycie (krok 2)
+        READY           — aparat wykryty po cyklu — Start aktywny
+    """
+
+    status_changed = pyqtSignal(str)
+
+    _WAIT_DISCONNECT = 0
+    _WAIT_RECONNECT  = 1
+    _READY           = 2
+
+    # Symbole kroków
+    _DOT_PENDING = "○"
+    _DOT_DONE    = "●"
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Prepare camera")
+        self.setMinimumWidth(540)
+        self.setModal(True)
+        self._state = self._WAIT_DISCONNECT
+        self._build_ui()
+
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._poll)
+        self._timer.start(1200)
+        self._poll()  # natychmiastowe sprawdzenie
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
+        layout.setContentsMargins(20, 16, 20, 16)
+
+        # Duży obrazek instrukcji
+        img_label = QLabel()
+        img_path = os.path.join("assets", "pictures", "turn_switch-on-and-off.jpg")
+        if os.path.exists(img_path):
+            pix = QPixmap(img_path).scaled(
+                500, 260,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            img_label.setPixmap(pix)
+        img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(img_label)
+
+        layout.addSpacing(4)
+
+        # Krok 1
+        self._step1 = QLabel(f"{self._DOT_PENDING}  Turn camera off")
+        self._step1.setStyleSheet("font-size: 13px; color: #888;")
+        layout.addWidget(self._step1)
+
+        # Krok 2
+        self._step2 = QLabel(f"{self._DOT_PENDING}  Turn camera back on")
+        self._step2.setStyleSheet("font-size: 13px; color: #888;")
+        layout.addWidget(self._step2)
+
+        layout.addSpacing(6)
+
+        # Przyciski
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+
+        btn_cancel = QPushButton("Cancel")
+        btn_cancel.setFixedSize(90, 34)
+        btn_cancel.clicked.connect(self.reject)
+        btn_row.addWidget(btn_cancel)
+
+        btn_row.addSpacing(8)
+
+        self._btn_start = QPushButton("Start Session")
+        self._btn_start.setFixedSize(130, 34)
+        self._btn_start.setEnabled(False)
+        self._btn_start.setStyleSheet(
+            "QPushButton:enabled  { font-weight: bold; "
+            "background-color: #1b5e20; color: #e8e8e8; }"
+            "QPushButton:disabled { color: #888; }"
+        )
+        self._btn_start.clicked.connect(self.accept)
+        btn_row.addWidget(self._btn_start)
+
+        layout.addLayout(btn_row)
+
+    def _poll(self):
+        """Polling USB co ~1.2s — lsusb, bez gphoto2."""
+        present = _lsusb_has_canon()
+
+        if self._state == self._WAIT_DISCONNECT:
+            if not present:
+                # Krok 1 zaliczony
+                self._state = self._WAIT_RECONNECT
+                self._step1.setText(f"{self._DOT_DONE}  Turn camera off")
+                self._step1.setStyleSheet("font-size: 13px; color: #27ae60;")
+                self._step2.setStyleSheet("font-size: 13px;")  # aktywny
+                self.status_changed.emit("Camera not connected")
+
+        elif self._state == self._WAIT_RECONNECT:
+            if present:
+                # Krok 2 zaliczony — cykl OFF→ON zakończony
+                self._state = self._READY
+                self._step2.setText(f"{self._DOT_DONE}  Turn camera back on")
+                self._step2.setStyleSheet("font-size: 13px; color: #27ae60;")
+                self._btn_start.setEnabled(True)
+                self._timer.stop()
+                self.status_changed.emit("Camera ready — wireless mode active")
+
+    def closeEvent(self, event):
+        self._timer.stop()
+        super().closeEvent(event)
 
 
 # ─────────────────────────── WIDGET TŁA
@@ -202,7 +332,7 @@ class ConfigPanel(QWidget):
         self.btn_start.setFixedHeight(42)
         self.btn_start.setEnabled(False)
         self.btn_start.setStyleSheet(
-            "QPushButton:enabled  { font-weight: bold; background-color: #1b5e20; color: white; }"
+            "QPushButton:enabled  { font-weight: bold; background-color: #1b5e20; color: #e8e8e8; }"
             "QPushButton:disabled { font-weight: bold; color: #555; }"
         )
         self.btn_start.clicked.connect(self._on_start)
@@ -304,7 +434,7 @@ class ActiveSessionPanel(BackgroundWidget):
         font.setPointSize(72)
         font.setBold(True)
         self.countdown_label.setFont(font)
-        self.countdown_label.setStyleSheet("color: white; background: transparent;")
+        self.countdown_label.setStyleSheet("color: #e0e0e0; background: transparent;")
         layout.addWidget(self.countdown_label)
 
         layout.addSpacing(16)
@@ -358,7 +488,7 @@ class ActiveSessionPanel(BackgroundWidget):
         self.btn_stop.setFixedSize(220, 48)
         self.btn_stop.setStyleSheet(
             "font-weight: bold; font-size: 14px; "
-            "background-color: #b71c1c; color: white; border-radius: 4px;"
+            "background-color: #b71c1c; color: #e8e8e8; border-radius: 4px;"
         )
         self.btn_stop.clicked.connect(self.stop_requested.emit)
         btn_row.addWidget(self.btn_stop)
@@ -465,7 +595,7 @@ class SummaryPanel(QWidget):
         self.btn_darkroom = QPushButton("→ Darkroom")
         self.btn_darkroom.setFixedHeight(42)
         self.btn_darkroom.setStyleSheet(
-            "font-weight: bold; background-color: #1565c0; color: white;"
+            "font-weight: bold; background-color: #1565c0; color: #e8e8e8;"
         )
         self.btn_darkroom.clicked.connect(self.go_darkroom.emit)
         btn_row.addWidget(self.btn_darkroom)
@@ -577,7 +707,13 @@ class SessionView(QWidget):
     # ─────────────────────────── START SESJI
 
     def _on_start_session(self, email: str, duration_min: int):
-        """Tworzy kontekst i uruchamia SessionRunner."""
+        """Pokazuje dialog USB → tworzy kontekst i uruchamia SessionRunner."""
+        # Dialog OFF→ON: bez USB podczas sesji aparat aktywuje moduł BT
+        dlg = _UsbDisconnectDialog(self)
+        dlg.status_changed.connect(self.status_message)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return  # użytkownik anulował
+
         from PyQt6.QtCore import QSettings as _QS
         settings = _QS("Grzeza", "SessionsAssistant")
         base_dir   = settings.value("session/directory",
@@ -685,6 +821,10 @@ class SessionView(QWidget):
         """Sygnalizuje MainWindow żeby przełączył na Darkroom."""
         # MainWindow podłącza session_finished i sam nawiguje
         pass
+
+    def is_session_active(self) -> bool:
+        """Zwraca True gdy sesja trwa (USB odłączone, aparat bezprzewodowy)."""
+        return self._runner is not None and self._runner.isRunning()
 
     # ─────────────────────────── KAMERA — snapshot ustawień
 
