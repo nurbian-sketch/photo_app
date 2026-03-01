@@ -18,6 +18,8 @@ from ui.widgets.preview_panel import PreviewPanel
 from ui.widgets.photo_preview_dialog import PhotoPreviewDialog
 from core.image_io import ImageLoader
 from core.camera_card_browser import CameraCardBrowserWorker
+from core.telegram_sender import TelegramSender
+from ui.dialogs.telegram_config_dialog import TelegramConfigDialog
 
 
 # Rola typu elementu listy: 'file', 'folder', 'parent'
@@ -261,10 +263,26 @@ class DarkroomView(QWidget):
         self._action_select_all.triggered.connect(self._select_all)
         self._action_deselect_all.triggered.connect(self._deselect_all)
 
-        self.btn_open_darktable = QPushButton(self.tr("Export…"))
+        self.btn_open_darktable = QPushButton(self.tr("Edit…"))
         self.btn_open_darktable.setMinimumHeight(BTN_H)
         self.btn_open_darktable.setIcon(QIcon.fromTheme("darktable"))
         self.btn_open_darktable.setEnabled(False)
+
+        # Telegram — klik = wyślij, strzałka = konfiguracja
+        self.btn_send = QToolButton()
+        self.btn_send.setText(self.tr("Send…"))
+        self.btn_send.setMinimumHeight(BTN_H)
+        self.btn_send.setMinimumWidth(90)
+        self.btn_send.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        self.btn_send.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.btn_send.setIcon(QIcon.fromTheme("telegram"))
+        self.btn_send.setEnabled(False)
+        send_menu = QMenu(self)
+        self._action_telegram_config = send_menu.addAction(self.tr("Configure Telegram…"))
+        self.btn_send.setMenu(send_menu)
+        # klik = wyślij jako plik (bezstratnie)
+        self.btn_send.clicked.connect(lambda: self._send_via_telegram())
+        self._action_telegram_config.triggered.connect(self._configure_telegram)
 
         self.btn_delete = QPushButton(self.tr("Delete Selected"))
         self.btn_delete.setMinimumHeight(BTN_H)
@@ -283,7 +301,7 @@ class DarkroomView(QWidget):
         )
         self.btn_format_card.setVisible(False)
 
-        for w in [self.btn_select, self.btn_delete,
+        for w in [self.btn_select, self.btn_send, self.btn_delete,
                   self.btn_copy_to_disk, self.btn_format_card, self.btn_open_darktable]:
             row_ops.addWidget(w)
 
@@ -1069,6 +1087,119 @@ class DarkroomView(QWidget):
             self.load_images(self.current_dir,
                              select_path=self.current_image_path)
 
+    # ─────────────────────────── Telegram
+
+    def _get_selected_file_paths(self) -> list[str]:
+        """
+        Zwraca ścieżki zaznaczonych plików.
+        W trybie SD: lokalne ścieżki do plików tymczasowych.
+        W trybie dysk: bezpośrednie ścieżki z systemu plików.
+        """
+        paths = []
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            if (item.data(_ITEM_TYPE_ROLE) == 'file'
+                    and item.data(Qt.ItemDataRole.UserRole + 1)):
+                if self._sd_mode:
+                    local = item.data(_SD_LOCAL_PATH_ROLE)
+                    if local and os.path.isfile(local):
+                        paths.append(local)
+                else:
+                    path = item.data(Qt.ItemDataRole.UserRole)
+                    if path and os.path.isfile(path):
+                        paths.append(path)
+        return paths
+
+    def _configure_telegram(self):
+        """Otwiera dialog konfiguracji Telegrama."""
+        TelegramConfigDialog(parent=self).exec()
+
+    def _send_via_telegram(self):
+        """Wysyła zaznaczone pliki przez Telegram Bot API jako dokumenty (bezstratnie)."""
+        from PyQt6.QtWidgets import QProgressDialog
+
+        # Pobierz ścieżki
+        paths = self._get_selected_file_paths()
+        if not paths:
+            QMessageBox.information(
+                self, self.tr("Send…"),
+                self.tr("No files selected. Use checkboxes to select files.")
+            )
+            return
+
+        # Sprawdź konfigurację — jeśli brak, otwórz dialog
+        token, chat_id = TelegramConfigDialog.get_credentials()
+        if not token or not chat_id:
+            dlg = TelegramConfigDialog(parent=self)
+            if dlg.exec() != TelegramConfigDialog.DialogCode.Accepted:
+                return
+            token, chat_id = TelegramConfigDialog.get_credentials()
+
+        # Dialog postępu
+        progress_dlg = QProgressDialog(
+            self.tr("Sending {0} file(s)…").format(len(paths)),
+            self.tr("Cancel"),
+            0, len(paths), self
+        )
+        progress_dlg.setWindowTitle(self.tr("Send via Telegram"))
+        progress_dlg.setMinimumWidth(400)
+        progress_dlg.setWindowModality(Qt.WindowModality.WindowModal)
+        progress_dlg.setValue(0)
+
+        # Worker — zawsze as_photos=False (bezstratnie)
+        self._telegram_worker = TelegramSender(
+            token=token,
+            chat_id=chat_id,
+            file_paths=paths,
+            as_photos=False,
+        )
+
+        def on_progress(idx, total, filename):
+            progress_dlg.setLabelText(
+                self.tr("Sending {0}/{1}: {2}").format(idx, total, filename)
+            )
+            progress_dlg.setValue(idx - 1)
+
+        def on_file_done(idx, filename, ok):
+            progress_dlg.setValue(idx)
+
+        def on_finished(sent, skipped, errors):
+            progress_dlg.close()
+            parts = [self.tr("Sent: {0}").format(sent)]
+            if skipped:
+                parts.append(self.tr("Skipped (too large): {0}").format(skipped))
+            if errors:
+                parts.append(self.tr("Errors: {0}").format(errors))
+            msg = "\n".join(parts)
+            if errors or skipped:
+                QMessageBox.warning(self, self.tr("Send via Telegram"), msg)
+            else:
+                QMessageBox.information(self, self.tr("Send via Telegram"), msg)
+
+        def on_error(message):
+            progress_dlg.close()
+            reply = QMessageBox.critical(
+                self, self.tr("Telegram Error"),
+                message + "\n\n" + self.tr("Open Telegram configuration?"),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                TelegramConfigDialog(parent=self).exec()
+
+        self._telegram_worker.progress.connect(on_progress)
+        self._telegram_worker.file_done.connect(on_file_done)
+        self._telegram_worker.finished_all.connect(on_finished)
+        self._telegram_worker.error.connect(on_error)
+        progress_dlg.canceled.connect(self._telegram_worker.stop)
+
+        self.btn_send.setEnabled(False)
+        self._telegram_worker.finished.connect(
+            lambda: self.btn_send.setEnabled(True)
+        )
+
+        self._telegram_worker.start()
+        progress_dlg.exec()
+
     # ─────────────────────────── Selekcja / status
 
     def update_selection_count(self):
@@ -1094,6 +1225,8 @@ class DarkroomView(QWidget):
         # btn_open_darktable — aktywny w trybie dysk gdy coś zaznaczone
         if not self._sd_mode:
             self.btn_open_darktable.setEnabled(count > 0)
+        # btn_send — aktywny gdy coś zaznaczone (oba tryby)
+        self.btn_send.setEnabled(count > 0)
 
     # ─────────────────────────── Cleanup
 
