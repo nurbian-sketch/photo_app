@@ -159,6 +159,12 @@ class CameraImportDialog(QDialog):
         self._build_ui()
         self._refresh_dest_preview()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Zaznacz tekst pola nazwy sesji — użytkownik może od razu wpisać nową
+        self._edit_name.setFocus()
+        self._edit_name.selectAll()
+
     # ─────────────────────────── UI
 
     def _build_ui(self):
@@ -298,6 +304,53 @@ class CameraImportDialog(QDialog):
             return
 
         self._lbl_status.setText(self.tr("Import complete!"))
+
+        # Zapytaj o usunięcie plików z karty
         if dest_dir:
+            reply = QMessageBox.question(
+                self,
+                self.tr("Delete from Card?"),
+                self.tr(
+                    "Import finished successfully.\n\n"
+                    "Do you want to delete the copied files from the camera card?"
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self._delete_from_card()
+
             self.import_finished.emit(dest_dir)
         self.accept()
+
+    def _delete_from_card(self):
+        """Usuwa skopiowane pliki z karty przez gphoto2."""
+        context = gp.Context()
+        camera  = None
+        errors  = []
+        try:
+            camera = gp.Camera()
+            camera.init(context)
+            for folder, fname in self._selected:
+                try:
+                    camera.file_delete(folder, fname, context)
+                except Exception as e:
+                    errors.append(f"{fname}: {e}")
+        except Exception as e:
+            QMessageBox.warning(
+                self, self.tr("Delete from Card"),
+                self.tr(f"Could not connect to camera:\n{e}")
+            )
+            return
+        finally:
+            if camera:
+                try:
+                    camera.exit(context)
+                except Exception:
+                    pass
+
+        if errors:
+            QMessageBox.warning(
+                self, self.tr("Delete from Card"),
+                self.tr("Some files could not be deleted:\n") + "\n".join(errors[:5])
+            )

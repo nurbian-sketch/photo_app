@@ -45,7 +45,10 @@ class DarkCacheService:
         pixmap = self.thumbnail_reader.read(path)
         if pixmap and not pixmap.isNull():
             return self._to_square(pixmap, 120)
-        # Brak embedded thumbnail — szary placeholder zamiast None
+        # Brak embedded thumbnail — wczytaj plik bezpośrednio (np. JPEG z edytora)
+        pixmap = QPixmap(str(path))
+        if pixmap and not pixmap.isNull():
+            return self._to_square(pixmap, 120)
         return self._placeholder(120)
 
     @staticmethod

@@ -192,6 +192,21 @@ class MainWindow(QMainWindow):
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
+        # SELECT MENU — między File a View, pozycje wyszarzane poza Pictures
+        self._select_menu = menu_bar.addMenu(self.tr("Select"))
+        self._action_mw_select_all = QAction(self.tr("Select All"), self)
+        self._action_mw_deselect_all = QAction(self.tr("Deselect All"), self)
+        self._action_mw_select_all.triggered.connect(
+            lambda: self.darkroom_view._select_all()
+        )
+        self._action_mw_deselect_all.triggered.connect(
+            lambda: self.darkroom_view._deselect_all()
+        )
+        self._action_mw_select_all.setEnabled(False)
+        self._action_mw_deselect_all.setEnabled(False)
+        self._select_menu.addAction(self._action_mw_select_all)
+        self._select_menu.addAction(self._action_mw_deselect_all)
+
         # VIEW MENU
         self._view_menu = menu_bar.addMenu(self.tr("View"))
         for name, key in [("Pictures", "Ctrl+1"), ("Camera", "Ctrl+2"), ("Session", "Ctrl+3")]:
@@ -199,6 +214,21 @@ class MainWindow(QMainWindow):
             action.setShortcut(QKeySequence(key))
             action.triggered.connect(lambda checked, n=name: self.switcher.select_view(n))
             self._view_menu.addAction(action)
+
+        self._view_menu.addSeparator()
+
+        # Submenu Sort By — aktywne tylko gdy widok Pictures
+        self._sort_menu = self._view_menu.addMenu(self.tr("Sort By"))
+        self._sort_actions = {}
+        for key, label in [('name', "Name"), ('date', "Date"), ('type', "Type")]:
+            action = QAction(self.tr(label), self)
+            action.setCheckable(True)
+            action.setData(key)
+            action.triggered.connect(lambda checked, k=key: self._on_sort_changed(k))
+            self._sort_menu.addAction(action)
+            self._sort_actions[key] = action
+        self._sort_actions['name'].setChecked(True)
+        self._sort_menu.setEnabled(False)
 
         # Separator + dynamiczne wpisy dla okien podglądu
         self._preview_separator = self._view_menu.addSeparator()
@@ -212,16 +242,17 @@ class MainWindow(QMainWindow):
             QMenu { background-color: #2b2b2b; color: #cccccc; border: 1px solid #555555; }
             QMenu::item { padding: 5px 30px 5px 20px; }
             QMenu::item:selected { background-color: #3d3d3d; }
+            QMenu::item:disabled { color: #666666; }
         """)
 
     def change_view(self, name):
         prev = self._current_view_name
 
-        # --- Opuszczamy Camera: zamykamy sesjÄ™ PTP ---
+        # --- Opuszczamy Camera: zamykamy sesję PTP ---
         if prev == "Camera":
             self.camera_view.on_leave()
 
-        # --- PrzeÅ‚Ä…czamy widget ---
+        # --- Przełączamy widget ---
         mapping = {
             "Pictures": self.darkroom_view,
             "Camera": self.camera_view,
@@ -229,6 +260,14 @@ class MainWindow(QMainWindow):
         }
         self.central_stack.setCurrentWidget(mapping[name])
         self._current_view_name = name
+
+        # Sort By i Select aktywne tylko w Pictures
+        is_pictures = (name == "Pictures")
+        if hasattr(self, '_sort_menu'):
+            self._sort_menu.setEnabled(is_pictures)
+        if hasattr(self, '_action_mw_select_all'):
+            self._action_mw_select_all.setEnabled(is_pictures)
+            self._action_mw_deselect_all.setEnabled(is_pictures)
 
         self._probe_camera(enforce_fv=(name == "Camera"))
 
@@ -247,6 +286,12 @@ class MainWindow(QMainWindow):
         self._probe_worker = _ProbeWorker(enforce_fv=enforce_fv)
         self._probe_worker.done.connect(self._on_probe_done)
         self._probe_worker.start()
+
+    def _on_sort_changed(self, key: str):
+        """Zmiana sortowania — aktualizuje checkmarki i przekazuje do darkroom_view."""
+        for k, action in self._sort_actions.items():
+            action.setChecked(k == key)
+        self.darkroom_view.set_sort(key)
 
     def _on_probe_done(self, camera_ready, sd_ready, model):
         self.camera_ready = camera_ready

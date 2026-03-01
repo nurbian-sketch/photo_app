@@ -98,16 +98,13 @@ class ExifThumbnailReader:
             if pixmap.isNull():
                 return None
 
-            # Priorytet: companion JPG
+            # Priorytet: companion JPG (RAW+L) — zawsze poprawna orientacja.
+            # Fallback: skan TIFF/EXIF w binarnych danych CR3 —
+            # potrzebny gdy companion jeszcze nie istnieje (np. SD card,
+            # pliki pobierane po kolei i JPG jeszcze nie dotarł do /tmp).
             orientation = self.read_cr3_orientation(path)
-
-            # Fallback dla CR3 bez companion: skan TIFF/EXIF w binarnych danych
-            if orientation == 0 and not any(
-                path.with_suffix(s).exists()
-                for s in ('.JPG', '.jpg', '.JPEG', '.jpeg')
-            ):
+            if orientation == 0:
                 orientation = _tiff_orientation_scan(data)
-
             return self._rotate(pixmap, orientation)
 
         except Exception:

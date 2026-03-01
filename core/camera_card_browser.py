@@ -2,42 +2,41 @@
 core/camera_card_browser.py
 
 Przeglądarka plików karty SD aparatu przez gphoto2 PTP.
-Listuje pliki i wyciąga thumbnails (GP_FILE_TYPE_PREVIEW) bez pobierania
-pełnych plików na dysk.
-
-Emituje file_found() dla każdego pliku osobno — miniatury pojawiają się
-progressywnie tak samo jak przy lazy loading z dysku.
+Pobiera każdy plik do katalogu tymczasowego — miniatury i podgląd
+generuje istniejący pipeline dyskowy (DarkCacheService + ImageLoader).
 """
 import os
 import logging
 import time
 
 from PyQt6.QtCore import QThread, pyqtSignal
-from PyQt6.QtGui import QPixmap
 
 logger = logging.getLogger(__name__)
 
 DCIM_ROOT = '/store_00020001/DCIM'
+_TEMP_DIR = '/tmp/sessions_assistant_preview'
 
 
 class CameraCardBrowserWorker(QThread):
     """
-    Łączy się z aparatem przez PTP, listuje DCIM, wyciąga thumbnail
-    każdego pliku (bez pełnego pobierania).
+    Łączy się z aparatem przez PTP, listuje DCIM, pobiera każdy plik
+    do katalogu tymczasowego i emituje jego lokalną ścieżkę.
+
+    UI thread odbiera local_path i obsługuje miniatury oraz podgląd
+    przez ten sam DarkCacheService + ImageLoader co pliki z dysku.
 
     Sygnały:
-        file_found(camera_folder, filename, pixmap)
-            — wyemitowany dla każdego pliku; pixmap może być null gdy
-              aparat nie udostępnia preview dla danego formatu
+        file_found(ptp_folder, filename, local_path)
+            — wyemitowany po pobraniu każdego pliku
         scan_finished(total_count, error_msg)
             — po przeskanowaniu całej karty; error_msg='' gdy OK
         progress(current, total, filename)
             — postęp skanowania
     """
 
-    file_found    = pyqtSignal(str, str, object)   # (folder_na_karcie, nazwa, QPixmap)
-    scan_finished = pyqtSignal(int, str)            # (liczba_plików, błąd)
-    progress      = pyqtSignal(int, int, str)       # (current, total, filename)
+    file_found    = pyqtSignal(str, str, str)  # (folder_ptp, nazwa, ścieżka_lokalna)
+    scan_finished = pyqtSignal(int, str)        # (liczba_plików, błąd)
+    progress      = pyqtSignal(int, int, str)   # (current, total, filename)
 
     def __init__(self):
         super().__init__()
@@ -50,6 +49,8 @@ class CameraCardBrowserWorker(QThread):
     def run(self):
         import gphoto2 as gp
 
+        os.makedirs(_TEMP_DIR, exist_ok=True)
+
         camera  = None
         context = gp.Context()
         found   = 0
@@ -60,7 +61,6 @@ class CameraCardBrowserWorker(QThread):
             camera.init(context)
             logger.info("CameraCardBrowser: połączono z aparatem")
 
-            # Buduj listę plików (folder_na_karcie, nazwa)
             all_files = self._list_all_files(camera, context)
             total = len(all_files)
             logger.info(f"CameraCardBrowser: znaleziono {total} plików")
@@ -71,9 +71,10 @@ class CameraCardBrowserWorker(QThread):
 
                 self.progress.emit(idx, total, fname)
 
-                pixmap = self._get_thumbnail(camera, context, folder, fname)
-                self.file_found.emit(folder, fname, pixmap)
-                found += 1
+                local_path = self._download_file(camera, context, folder, fname)
+                if local_path:
+                    self.file_found.emit(folder, fname, local_path)
+                    found += 1
 
                 # Krótka przerwa — nie blokuj USB między żądaniami
                 time.sleep(0.02)
@@ -102,7 +103,7 @@ class CameraCardBrowserWorker(QThread):
             for i in range(folders.count()):
                 if self._abort:
                     break
-                subfolder = folders.get_name(i)
+                subfolder   = folders.get_name(i)
                 folder_path = f'{DCIM_ROOT}/{subfolder}'
                 try:
                     files = camera.folder_list_files(folder_path, context)
@@ -115,41 +116,41 @@ class CameraCardBrowserWorker(QThread):
 
         return result
 
-    def _get_thumbnail(self, camera, context, folder: str, fname: str) -> QPixmap:
+    def _download_file(
+        self, camera, context, folder: str, fname: str
+    ) -> str | None:
         """
-        Wyciąga thumbnail z aparatu przez PTP (GP_FILE_TYPE_PREVIEW).
-        Zwraca pustą QPixmap gdy aparat nie udostępnia preview.
+        Pobiera plik z karty do _TEMP_DIR.
+        Zwraca lokalną ścieżkę lub None przy błędzie.
         """
         import gphoto2 as gp
 
+        dest = os.path.join(_TEMP_DIR, fname)
+
+        # Plik już pobrany (poprzedni scan lub ten sam plik dwukrotnie)
+        if os.path.exists(dest):
+            return dest
+
         try:
-            camera_file = gp.CameraFile()
+            cam_file = gp.CameraFile()
             camera.file_get(
                 folder, fname,
-                gp.GP_FILE_TYPE_PREVIEW,
-                camera_file, context
+                gp.GP_FILE_TYPE_NORMAL,
+                cam_file, context,
             )
-            data = camera_file.get_data_and_size()
-            pixmap = QPixmap()
-            pixmap.loadFromData(bytes(data))
-            if not pixmap.isNull():
-                # Przeskaluj do rozmiaru miniatury (120x120 center crop)
-                return self._to_square(pixmap, 120)
+            cam_file.save(dest)
+            logger.debug(f"Pobrano: {fname}")
+            return dest
         except Exception as e:
-            logger.debug(f"Brak preview dla {fname}: {e}")
+            logger.warning(f"Błąd pobierania {fname}: {e}")
+            return None
 
-        return QPixmap()
-
-    @staticmethod
-    def _to_square(pixmap: QPixmap, size: int) -> QPixmap:
-        """Center crop do kwadratu."""
-        from PyQt6.QtCore import Qt
-
-        scaled = pixmap.scaled(
-            size, size,
-            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        x = (scaled.width()  - size) // 2
-        y = (scaled.height() - size) // 2
-        return scaled.copy(x, y, size, size)
+    @classmethod
+    def cleanup_temp(cls):
+        """Usuwa katalog tymczasowy — wywołać przy wyjściu z trybu SD."""
+        import shutil
+        try:
+            shutil.rmtree(_TEMP_DIR, ignore_errors=True)
+            logger.debug("Wyczyszczono katalog tymczasowy SD card")
+        except Exception:
+            pass

@@ -7,7 +7,7 @@ import piexif
 from PyQt6.QtGui import QPixmap, QTransform
 from PyQt6.QtCore import Qt
 
-from core.darkcache.thumbnail_reader import ExifThumbnailReader
+from core.darkcache.thumbnail_reader import ExifThumbnailReader, _tiff_orientation_scan
 
 
 class PreviewGenerator:
@@ -55,6 +55,11 @@ class PreviewGenerator:
         try:
             if path.suffix.lower() == '.cr3':
                 angle = ExifThumbnailReader.read_cr3_orientation(path)
+                # Fallback gdy brak companion JPG (np. SD card, pliki pobierane kolejno)
+                if angle == 0:
+                    with open(path, 'rb') as f:
+                        data = f.read(512 * 1024)
+                    angle = _tiff_orientation_scan(data)
             else:
                 exif = piexif.load(str(path))
                 orientation = exif.get('0th', {}).get(piexif.ImageIFD.Orientation)
