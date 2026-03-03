@@ -50,7 +50,7 @@ class AppInitializer(QObject):
         msg(f"Camera detected: {result['model']}")
         msg(f"Mode: {result['mode']}")
 
-        if result['mode'] != 'Fv':
+        if result['mode'] and result['mode'] != 'Fv':
             msg(f"WARNING: Camera not in Fv mode ({result['mode']})")
 
         storage = result['storage']

@@ -199,6 +199,7 @@ class SessionRunner(QThread):
 
         # Połącz z aparatem
         camera, gp_context = self._connect_camera()
+        print(f"[IMPORT] connect: {'OK' if camera else 'FAIL'}", flush=True)
         if camera is None:
             msg = "Import: nie można połączyć z aparatem"
             logger.warning(msg)
@@ -208,18 +209,23 @@ class SessionRunner(QThread):
         try:
             # Odczytaj offset zegarów
             self.context.camera_time_offset = self._get_time_offset(camera, gp_context)
+            print(f"[IMPORT] offset={self.context.camera_time_offset}s  started_at={self.context.started_at}", flush=True)
             logger.info(f"Offset zegarów aparat↔system: {self.context.camera_time_offset}s")
 
             # Snapshot karty — pliki nowsze niż start sesji
             files_to_import = self._list_new_files(camera, gp_context)
+            print(f"[IMPORT] znaleziono {len(files_to_import)} plików do importu", flush=True)
             logger.info(f"Import: znaleziono {len(files_to_import)} nowych plików")
 
             if not files_to_import:
                 self._warnings.append("Import: brak nowych plików na karcie")
                 return
 
-            # Utwórz katalog docelowy
-            os.makedirs(self.context.captures_path, exist_ok=True)
+            # Utwórz katalog sesji (zdjęcia trafiają bezpośrednio tu)
+            os.makedirs(self.context.session_path, exist_ok=True)
+
+            # Reset flagi — import musi działać niezależnie od powodu zakończenia sesji
+            self._stop_flag = False
 
             # Transfer
             total = len(files_to_import)
@@ -247,9 +253,13 @@ class SessionRunner(QThread):
             f"Import zakończony: {len(self.context.imported_files)}/{len(files_to_import)} plików"
         )
 
+    # Maksymalna liczba prób połączenia podczas importu (15 × 2s = 30s)
+    _CONNECT_MAX_ATTEMPTS = 15
+
     def _connect_camera(self) -> tuple[Optional[object], Optional[object]]:
-        """Łączy z aparatem przez USB. Zwraca (camera, context) lub (None, None)."""
-        for attempt in range(3):
+        """Łączy z aparatem przez USB. Zwraca (camera, context) lub (None, None).
+        Przy sesji interrupted daje użytkownikowi 30 sekund na podłączenie aparatu."""
+        for attempt in range(self._CONNECT_MAX_ATTEMPTS):
             try:
                 gp_context = gp.Context()
                 port_info_list = gp.PortInfoList()
@@ -259,7 +269,9 @@ class SessionRunner(QThread):
                 cameras = abilities_list.detect(port_info_list, gp_context)
 
                 if not cameras:
-                    logger.warning(f"Import connect: brak aparatu (próba {attempt+1})")
+                    if attempt == 0:
+                        self.warning.emit("Connect camera via USB to import photos...")
+                    logger.warning(f"Import connect: brak aparatu (próba {attempt+1}/{self._CONNECT_MAX_ATTEMPTS})")
                     time.sleep(2)
                     continue
 
@@ -272,7 +284,9 @@ class SessionRunner(QThread):
                 return camera, gp_context
 
             except gp.GPhoto2Error as e:
-                logger.warning(f"Import connect error {e.code} (próba {attempt+1})")
+                if attempt == 0:
+                    self.warning.emit("Connect camera via USB to import photos...")
+                logger.warning(f"Import connect error {e.code} (próba {attempt+1}/{self._CONNECT_MAX_ATTEMPTS})")
                 time.sleep(2)
 
         return None, None
@@ -307,6 +321,7 @@ class SessionRunner(QThread):
         threshold_ts     = session_start_ts + self.context.camera_time_offset
         # Bufor 30s — na wypadek drobnych rozbieżności
         threshold_ts    -= 30
+        print(f"[LIST] session_start_ts={session_start_ts}  threshold_ts={threshold_ts}", flush=True)
 
         result = []
 
@@ -325,7 +340,10 @@ class SessionRunner(QThread):
                     try:
                         info = camera.file_get_info(folder_path, filename, gp_context)
                         mtime = info.file.mtime
-                        if mtime >= threshold_ts:
+                        inc = mtime == 0 or mtime >= threshold_ts
+                        print(f"[LIST]  {filename}: mtime={mtime}  include={inc}", flush=True)
+                        # mtime=0 → gphoto2 nie odczytał czasu (Canon EOS RP) → dołącz plik
+                        if inc:
                             result.append((folder_path, filename))
                     except Exception as e:
                         logger.debug(f"file_get_info błąd {filename}: {e}")
@@ -350,11 +368,13 @@ class SessionRunner(QThread):
         Zwraca True przy sukcesie.
         """
         local_path = os.path.join(self.context.captures_path, filename)
+        print(f"[DL] {filename}  folder={folder}  local={local_path}", flush=True)
 
         try:
             # Pobierz info — rozmiar referencyjny
             info = camera.file_get_info(folder, filename, gp_context)
             expected_size = info.file.size
+            print(f"[DL] info OK, size={expected_size}", flush=True)
 
             # Transfer
             camera_file = camera.file_get(
@@ -371,10 +391,12 @@ class SessionRunner(QThread):
                 )
                 self._warnings.append(f"Niezgodność rozmiaru: {filename}")
 
+            print(f"[DL] OK: {filename} ({actual_size}B)", flush=True)
             logger.debug(f"OK: {filename} ({actual_size}B)")
             return True
 
         except gp.GPhoto2Error as e:
+            print(f"[DL] GPhoto2Error {filename}: code={e.code} {e}", flush=True)
             logger.error(f"Błąd pobierania {filename}: {e.code}")
             # Usuń niekompletny plik
             if os.path.exists(local_path):
@@ -385,6 +407,7 @@ class SessionRunner(QThread):
             return False
 
         except Exception as e:
+            print(f"[DL] Exception {filename}: {type(e).__name__}: {e}", flush=True)
             logger.exception(f"Nieoczekiwany błąd pobierania {filename}")
             return False
 

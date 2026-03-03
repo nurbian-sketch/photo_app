@@ -97,7 +97,7 @@ class MainWindow(QMainWindow):
         self.central_stack.addWidget(self.camera_view)     # index 1
         self.central_stack.addWidget(self.session_view)    # index 2
 
-        self.switcher = ViewSwitcher(["Pictures", "Camera", "Session"])
+        self.switcher = ViewSwitcher(["Darkroom", "Camera", "Session"])
         self.switcher.view_changed.connect(self.change_view)
 
         layout = QVBoxLayout()
@@ -111,12 +111,13 @@ class MainWindow(QMainWindow):
         # 4. FINALIZACJA STANU
         # Ustawiamy ikony na podstawie danych ze splasha
         self.set_status_icons(camera=self.camera_ready, sd=self.sd_ready)
+        self.session_view.set_camera_ready(self.camera_ready, self.sd_ready)
         
         # Logika wyboru widoku startowego
         if self.camera_ready and self.sd_ready:
             start_view = "Camera"
         elif self.camera_ready:
-            start_view = "Pictures"
+            start_view = "Darkroom"
         else:
             start_view = "Session"
 
@@ -127,6 +128,8 @@ class MainWindow(QMainWindow):
         self.camera_view.reconnect_requested.connect(
             lambda: self._probe_camera(enforce_fv=True)
         )
+        # camera_released: USB zwolnione po zatrzymaniu LV — odśwież stan we wszystkich widokach
+        self.camera_view.camera_released.connect(self._probe_camera)
         # Dynamiczne menu podglądów
         self.camera_view.preview_list_changed.connect(self._update_preview_menu)
         # Komunikaty z camera_view do status bar
@@ -143,6 +146,7 @@ class MainWindow(QMainWindow):
             lambda msg: self.status_bar.showMessage(msg, 5000)
         )
         self.session_view.session_finished.connect(self._on_session_finished)
+        self.session_view.camera_detected.connect(self._probe_camera)
 
     def _make_status_pixmap(self, file_name, active=True):
         """Tworzy pixmapÄ™ 24px: kolorowÄ… lub wyszarzonÄ… w locie"""
@@ -209,7 +213,7 @@ class MainWindow(QMainWindow):
 
         # VIEW MENU
         self._view_menu = menu_bar.addMenu(self.tr("View"))
-        for name, key in [("Pictures", "Ctrl+1"), ("Camera", "Ctrl+2"), ("Session", "Ctrl+3")]:
+        for name, key in [("Darkroom", "Ctrl+1"), ("Camera", "Ctrl+2"), ("Session", "Ctrl+3")]:
             action = QAction(self.tr(name), self)
             action.setShortcut(QKeySequence(key))
             action.triggered.connect(lambda checked, n=name: self.switcher.select_view(n))
@@ -252,17 +256,27 @@ class MainWindow(QMainWindow):
         if prev == "Camera":
             self.camera_view.on_leave()
 
+        # --- Opuszczamy Session: zatrzymujemy worker i polling USB ---
+        if prev == "Session":
+            self.session_view.on_leave()
+
         # --- Przełączamy widget ---
         mapping = {
-            "Pictures": self.darkroom_view,
+            "Darkroom": self.darkroom_view,
             "Camera": self.camera_view,
             "Session": self.session_view
         }
         self.central_stack.setCurrentWidget(mapping[name])
         self._current_view_name = name
 
-        # Sort By i Select aktywne tylko w Pictures
-        is_pictures = (name == "Pictures")
+        # --- Wchodzimy do Camera lub Session ---
+        if name == "Camera":
+            self.camera_view.on_enter()
+        elif name == "Session":
+            self.session_view.on_enter()
+
+        # Sort By i Select aktywne tylko w Darkroom
+        is_pictures = (name == "Darkroom")
         if hasattr(self, '_sort_menu'):
             self._sort_menu.setEnabled(is_pictures)
         if hasattr(self, '_action_mw_select_all'):
@@ -282,6 +296,9 @@ class MainWindow(QMainWindow):
             return  # Wątek w trakcie zamykania — USB niestabilne
         if self._probe_worker and self._probe_worker.isRunning():
             return  # Poprzedni probe jeszcze działa
+        # Zatrzymaj workerów ustawień — probe potrzebuje wyłącznego dostępu USB (PTP exclusive)
+        self.camera_view._stop_settings_worker()
+        self.session_view._stop_settings_worker()
         self.status_bar.showMessage(self.tr("Connecting camera..."))
         self._probe_worker = _ProbeWorker(enforce_fv=enforce_fv)
         self._probe_worker.done.connect(self._on_probe_done)
@@ -299,6 +316,7 @@ class MainWindow(QMainWindow):
         self.set_status_icons(camera=camera_ready, sd=sd_ready)
         self.camera_view.set_camera_ready(camera_ready)
         self.darkroom_view.set_sd_card_ready(sd_ready)
+        self.session_view.set_camera_ready(camera_ready, sd_ready)
         # Powiadom camera_view o wyniku probe — umożliwia auto-start po RECONNECT
         self.camera_view.on_probe_completed(camera_ready)
         if camera_ready:
@@ -319,11 +337,10 @@ class MainWindow(QMainWindow):
             self.darkroom_view.load_images(ctx.session_path)
 
     def _on_darkroom_wb_apply(self, kelvin: int):
-        """WB picker z DarkroomView: aplikuje temperaturę WB i przełącza na Camera."""
+        """WB picker z DarkroomView: aplikuje temperaturę WB na aparacie."""
         self.camera_view.image_ctrl.apply_wb_temperature(kelvin)
-        self.switcher.select_view("Camera")
         self.status_bar.showMessage(
-            self.tr(f"WB set to {kelvin} K — switch to Camera view"), 4000
+            self.tr(f"WB set to {kelvin} K"), 4000
         )
 
     def _update_preview_menu(self, pairs):
@@ -366,6 +383,10 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         self.camera_view.close_all_previews()
         self.camera_view.on_leave()
+        self.session_view.on_leave()  # zatrzymuje worker ustawień i USB polling
+        # Nie zapisujemy geometrii fullscreen — przywracamy normalną
+        if self.isFullScreen():
+            self.showNormal()
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("windowState", self.saveState())
         self.settings.setValue("darkroom_splitter", self.darkroom_view.splitter.saveState())

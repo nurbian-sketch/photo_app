@@ -117,7 +117,7 @@ class CameraDownloadDialog(QDialog):
 
     def __init__(self, dest_dir: str, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Download from Camera")
+        self.setWindowTitle(self.tr("Download from Camera"))
         self.setMinimumSize(500, 400)
         self.downloaded_dir = None
         self._dest_dir = dest_dir
@@ -130,12 +130,12 @@ class CameraDownloadDialog(QDialog):
     def _init_ui(self):
         layout = QVBoxLayout(self)
 
-        self._status = QLabel("Connecting to camera…")
+        self._status = QLabel(self.tr("Connecting to camera…"))
         layout.addWidget(self._status)
 
         # Select all / none
         sel_row = QHBoxLayout()
-        self._chk_all = QCheckBox("Select all")
+        self._chk_all = QCheckBox(self.tr("Select all"))
         self._chk_all.setChecked(True)
         self._chk_all.toggled.connect(self._toggle_all)
         sel_row.addWidget(self._chk_all)
@@ -152,13 +152,13 @@ class CameraDownloadDialog(QDialog):
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
-        self._btn_download = QPushButton("Download Selected")
+        self._btn_download = QPushButton(self.tr("Download Selected"))
         self._btn_download.setEnabled(False)
         self._btn_download.setStyleSheet(
             "font-weight: bold; background-color: #1565c0; color: white;"
         )
         self._btn_download.clicked.connect(self._start_download)
-        btn_cancel = QPushButton("Cancel")
+        btn_cancel = QPushButton(self.tr("Cancel"))
         btn_cancel.clicked.connect(self.reject)
         btn_row.addWidget(self._btn_download)
         btn_row.addWidget(btn_cancel)
@@ -174,13 +174,13 @@ class CameraDownloadDialog(QDialog):
             self._status.setText(f"Error: {error}")
             return
         if not files:
-            self._status.setText("No files found on camera SD card.")
+            self._status.setText(self.tr("No files found on camera SD card."))
             return
 
         self._files = files
         self._list.setEnabled(True)
         self._btn_download.setEnabled(True)
-        self._status.setText(f"Found {len(files)} file(s) on camera.")
+        self._status.setText(self.tr("Found %1 file(s) on camera.").replace("%1", str(len(files))))
 
         for folder, fname in files:
             item = QListWidgetItem(fname)
@@ -201,7 +201,7 @@ class CameraDownloadDialog(QDialog):
                 selected.append(item.data(Qt.ItemDataRole.UserRole))
 
         if not selected:
-            QMessageBox.information(self, "Download", "No files selected.")
+            QMessageBox.information(self, self.tr("Download"), self.tr("No files selected."))
             return
 
         # Katalog: session_dir/YYYY-MM-DD_HH-MM-SS_camera
@@ -221,15 +221,15 @@ class CameraDownloadDialog(QDialog):
     def _on_progress(self, percent, filename):
         self._progress.setValue(percent)
         if filename:
-            self._status.setText(f"Downloading: {filename}")
+            self._status.setText(self.tr("Downloading: %1").replace("%1", filename))
 
     def _on_download_done(self, dest_dir, error):
         if error:
-            QMessageBox.warning(self, "Download", f"Error: {error}")
+            QMessageBox.warning(self, self.tr("Download"), self.tr("Error: %1").replace("%1", error))
         if dest_dir:
             self.downloaded_dir = dest_dir
             self.accept()
         else:
-            self._status.setText("Download failed — no files saved.")
+            self._status.setText(self.tr("Download failed — no files saved."))
             self._btn_download.setEnabled(True)
             self._list.setEnabled(True)

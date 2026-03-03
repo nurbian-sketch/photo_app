@@ -24,7 +24,7 @@ class CameraStatusBar(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         
         # Status label
-        self.status_label = QLabel("🟢 Ready")
+        self.status_label = QLabel(self.tr("🟢 Ready"))
         self.status_label.setStyleSheet("""
             QLabel {
                 background-color: #E8F5E9;
@@ -37,7 +37,7 @@ class CameraStatusBar(QWidget):
         layout.addWidget(self.status_label, stretch=1)
         
         # Reset button
-        self.reset_btn = QPushButton("Reset")
+        self.reset_btn = QPushButton(self.tr("Reset"))
         self.reset_btn.setMinimumHeight(40)
         self.reset_btn.setEnabled(False)
         self.reset_btn.setStyleSheet("""
@@ -70,7 +70,7 @@ class CameraStatusBar(QWidget):
             if len(changes) > 3:
                 changes_str += f" (+{len(changes)-3} more)"
             
-            self.status_label.setText(f"🔴 Changes: {changes_str}")
+            self.status_label.setText(self.tr("🔴 Changes: %1").replace("%1", changes_str))
             self.status_label.setStyleSheet("""
                 QLabel {
                     background-color: #FFEBEE;
@@ -82,7 +82,7 @@ class CameraStatusBar(QWidget):
             """)
             self.reset_btn.setEnabled(True)
         else:
-            self.status_label.setText("🟢 Ready")
+            self.status_label.setText(self.tr("🟢 Ready"))
             self.status_label.setStyleSheet("""
                 QLabel {
                     background-color: #E8F5E9;

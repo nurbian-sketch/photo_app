@@ -61,17 +61,17 @@ class ExposureControls(QWidget):
     def _init_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        group = QGroupBox("Exposure (Fv)")
+        group = QGroupBox(self.tr("Exposure (Fv)"))
         grid = QVBoxLayout(group)
 
-        self.flash_check = QCheckBox("Flash Sync Mode (1/30 - 1/160)")
+        self.flash_check = QCheckBox(self.tr("Flash Sync Mode (1/30 - 1/160)"))
         grid.addWidget(self.flash_check)
 
         configs = [
-            ("shutterspeed", "Shutter Speed", True),
-            ("aperture", "Aperture", True),
-            ("iso", "ISO Speed", True),
-            ("exposurecompensation", "Exp. Comp.", False)
+            ("shutterspeed", self.tr("Shutter Speed"), True),
+            ("aperture",     self.tr("Aperture"),       True),
+            ("iso",          self.tr("ISO Speed"),       True),
+            ("exposurecompensation", self.tr("Exp. Comp."), False)
         ]
 
         for key, label, has_auto in configs:
@@ -79,7 +79,7 @@ class ExposureControls(QWidget):
             row = QHBoxLayout()
 
             if has_auto:
-                btn_auto = QPushButton("AUTO")
+                btn_auto = QPushButton(self.tr("AUTO"))
                 btn_auto.setFixedSize(65, 45)
                 btn_auto.setCheckable(True)
                 btn_auto.setStyleSheet(
@@ -102,7 +102,7 @@ class ExposureControls(QWidget):
 
         # ── Metering mode ──────────────────────────────────────
         grid.addStretch()
-        self.metering_combo = LabeledComboBox("Metering", [])
+        self.metering_combo = LabeledComboBox(self.tr("Metering"), [])
         self.metering_combo.combo.setIconSize(QSize(ICON_SIZE, ICON_SIZE))
         self.metering_combo.currentTextChanged.connect(
             lambda _: self._on_metering_changed(self.metering_combo.combo.currentIndex())

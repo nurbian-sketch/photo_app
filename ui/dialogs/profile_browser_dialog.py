@@ -22,7 +22,7 @@ class ProfileBrowserDialog(QDialog):
     def __init__(self, profiles_dir: str, parent=None):
         super().__init__(parent)
         self._profiles_dir = profiles_dir
-        self.setWindowTitle("Camera Profiles")
+        self.setWindowTitle(self.tr("Camera Profiles"))
         self.setMinimumSize(480, 360)
         self.setWindowFlags(
             Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint
@@ -48,11 +48,11 @@ class ProfileBrowserDialog(QDialog):
         layout.addWidget(self._detail)
 
         row = QHBoxLayout()
-        self.btn_load = QPushButton("Load")
+        self.btn_load = QPushButton(self.tr("Load"))
         self.btn_load.setEnabled(False)
-        self.btn_delete = QPushButton("Delete")
+        self.btn_delete = QPushButton(self.tr("Delete"))
         self.btn_delete.setEnabled(False)
-        btn_cancel = QPushButton("Cancel")
+        btn_cancel = QPushButton(self.tr("Cancel"))
         self.btn_load.clicked.connect(self._on_load)
         self.btn_delete.clicked.connect(self._on_delete)
         btn_cancel.clicked.connect(self.reject)
@@ -121,7 +121,7 @@ class ProfileBrowserDialog(QDialog):
             self.profile_selected.emit(data.get("settings", {}))
             self.accept()
         except Exception as e:
-            QMessageBox.warning(self, "Load Profile", f"Error loading profile:\n{e}")
+            QMessageBox.warning(self, self.tr("Load Profile"), self.tr("Error loading profile:\n%1").replace("%1", str(e)))
 
     def _on_delete(self):
         path = self._selected_path()
@@ -129,8 +129,8 @@ class ProfileBrowserDialog(QDialog):
             return
         item = self._list.currentItem()
         ans = QMessageBox.question(
-            self, "Delete Profile",
-            f"Delete profile '{item.text()}'?",
+            self, self.tr("Delete Profile"),
+            self.tr("Delete profile '%1'?").replace("%1", item.text()),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         if ans == QMessageBox.StandardButton.Yes:
@@ -138,4 +138,4 @@ class ProfileBrowserDialog(QDialog):
                 os.unlink(path)
                 self._refresh()
             except Exception as e:
-                QMessageBox.warning(self, "Delete Profile", f"Error:\n{e}")
+                QMessageBox.warning(self, self.tr("Delete Profile"), self.tr("Error:\n%1").replace("%1", str(e)))

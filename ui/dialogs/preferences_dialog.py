@@ -6,7 +6,7 @@ import os
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QFileDialog,
-    QGroupBox, QDialogButtonBox, QMessageBox
+    QGroupBox, QDialogButtonBox, QMessageBox, QComboBox
 )
 from PyQt6.QtCore import QSettings
 
@@ -59,17 +59,25 @@ class PreferencesDialog(QDialog):
         dir_layout.addLayout(row)
         layout.addWidget(dir_group)
 
-        # === Language Group (TODO) ===
+        # === Language Group ===
         lang_group = QGroupBox(self.tr("Language"))
         lang_layout = QVBoxLayout(lang_group)
 
-        from PyQt6.QtWidgets import QComboBox
+        # (label, QSettings code) — "" = auto (system locale)
+        self._lang_items = [
+            (self.tr("Auto (system locale)"), ""),
+            ("English",    "en"),
+            ("Polski",     "pl"),
+            ("Русский",    "ru"),
+            ("Українська", "uk"),
+        ]
         self.lang_combo = QComboBox()
-        self.lang_combo.addItems(["English", "Polski"])
-        self.lang_combo.setEnabled(False)  # TODO: not yet implemented
+        for label, _ in self._lang_items:
+            self.lang_combo.addItem(label)
 
-        lang_note = QLabel(self.tr("Language support coming soon."))
+        lang_note = QLabel(self.tr("Language change takes effect after restarting the application."))
         lang_note.setStyleSheet("color: #888; font-size: 11px;")
+        lang_note.setWordWrap(True)
 
         lang_layout.addWidget(self.lang_combo)
         lang_layout.addWidget(lang_note)
@@ -96,6 +104,11 @@ class PreferencesDialog(QDialog):
         )
         self.dir_edit.setText(session_dir)
 
+        current_lang = self.settings.value("app/language", "")
+        codes = [code for _, code in self._lang_items]
+        idx = codes.index(current_lang) if current_lang in codes else 0
+        self.lang_combo.setCurrentIndex(idx)
+
     def _save_and_accept(self):
         directory = self.dir_edit.text().strip() or self.DEFAULT_SESSION_DIR
         directory = os.path.expanduser(directory)
@@ -112,6 +125,10 @@ class PreferencesDialog(QDialog):
             return
 
         self.settings.setValue(self.KEY_SESSION_DIR, directory)
+
+        lang_code = self._lang_items[self.lang_combo.currentIndex()][1]
+        self.settings.setValue("app/language", lang_code)
+
         self.accept()
 
     def _restore_defaults(self):

@@ -17,7 +17,7 @@ from core.session_context import SessionContext, SessionMode, SessionSummary
 
 logger = logging.getLogger(__name__)
 
-SESSION_FILE = "session.json"
+SESSION_FILE = "session_summary.json"
 CLIENT_RETENTION_DAYS = 365
 
 

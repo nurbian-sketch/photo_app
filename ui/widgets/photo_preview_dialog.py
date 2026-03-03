@@ -78,7 +78,7 @@ class PhotoPreviewDialog(QDialog):
         bar.addStretch()
 
         if self._close_all_callback:
-            btn_close_all = QPushButton("Close All")
+            btn_close_all = QPushButton(self.tr("Close All"))
             btn_close_all.setFixedSize(90, 32)
             btn_close_all.setStyleSheet(
                 "background-color: #c62828; color: white; font-weight: bold;"
@@ -86,7 +86,7 @@ class PhotoPreviewDialog(QDialog):
             btn_close_all.clicked.connect(self._close_all_callback)
             bar.addWidget(btn_close_all)
 
-        btn_close = QPushButton("Close")
+        btn_close = QPushButton(self.tr("Close"))
         btn_close.setFixedSize(80, 32)
         btn_close.clicked.connect(self.close)
         bar.addWidget(btn_close)

@@ -1,7 +1,8 @@
 import sys
+import os
 from PyQt6.QtWidgets import QApplication, QSplashScreen
 from PyQt6.QtGui import QPixmap, QIcon
-from PyQt6.QtCore import qInstallMessageHandler, QtMsgType
+from PyQt6.QtCore import qInstallMessageHandler, QtMsgType, QTranslator, QLocale, QSettings
 from ui.main_window import MainWindow
 from core.initializer import AppInitializer
 
@@ -17,8 +18,26 @@ def _qt_message_handler(mode, context, message):
 qInstallMessageHandler(_qt_message_handler)
 
 
+def _load_translator(app: QApplication) -> QTranslator | None:
+    """Wczytuje tłumaczenie na podstawie ustawień lub lokalizacji systemu."""
+    settings = QSettings("Grzeza", "SessionsAssistant")
+    lang = settings.value("app/language", "")  # "" = auto
+    if not lang:
+        lang = QLocale.system().name()[:2]      # np. "pl", "ru", "uk"
+    ts_dir = os.path.join(os.path.dirname(__file__), "locales")
+    qm_path = os.path.join(ts_dir, f"{lang}.qm")
+    if not os.path.exists(qm_path):
+        return None
+    translator = QTranslator(app)
+    if translator.load(qm_path):
+        app.installTranslator(translator)
+        return translator
+    return None
+
+
 def main():
     app = QApplication(sys.argv)
+    _load_translator(app)
     app.setStyle('Fusion')
     app.setStyleSheet(
         "QToolTip { color: #bbbbbb; background-color: #2b2b2b; border: 1px solid #555555; }"

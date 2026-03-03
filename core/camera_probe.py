@@ -198,7 +198,7 @@ class CameraProbe:
             }
 
         mode = self.get_mode()
-        if mode != REQUIRED_MODE:
+        if mode and mode != REQUIRED_MODE:
             warnings.append(
                 f"Camera is in {mode} mode. Required: {REQUIRED_MODE}."
             )

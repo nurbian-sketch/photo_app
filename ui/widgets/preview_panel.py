@@ -3,11 +3,32 @@ PreviewPanel — wielokrotnego użytku widget podglądu zdjęcia.
 Zoom, pan, rotate, wheel, klawiatura, EXIF bar, auto-resize.
 Wbudowany WB picker z podglądem korekcji w miejscu.
 """
+import os
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSizePolicy
 )
 from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
-from PyQt6.QtGui import QPixmap, QTransform
+from PyQt6.QtGui import QPixmap, QTransform, QCursor
+
+
+# ─────────────────────────────── Kursor WB picker
+
+_WB_CURSOR_SIZE = 48
+_WB_CURSOR_HOT  = (6, 42)   # hotspot: czubek kropli w lewym dolnym rogu
+
+
+def _load_wb_cursor(filename: str) -> QCursor:
+    """Ładuje kursor WB picker z assets/cursors/. Fallback: CrossCursor."""
+    path = os.path.join("assets", "cursors", filename)
+    if os.path.exists(path):
+        pix = QPixmap(path).scaled(
+            _WB_CURSOR_SIZE, _WB_CURSOR_SIZE,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        hx, hy = _WB_CURSOR_HOT
+        return QCursor(pix, hx, hy)
+    return QCursor(Qt.CursorShape.CrossCursor)
 
 
 # ─────────────────────────────── WB Worker
@@ -148,7 +169,7 @@ class PreviewPanel(QWidget):
         layout.addWidget(self._label, 1)
 
         # EXIF bar
-        self._exif_bar = QLabel("No image")
+        self._exif_bar = QLabel(self.tr("No image"))
         self._exif_bar.setStyleSheet(
             "background: #222; color: #999; font-size: 11px; padding: 3px 10px;"
         )
@@ -164,14 +185,14 @@ class PreviewPanel(QWidget):
 
         btn_rotate_left = QPushButton("↶")
         btn_rotate_left.setFixedSize(32, 32)
-        btn_rotate_left.setToolTip("Rotate left 90° [←]")
+        btn_rotate_left.setToolTip(self.tr("Rotate left 90° [←]"))
         btn_rotate_left.setStyleSheet("font-size: 16px;")
         btn_rotate_left.clicked.connect(self.rotate_left)
         ctrl.addWidget(btn_rotate_left)
 
         btn_rotate_right = QPushButton("↷")
         btn_rotate_right.setFixedSize(32, 32)
-        btn_rotate_right.setToolTip("Rotate right 90° [→]")
+        btn_rotate_right.setToolTip(self.tr("Rotate right 90° [→]"))
         btn_rotate_right.setStyleSheet("font-size: 16px;")
         btn_rotate_right.clicked.connect(self.rotate_right)
         ctrl.addWidget(btn_rotate_right)
@@ -198,9 +219,9 @@ class PreviewPanel(QWidget):
         btn_zoom_in.clicked.connect(self._zoom_in)
         ctrl.addWidget(btn_zoom_in)
 
-        btn_fit = QPushButton("Fit")
+        btn_fit = QPushButton(self.tr("Fit"))
         btn_fit.setFixedSize(50, 32)
-        btn_fit.setToolTip("Fit to window [0]")
+        btn_fit.setToolTip(self.tr("Fit to window [0]"))
         btn_fit.clicked.connect(self._zoom_fit)
         ctrl.addWidget(btn_fit)
 
@@ -209,10 +230,10 @@ class PreviewPanel(QWidget):
         ctrl.addWidget(sep_wb)
 
         # WB picker
-        self._btn_wb = QPushButton("Pick WB")
+        self._btn_wb = QPushButton(self.tr("Pick WB"))
         self._btn_wb.setFixedSize(70, 32)
         self._btn_wb.setCheckable(True)
-        self._btn_wb.setToolTip("Click on a neutral white/grey area to pick white balance")
+        self._btn_wb.setToolTip(self.tr("Click on a neutral white/grey area to pick white balance"))
         self._btn_wb.clicked.connect(self._toggle_wb_mode)
         ctrl.addWidget(self._btn_wb)
 
@@ -222,13 +243,13 @@ class PreviewPanel(QWidget):
         self._wb_label.setStyleSheet("color: #888; font-size: 11px;")
         ctrl.addWidget(self._wb_label)
 
-        self._btn_wb_accept = QPushButton("Apply")
+        self._btn_wb_accept = QPushButton(self.tr("Apply"))
         self._btn_wb_accept.setFixedSize(55, 32)
         self._btn_wb_accept.setVisible(False)
         self._btn_wb_accept.clicked.connect(self._accept_wb)
         ctrl.addWidget(self._btn_wb_accept)
 
-        self._btn_wb_cancel = QPushButton("Cancel")
+        self._btn_wb_cancel = QPushButton(self.tr("Cancel"))
         self._btn_wb_cancel.setFixedSize(55, 32)
         self._btn_wb_cancel.setVisible(False)
         self._btn_wb_cancel.clicked.connect(self._cancel_wb)
@@ -257,7 +278,7 @@ class PreviewPanel(QWidget):
             exif.get('shutter', ''), exif.get('aperture', ''), exif.get('iso', ''),
             exif.get('focal', ''), exif.get('date', '')
         ] if v]
-        self._exif_bar.setText("   •   ".join(parts) if parts else "No EXIF data")
+        self._exif_bar.setText("   •   ".join(parts) if parts else self.tr("No EXIF data"))
 
     def set_message(self, text: str):
         """Pokaż komunikat (loading/error) zamiast obrazu."""
@@ -270,7 +291,7 @@ class PreviewPanel(QWidget):
         self._original_pixmap = QPixmap()
         self._pixmap = QPixmap()
         self._label.clear()
-        self._label.setText("No image")
+        self._label.setText(self.tr("No image"))
         self._exif_bar.setText("")
 
     def activate_wb_mode(self):
@@ -294,7 +315,7 @@ class PreviewPanel(QWidget):
         self._wb_mode = checked
         if checked:
             self._label.setCursor(Qt.CursorShape.CrossCursor)
-            self._wb_label.setText("Click neutral")
+            self._wb_label.setText(self.tr("Click neutral"))
         else:
             self._cancel_wb()
 

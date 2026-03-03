@@ -240,7 +240,7 @@ def make_session_context(
     # Ścieżki tylko dla trybów z importem
     if mode != SessionMode.PRIVATE:
         session_path  = os.path.join(session_base_dir, session_id)
-        captures_path = os.path.join(session_path, captures_subdir)
+        captures_path = session_path  # zdjęcia bezpośrednio w katalogu sesji
     else:
         session_path  = ""
         captures_path = ""
