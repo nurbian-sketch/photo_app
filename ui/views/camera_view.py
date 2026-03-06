@@ -8,9 +8,7 @@ from PyQt6.QtGui import QPixmap, QTransform
 
 from core.gphoto_interface import GPhotoInterface
 
-from ui.views.camera_components.exposure_controls import ExposureControls
-from ui.views.camera_components.image_controls import ImageControls
-from ui.views.camera_components.autofocus_controls import AutofocusControls
+from ui.widgets.camera_settings_panel import CameraSettingsPanel
 from ui.dialogs.profile_browser_dialog import ProfileBrowserDialog
 from ui.widgets.photo_preview_dialog import PhotoPreviewDialog
 
@@ -55,7 +53,7 @@ class CameraView(QWidget):
         self._capture_dir = self._get_capture_directory()
         self._preview_dialogs = []  # Referencje do otwartych podglądów
         self._lv_rotation = 0       # Rotacja live view: 0, 90, 180, 270
-        self._settings_worker = None  # Worker ustawień (aktywny gdy LV wyłączone)
+        # Worker ustawień zarządzany przez _settings_panel.activate()/deactivate()
         self._view_active = False     # True gdy camera_view jest widoczny
         self._init_ui()
 
@@ -85,60 +83,30 @@ class CameraView(QWidget):
         self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.main_splitter.setHandleWidth(12)
 
-        # ---- LEFT: Panel sterowania (2 kolumny) ----
+        # ---- LEFT: Panel sterowania (wspólny widget) ----
         control_panel = QWidget()
         control_panel.setMinimumWidth(760)
-        control_layout = QHBoxLayout(control_panel)
+        control_layout = QVBoxLayout(control_panel)
         control_layout.setContentsMargins(0, 0, 0, 0)
-        control_layout.setSpacing(30)
+        control_layout.setSpacing(0)
 
-        # Kolumna 1: Exposure + przyciski profili
-        col1 = QWidget()
-        col1.setMinimumWidth(450)
-        col1_layout = QVBoxLayout(col1)
-        col1_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.exposure_ctrl = ExposureControls()
+        self._settings_panel = CameraSettingsPanel()
+        self.exposure_ctrl = self._settings_panel.exposure_ctrl
+        self.image_ctrl    = self._settings_panel.image_ctrl
+        self.focus_ctrl    = self._settings_panel.focus_ctrl
         self.exposure_ctrl.setEnabled(False)
-        col1_layout.addWidget(self.exposure_ctrl, 3)
-        col1_layout.addSpacing(20)
-        col1_layout.addStretch(1)
+        self.image_ctrl.setEnabled(False)
+        self.focus_ctrl.setEnabled(False)
+        control_layout.addWidget(self._settings_panel)
 
+        # Przyciski profili (camera_view-specific)
         row1 = QHBoxLayout()
         self.btn_save = QPushButton(self.tr("Save"))
         self.btn_load = QPushButton(self.tr("Load"))
         row1.addWidget(self.btn_save)
         row1.addWidget(self.btn_load)
         row1.addStretch()
-        col1_layout.addLayout(row1)
-
-        # Kolumna 2: Image + Focus + przyciski
-        col2 = QWidget()
-        col2.setMinimumWidth(280)
-        col2_layout = QVBoxLayout(col2)
-        col2_layout.setContentsMargins(0, 0, 0, 0)
-
-        self.image_ctrl = ImageControls()
-        self.image_ctrl.setEnabled(False)
-        self.focus_ctrl = AutofocusControls()
-        self.focus_ctrl.setEnabled(False)
-        col2_layout.addWidget(self.image_ctrl, 2)
-        col2_layout.addSpacing(23)
-        col2_layout.addWidget(self.focus_ctrl, 1)
-        col2_layout.addSpacing(20)
-        col2_layout.addStretch(1)
-
-        row2 = QHBoxLayout()
-        self.btn_update = QPushButton(self.tr("UPDATE"))
-        self.btn_cancel = QPushButton(self.tr("CANCEL"))
-        self.btn_update.setStyleSheet("font-weight: bold; color: #2e7d32;")
-        row2.addWidget(self.btn_update)
-        row2.addWidget(self.btn_cancel)
-        row2.addStretch()
-        col2_layout.addLayout(row2)
-
-        control_layout.addWidget(col1, 5)
-        control_layout.addWidget(col2, 3)
+        control_layout.addLayout(row1)
 
         # ---- RIGHT: Live View ----
         preview_panel = QWidget()
@@ -192,7 +160,6 @@ class CameraView(QWidget):
         main_layout.addWidget(self.main_splitter)
 
         # --- SYGNAŁY ---
-        self.btn_update.clicked.connect(self._on_update_clicked)
         self.btn_lv.clicked.connect(self._toggle_liveview)
         self.btn_cap.clicked.connect(self._on_capture_clicked)
         self.btn_lv_rotate_left.clicked.connect(self._rotate_lv_ccw)
@@ -249,9 +216,9 @@ class CameraView(QWidget):
         # Worker ustawień: start gdy aparat gotowy i LV nieaktywne (i widok aktywny)
         lv_running = self.lv_thread and self.lv_thread.isRunning()
         if ready and not lv_running and self._view_active:
-            self._start_settings_worker()
+            self._settings_panel.activate()
         elif not ready:
-            self._stop_settings_worker()
+            self._settings_panel.deactivate()
 
         usb_busy = (
             self._stopping
@@ -282,7 +249,6 @@ class CameraView(QWidget):
         self.btn_cap.setEnabled(enabled and self.lv_thread is not None
                                 and self.lv_thread.isRunning())
         self.btn_save.setEnabled(enabled)
-        self.btn_update.setEnabled(enabled)
 
     # ─────────────────────────────── Live View — sterowanie
 
@@ -332,7 +298,7 @@ class CameraView(QWidget):
     def _start_lv(self):
         """Inicjalizuje i uruchamia interfejs gphoto."""
         # Zatrzymaj worker ustawień — zwalnia USB dla GPhotoInterface
-        self._stop_settings_worker()
+        self._settings_panel.deactivate()
 
         self.btn_lv.setEnabled(False)
         self._error_stopped = False
@@ -359,6 +325,10 @@ class CameraView(QWidget):
         self.btn_lv_rotate_right.setEnabled(True)
         self.btn_lv.setText(self.tr("STOP LIVE VIEW"))
         self.btn_lv.setStyleSheet(self.BTN_STYLE_STOP)
+
+    def _stop_settings_worker(self):
+        """Deleguje zatrzymanie workera ustawień do panelu."""
+        self._settings_panel._stop_worker()
 
     def _stop_lv(self):
         """Zatrzymuje wątek. USB zwolnione po finished → START aktywny."""
@@ -549,7 +519,7 @@ class CameraView(QWidget):
     def on_leave(self):
         """Wywoływane przy opuszczeniu widoku Camera — zamyka sesję PTP."""
         self._view_active = False
-        self._stop_settings_worker()
+        self._settings_panel.deactivate()
         if self.lv_thread and self.lv_thread.isRunning():
             self._stop_lv()
         self.lv_thread = None
@@ -577,34 +547,6 @@ class CameraView(QWidget):
         self.btn_lv_rotate_left.setEnabled(False)
         self.btn_lv_rotate_right.setEnabled(False)
         self._set_buttons_enabled(self._camera_ready)
-
-    # ─────────────────────────────── Worker ustawień (bez LV)
-
-    def _start_settings_worker(self):
-        """Uruchamia CameraSettingsWorker jeśli nie działa już inny."""
-        if self._settings_worker and self._settings_worker.isRunning():
-            return
-        from core.camera_settings_worker import CameraSettingsWorker
-        self._settings_worker = CameraSettingsWorker()
-        self._settings_worker.settings_loaded.connect(self.exposure_ctrl.sync_with_camera)
-        self._settings_worker.settings_loaded.connect(self.image_ctrl.sync_with_camera)
-        self._settings_worker.settings_loaded.connect(self.focus_ctrl.sync_with_camera)
-        self.exposure_ctrl.gphoto = self._settings_worker
-        self.image_ctrl.gphoto    = self._settings_worker
-        self.focus_ctrl.gphoto    = self._settings_worker
-        self._settings_worker.start()
-
-    def _stop_settings_worker(self):
-        """Zatrzymuje CameraSettingsWorker synchronicznie (max 3s — czas na init gphoto2)."""
-        if self._settings_worker:
-            self.exposure_ctrl.gphoto = None
-            self.image_ctrl.gphoto    = None
-            self.focus_ctrl.gphoto    = None
-            self._settings_worker.keep_running = False
-            if self._settings_worker.isRunning():
-                if not self._settings_worker.wait(3000):
-                    self._settings_worker.terminate()
-            self._settings_worker = None
 
     def is_lv_active(self) -> bool:
         """True gdy sesja PTP aktywna LUB gdy umierający wątek trzyma USB."""
@@ -736,11 +678,4 @@ class CameraView(QWidget):
 
         self.status_message.emit("Profile loaded", 3000)
 
-    def _on_update_clicked(self):
-        """Zbiera ustawienia i wysyła (zachowano dla kompatybilności)."""
-        settings = {}
-        settings.update(self.exposure_ctrl.get_settings())
-        settings.update(self.image_ctrl.get_settings())
-        settings.update(self.focus_ctrl.get_settings())
-        if self.cs:
-            self.cs.apply_bulk_settings(settings)
+

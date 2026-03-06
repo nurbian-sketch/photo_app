@@ -78,20 +78,23 @@ class SessionRunner(QThread):
         store: SessionStore,
         rclone_remote: str = "",
         rclone_dest: str = "",
+        pre_session_files: Optional[set] = None,
         parent=None,
     ):
         """
         Args:
-            context:       gotowy SessionContext z make_session_context()
-            store:         SessionStore do zapisu metadanych
-            rclone_remote: nazwa remote rclone (np. "gdrive")
-            rclone_dest:   ścieżka docelowa na remote (np. "Sessions")
+            context:            gotowy SessionContext z make_session_context()
+            store:              SessionStore do zapisu metadanych
+            rclone_remote:      nazwa remote rclone (np. "gdrive")
+            rclone_dest:        ścieżka docelowa na remote (np. "Sessions")
+            pre_session_files:  zestaw nazw plików na karcie PRZED sesją (snapshot)
         """
         super().__init__(parent)
-        self.context       = context
-        self.store         = store
-        self.rclone_remote = rclone_remote
-        self.rclone_dest   = rclone_dest
+        self.context            = context
+        self.store              = store
+        self.rclone_remote      = rclone_remote
+        self.rclone_dest        = rclone_dest
+        self._pre_session_files = pre_session_files or set()
 
         self._state        = SessionState.IDLE
         self._stop_flag    = False
@@ -322,6 +325,7 @@ class SessionRunner(QThread):
         # Bufor 30s — na wypadek drobnych rozbieżności
         threshold_ts    -= 30
         print(f"[LIST] session_start_ts={session_start_ts}  threshold_ts={threshold_ts}", flush=True)
+        print(f"[LIST] pre_session_files={len(self._pre_session_files)} plików do pominięcia", flush=True)
 
         result = []
 
@@ -335,6 +339,11 @@ class SessionRunner(QThread):
                 files = camera.folder_list_files(folder_path, gp_context)
                 for j in range(files.count()):
                     filename = files.get_name(j)
+
+                    # Pomiń pliki które były na karcie PRZED startem sesji
+                    if filename in self._pre_session_files:
+                        print(f"[LIST]  {filename}: był przed sesją — pomijam", flush=True)
+                        continue
 
                     # Pobierz info o pliku (mtime)
                     try:
@@ -376,9 +385,10 @@ class SessionRunner(QThread):
             expected_size = info.file.size
             print(f"[DL] info OK, size={expected_size}", flush=True)
 
-            # Transfer
-            camera_file = camera.file_get(
-                folder, filename, gp.GP_FILE_TYPE_NORMAL, gp_context
+            # Transfer — camera_file musi być przekazany jako argument (Python gphoto2 binding)
+            camera_file = gp.CameraFile()
+            camera.file_get(
+                folder, filename, gp.GP_FILE_TYPE_NORMAL, camera_file, gp_context
             )
             camera_file.save(local_path)
 

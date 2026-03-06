@@ -30,9 +30,9 @@ from core.session_context import (
 )
 from core.session_runner import SessionRunner, COUNTDOWN_SEC
 from core.session_store import SessionStore
-from ui.views.camera_components.exposure_controls import ExposureControls
-from ui.views.camera_components.image_controls import ImageControls
-from ui.views.camera_components.autofocus_controls import AutofocusControls
+from ui.widgets.camera_settings_panel import CameraSettingsPanel
+from ui.dialogs.usb_disconnect_dialog import UsbDisconnectDialog, _lsusb_has_canon
+from ui.widgets.slider_with_scale import SliderWithScale
 
 # ─────────────────────────── STAŁE
 
@@ -45,136 +45,45 @@ BG_FINISHED    = os.path.join("assets", "pictures", "session-finished.jpg")
 BG_INTERRUPTED = os.path.join("assets", "pictures", "session-interrupted.jpg")
 
 
-# ─────────────────────────── DIALOG PRZYGOTOWANIA SESJI
+# ─────────────────────────── SNAPSHOT KARTY SD
 
-def _lsusb_has_canon() -> bool:
-    """Sprawdza przez lsusb czy aparat Canon jest widoczny — bez gphoto2, bez sesji PTP."""
-    import subprocess
+def _snapshot_card_files() -> set:
+    """
+    Szybki snapshot nazw plików na karcie SD aparatu (bez pobierania treści).
+    Canon EOS RP zwraca mtime=0 — nie można filtrować po czasie; filtrujemy po tym
+    czy plik istniał przed sesją.
+    Zwraca pusty zbiór przy braku aparatu lub błędzie.
+    """
+    import logging as _log
+    _logger = _log.getLogger(__name__)
     try:
-        r = subprocess.run(["lsusb"], capture_output=True, text=True, timeout=2)
-        return "Canon" in r.stdout
-    except Exception:
-        return False
-
-
-class _UsbDisconnectDialog(QDialog):
-    """
-    Dialog przygotowania sesji: prowadzi przez dwa kroki (OFF → ON).
-    Emituje status_changed(str) do paska stanu głównego okna.
-
-    Stany:
-        WAIT_DISCONNECT — oczekuje na odłączenie aparatu (krok 1)
-        WAIT_RECONNECT  — aparat zniknął, oczekuje na ponowne wykrycie (krok 2)
-        READY           — aparat wykryty po cyklu — Start aktywny
-    """
-
-    status_changed = pyqtSignal(str)
-
-    _WAIT_DISCONNECT = 0
-    _WAIT_RECONNECT  = 1
-    _READY           = 2
-
-    # Symbole kroków
-    _DOT_PENDING = "○"
-    _DOT_DONE    = "●"
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle(self.tr("Prepare camera"))
-        self.setMinimumWidth(400)
-        self.setModal(True)
-        self._state = self._WAIT_DISCONNECT
-        self._build_ui()
-
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._poll)
-        self._timer.start(1200)
-        self._poll()  # natychmiastowe sprawdzenie
-
-    def _build_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setSpacing(8)
-        layout.setContentsMargins(20, 14, 20, 14)
-
-        # Obrazek instrukcji
-        img_label = QLabel()
-        img_path = os.path.join("assets", "pictures", "turn_switch-on-and-off.jpg")
-        if os.path.exists(img_path):
-            pix = QPixmap(img_path).scaled(
-                360, 200,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            img_label.setPixmap(pix)
-        img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(img_label)
-
-        layout.addSpacing(4)
-
-        # Krok 1 — wycentrowany
-        self._step1 = QLabel(f"{self._DOT_PENDING}  " + self.tr("Turn camera off"))
-        self._step1.setStyleSheet("font-size: 13px; color: #888;")
-        self._step1.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self._step1)
-
-        # Krok 2 — wycentrowany
-        self._step2 = QLabel(f"{self._DOT_PENDING}  " + self.tr("Turn camera back on"))
-        self._step2.setStyleSheet("font-size: 13px; color: #888;")
-        self._step2.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self._step2)
-
-        layout.addSpacing(6)
-
-        # Przyciski
-        btn_row = QHBoxLayout()
-        btn_row.addStretch()
-
-        btn_cancel = QPushButton(self.tr("Cancel"))
-        btn_cancel.setFixedSize(90, 34)
-        btn_cancel.clicked.connect(self.reject)
-        btn_row.addWidget(btn_cancel)
-
-        btn_row.addSpacing(8)
-
-        self._btn_start = QPushButton(self.tr("Start Session"))
-        self._btn_start.setFixedSize(130, 34)
-        self._btn_start.setEnabled(False)
-        self._btn_start.setStyleSheet(
-            "QPushButton:enabled  { font-weight: bold; "
-            "background-color: #1b5e20; color: #e8e8e8; }"
-            "QPushButton:disabled { color: #888; }"
-        )
-        self._btn_start.clicked.connect(self.accept)
-        btn_row.addWidget(self._btn_start)
-
-        layout.addLayout(btn_row)
-
-    def _poll(self):
-        """Polling USB co ~1.2s — lsusb, bez gphoto2."""
-        present = _lsusb_has_canon()
-
-        if self._state == self._WAIT_DISCONNECT:
-            if not present:
-                # Krok 1 zaliczony
-                self._state = self._WAIT_RECONNECT
-                self._step1.setText(f"{self._DOT_DONE}  " + self.tr("Turn camera off"))
-                self._step1.setStyleSheet("font-size: 13px; color: #27ae60;")
-                self._step2.setStyleSheet("font-size: 13px;")  # aktywny
-                self.status_changed.emit(self.tr("Camera not connected"))
-
-        elif self._state == self._WAIT_RECONNECT:
-            if present:
-                # Krok 2 zaliczony — cykl OFF→ON zakończony
-                self._state = self._READY
-                self._step2.setText(f"{self._DOT_DONE}  " + self.tr("Turn camera back on"))
-                self._step2.setStyleSheet("font-size: 13px; color: #27ae60;")
-                self._btn_start.setEnabled(True)
-                self._timer.stop()
-                self.status_changed.emit(self.tr("Camera ready — wireless mode active"))
-
-    def closeEvent(self, event):
-        self._timer.stop()
-        super().closeEvent(event)
+        import gphoto2 as gp
+        ctx = gp.Context()
+        pil = gp.PortInfoList(); pil.load()
+        al  = gp.CameraAbilitiesList(); al.load(ctx)
+        cameras = al.detect(pil, ctx)
+        if not cameras:
+            return set()
+        model, port = cameras[0]
+        camera = gp.Camera()
+        camera.set_abilities(al[al.lookup_model(model)])
+        camera.set_port_info(pil[pil.lookup_path(port)])
+        camera.init(ctx)
+        filenames: set = set()
+        try:
+            dcim = camera.folder_list_folders("/store_00020001/DCIM", ctx)
+            for i in range(dcim.count()):
+                fpath = f"/store_00020001/DCIM/{dcim.get_name(i)}"
+                files = camera.folder_list_files(fpath, ctx)
+                for j in range(files.count()):
+                    filenames.add(files.get_name(j))
+        finally:
+            camera.exit(ctx)
+        _logger.info(f"Snapshot karty: {len(filenames)} plików przed sesją")
+        return filenames
+    except Exception as e:
+        _logger.warning(f"Snapshot karty nie powiódł się: {e}")
+        return set()
 
 
 # ─────────────────────────── WIDGET TŁA
@@ -208,67 +117,6 @@ class BackgroundWidget(QWidget):
             painter.drawPixmap(x, y, scaled)
         else:
             painter.fillRect(self.rect(), QColor("#000000"))
-
-
-# ─────────────────────────── SUWAK CZASU TRWANIA
-
-class DurationSlider(QWidget):
-    """Suwak z wartościami dyskretnymi (minuty) i podpisem bieżącej wartości."""
-
-    value_changed = pyqtSignal(int)  # wartość w minutach
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self._values = DURATION_VALUES
-        self._index  = DURATION_VALUES.index(30)  # domyślnie 30 min
-        self._build_ui()
-
-    def _build_ui(self):
-        from PyQt6.QtWidgets import QSlider
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
-
-        self._label = QLabel(self.tr("Duration: %1 min").replace("%1", "30"))
-        self._label.setStyleSheet("font-weight: 600; font-size: 13px;")
-        layout.addWidget(self._label)
-
-        self._slider = QSlider(Qt.Orientation.Horizontal)
-        self._slider.setRange(0, len(self._values) - 1)
-        self._slider.setValue(self._index)
-        self._slider.setTickPosition(
-            self._slider.TickPosition.TicksBelow
-        )
-        self._slider.setTickInterval(1)
-        layout.addWidget(self._slider)
-
-        # Skala wartości pod suwakiem
-        scale_row = QHBoxLayout()
-        scale_row.setContentsMargins(0, 0, 0, 0)
-        for i, v in enumerate(self._values):
-            lbl = QLabel(str(v))
-            lbl.setStyleSheet("color: #888; font-size: 10px;")
-            lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            scale_row.addWidget(lbl)
-            if i < len(self._values) - 1:
-                scale_row.addStretch(1)
-        layout.addLayout(scale_row)
-
-        self._slider.valueChanged.connect(self._on_change)
-
-    def _on_change(self, idx: int):
-        self._index = idx
-        val = self._values[idx]
-        self._label.setText(self.tr("Duration: %1 min").replace("%1", str(val)))
-        self.value_changed.emit(val)
-
-    @property
-    def value(self) -> int:
-        return self._values[self._index]
-
-    def restore(self, minutes: int):
-        if minutes in self._values:
-            self._slider.setValue(self._values.index(minutes))
 
 
 # ─────────────────────────── SKALOWALNY NAPIS
@@ -355,7 +203,10 @@ class ConfigPanel(QWidget):
         inner.addSpacing(8)
 
         # Suwak czasu
-        self.duration_slider = DurationSlider()
+        self.duration_slider = SliderWithScale(
+            self.tr("Duration (min)"), [str(v) for v in DURATION_VALUES]
+        )
+        self.duration_slider.set_value("30")
         inner.addWidget(self.duration_slider)
 
         inner.addSpacing(12)
@@ -435,7 +286,7 @@ class ConfigPanel(QWidget):
 
     def _on_start(self):
         email = self.email_field.text().strip().lower()
-        duration = self.duration_slider.value
+        duration = int(self.duration_slider.get_value())
 
         if not self.email_field.isEnabled():
             # HOME lub PRIVATE — email jest pusty lub "home"
@@ -723,8 +574,9 @@ class SessionView(QWidget):
         self._settings = QSettings("Grzeza", "SessionsAssistant")
         self._camera_on = False
         self._sd_on = False
-        self._settings_worker = None  # Worker ustawień (aktywny gdy widok aktywny i aparat podłączony)
+        # Worker ustawień zarządzany przez _settings_panel.activate()/deactivate()
         self._view_active = False     # True gdy session_view jest widoczny
+        self._last_bad_state: Optional[str] = None  # 'no_camera' | 'no_sd' | None
         # Timer do pollingu USB gdy brak aparatu
         self._usb_poll_timer = QTimer(self)
         self._usb_poll_timer.timeout.connect(self._poll_usb)
@@ -751,37 +603,14 @@ class SessionView(QWidget):
         # QStackedWidget: 0 = kontrolki, 1 = overlay
         self._left_stack = QStackedWidget()
 
-        # ── Strona 0: dwie kolumny kontrolek (jak w CameraView) ──────────
-        controls_widget = QWidget()
-        controls_layout = QHBoxLayout(controls_widget)
-        controls_layout.setContentsMargins(0, 0, 0, 0)
-        controls_layout.setSpacing(30)
-
-        # Kolumna 1: Exposure
-        col1 = QWidget()
-        col1.setMinimumWidth(450)
-        col1_layout = QVBoxLayout(col1)
-        col1_layout.setContentsMargins(0, 0, 0, 0)
-        self.exposure_ctrl = ExposureControls()
-        col1_layout.addWidget(self.exposure_ctrl, 3)
-        col1_layout.addSpacing(20)
-        col1_layout.addStretch(1)
-
-        # Kolumna 2: Image + Focus
-        col2 = QWidget()
-        col2.setMinimumWidth(280)
-        col2_layout = QVBoxLayout(col2)
-        col2_layout.setContentsMargins(0, 0, 0, 0)
-        self.image_ctrl = ImageControls()
-        self.focus_ctrl = AutofocusControls()
-        col2_layout.addWidget(self.image_ctrl, 2)
-        col2_layout.addSpacing(23)
-        col2_layout.addWidget(self.focus_ctrl, 1)
-        col2_layout.addSpacing(20)
-        col2_layout.addStretch(1)
-
-        controls_layout.addWidget(col1, 5)
-        controls_layout.addWidget(col2, 3)
+        # ── Strona 0: wspólny panel ustawień aparatu ──────────────────────
+        self._settings_panel = CameraSettingsPanel(session_mode_init=True)
+        self._settings_panel.settings_captured.connect(self._on_settings_captured)
+        self._settings_panel.status_message.connect(self.status_message)
+        self.exposure_ctrl = self._settings_panel.exposure_ctrl
+        self.image_ctrl    = self._settings_panel.image_ctrl
+        self.focus_ctrl    = self._settings_panel.focus_ctrl
+        controls_widget = self._settings_panel
 
         # ── Strona 1: overlay ─────────────────────────────────────────────
         no_camera_widget = QWidget()
@@ -887,63 +716,71 @@ class SessionView(QWidget):
     def on_enter(self):
         """Wywoływane przez MainWindow przy przejściu do widoku Session."""
         self._view_active = True
+        self._last_bad_state = None   # reset — dialogi pokażą się przy pierwszym probe
         # NIE startujemy workera tu — probe (wywoływane po on_enter) wywoła
         # set_camera_ready, które dopiero uruchomi workera po zwolnieniu USB.
 
     def on_leave(self):
         """Wywoływane przez MainWindow przy opuszczeniu widoku Session."""
         self._view_active = False
-        self._stop_settings_worker()
+        self._settings_panel.deactivate()
         self._stop_usb_polling()
 
-    # ─────────────────────────── Worker ustawień (bez LV)
-
-    def _start_settings_worker(self):
-        """Uruchamia CameraSettingsWorker z inicjalizacją trybu sesji."""
-        if self._settings_worker and self._settings_worker.isRunning():
-            return
-        from core.camera_settings_worker import CameraSettingsWorker
-        self._settings_worker = CameraSettingsWorker(session_mode_init=True)
-        self._settings_worker.settings_loaded.connect(self.exposure_ctrl.sync_with_camera)
-        self._settings_worker.settings_loaded.connect(self.image_ctrl.sync_with_camera)
-        self._settings_worker.settings_loaded.connect(self.focus_ctrl.sync_with_camera)
-        self._settings_worker.status_message.connect(self.status_message)
-        self.exposure_ctrl.gphoto = self._settings_worker
-        self.image_ctrl.gphoto    = self._settings_worker
-        self.focus_ctrl.gphoto    = self._settings_worker
-        self._settings_worker.start()
-
-    def _stop_settings_worker(self):
-        """Zatrzymuje CameraSettingsWorker synchronicznie (max 3s — czas na init gphoto2)."""
-        if self._settings_worker:
-            self.exposure_ctrl.gphoto = None
-            self.image_ctrl.gphoto    = None
-            self.focus_ctrl.gphoto    = None
-            self._settings_worker.keep_running = False
-            if self._settings_worker.isRunning():
-                if not self._settings_worker.wait(3000):
-                    self._settings_worker.terminate()
-            self._settings_worker = None
+    def _on_settings_captured(self, d: dict):
+        """Zapisuje snapshot ustawień aparatu przed startem sesji."""
+        self._current_camera_settings = CameraSettings.from_dict(
+            {k: v["current"] if isinstance(v, dict) else v for k, v in d.items()}
+        )
 
     def set_camera_ready(self, camera_on: bool, sd_on: bool):
-        """Wywoływane z MainWindow — włącza/wyłącza panel ustawień kamery."""
+        """Wywoływane z MainWindow — włącza/wyłącza panele w zależności od stanu aparatu/karty."""
         self._camera_on = camera_on
         self._sd_on = sd_on
+
         if camera_on and sd_on:
+            # Aparat i karta SD — oba panele aktywne
+            self._last_bad_state = None
             self._stop_usb_polling()
             self._left_stack.setCurrentIndex(0)
-            # Uruchom worker ustawień jeśli widok aktywny i sesja nieaktywna
+            self._config_panel.setEnabled(True)
             if self._view_active and not self.is_session_active():
-                self._start_settings_worker()
+                self._settings_panel.activate()
+                # Jawne włączenie kontrolek — Qt propaguje setEnabled przez C++
+                # bez wywoływania Python-owych overrides, więc _apply_locks() nie odpala
+                self.exposure_ctrl.setEnabled(True)
+                self.image_ctrl.setEnabled(True)
+                self.focus_ctrl.setEnabled(True)
+
+        elif camera_on and not sd_on:
+            # Aparat wykryty, brak karty SD — lewy panel aktywny, prawy zablokowany
+            self._stop_usb_polling()
+            self._left_stack.setCurrentIndex(0)
+            self._config_panel.setEnabled(False)
+            if self._view_active and not self.is_session_active():
+                self._settings_panel.activate()
+                self.exposure_ctrl.setEnabled(True)
+                self.image_ctrl.setEnabled(True)
+                self.focus_ctrl.setEnabled(True)
+            if self._view_active and self._last_bad_state != "no_sd":
+                self._last_bad_state = "no_sd"
+                from ui.dialogs.no_sd_card_dialog import NoSdCardDialog
+                dlg = NoSdCardDialog(self)
+                if dlg.exec() == QDialog.DialogCode.Accepted:
+                    # OK: użytkownik włożył kartę — zlecamy re-probe
+                    self.camera_detected.emit()
+
         else:
-            self._stop_settings_worker()
-            self._set_overlay_image(self._no_camera_pixmap_default)
-            self._overlay_label.setText(
-                self.tr("Camera not detected.\n"
-                        "Connect camera via USB and insert SD card\n"
-                        "to enable camera settings.")
-            )
-            self._left_stack.setCurrentIndex(1)
+            # Brak aparatu — oba panele zablokowane, lewy panel wyszarzony
+            self._settings_panel.deactivate()
+            self._config_panel.setEnabled(False)
+            self._left_stack.setCurrentIndex(0)
+            if self._view_active and self._last_bad_state != "no_camera":
+                self._last_bad_state = "no_camera"
+                from ui.dialogs.no_camera_dialog import NoCameraDialog
+                dlg = NoCameraDialog(self)
+                if dlg.exec() == QDialog.DialogCode.Accepted:
+                    # Canon wykryty przez dialog — zlecamy re-probe
+                    self.camera_detected.emit()
             self._start_usb_polling()
 
     def _start_usb_polling(self):
@@ -951,6 +788,10 @@ class SessionView(QWidget):
         if self._usb_poll_timer.isActive():
             return
         self._usb_poll_timer.start(2000)
+
+    def _stop_settings_worker(self):
+        """Deleguje zatrzymanie workera ustawień do panelu."""
+        self._settings_panel._stop_worker()
 
     def _stop_usb_polling(self):
         """Zatrzymuje polling USB."""
@@ -1001,9 +842,13 @@ class SessionView(QWidget):
     def _on_start_session(self, email: str, duration_min: int):
         """Pokazuje dialog USB → tworzy kontekst i uruchamia SessionRunner."""
         # Zatrzymaj worker ustawień — zwalnia USB przed dialogiem
-        self._stop_settings_worker()
+        self._settings_panel.deactivate()
+
+        # Snapshot plików na karcie PRZED sesją — aparat jeszcze w trybie USB
+        pre_session_files = _snapshot_card_files()
+
         # Dialog OFF→ON: bez USB podczas sesji aparat aktywuje moduł BT
-        dlg = _UsbDisconnectDialog(self)
+        dlg = UsbDisconnectDialog(self)
         dlg.status_changed.connect(self.status_message)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return  # użytkownik anulował
@@ -1026,7 +871,7 @@ class SessionView(QWidget):
         ctx = make_session_context(email, duration_min, base_dir, captures, cam_settings)
         store = SessionStore(base_dir)
 
-        self._runner = SessionRunner(ctx, store, rclone_rem, rclone_dst)
+        self._runner = SessionRunner(ctx, store, rclone_rem, rclone_dst, pre_session_files)
 
         # Podłącz sygnały
         self._runner.state_changed.connect(self._on_state_changed)
@@ -1043,6 +888,7 @@ class SessionView(QWidget):
         self._active_panel.set_session_info(ctx)
         self._active_panel.btn_stop.setEnabled(True)
         self._active_panel.btn_stop.setText("■  STOP SESSION")
+        self._active_panel.btn_stop.show()
         self._active_panel.import_label.hide()
         self._active_panel.countdown_label.setText(
             f"{duration_min:02d}:00"
@@ -1142,4 +988,4 @@ class SessionView(QWidget):
     def _restore_state(self):
         dur = self._settings.value("session/last_duration", 30, type=int)
         if dur in DURATION_VALUES:
-            self._config_panel.duration_slider.restore(dur)
+            self._config_panel.duration_slider.set_value(str(dur))
