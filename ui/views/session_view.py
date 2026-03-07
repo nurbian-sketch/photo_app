@@ -972,6 +972,12 @@ class SessionView(QWidget):
         """Zwraca True gdy sesja trwa (USB odłączone, aparat bezprzewodowy)."""
         return self._runner is not None and self._runner.isRunning()
 
+    def is_settings_active(self) -> bool:
+        """Zwraca True gdy worker ustawień trzyma USB (analogicznie do is_lv_active w CameraView).
+        Probe powinien być pomijany gdy worker aktywny — nie przerywaj konfiguracji."""
+        w = self._settings_panel.worker
+        return w is not None and w.isRunning()
+
     # ─────────────────────────── KAMERA — snapshot ustawień
 
     _current_camera_settings: Optional[CameraSettings] = None

@@ -294,6 +294,8 @@ class MainWindow(QMainWindow):
             return  # LV trzyma USB — nie dotykaj
         if self.camera_view._stopping:
             return  # Wątek w trakcie zamykania — USB niestabilne
+        if self.session_view.is_settings_active():
+            return  # Worker ustawień sesji aktywny — nie przerywaj
         if self._probe_worker and self._probe_worker.isRunning():
             return  # Poprzedni probe jeszcze działa
         # Zatrzymaj workerów ustawień — probe potrzebuje wyłącznego dostępu USB (PTP exclusive)
