@@ -165,7 +165,7 @@ class _ScalableLabel(QLabel):
 class ConfigPanel(QWidget):
     """Formularz przed startem sesji."""
 
-    start_requested = pyqtSignal(str, str, int)   # email, phone, duration_min
+    start_requested = pyqtSignal(str, int)    # email, duration_min
     private_requested = pyqtSignal(int)      # duration_min
 
     def __init__(self, parent=None):
@@ -200,21 +200,8 @@ class ConfigPanel(QWidget):
         self.email_field.returnPressed.connect(self._try_start)
         inner.addWidget(self.email_field)
 
-        # Telefon
-        phone_lbl = QLabel(self.tr("Phone number"))
-        phone_lbl.setStyleSheet("font-weight: 600;")
-        inner.addWidget(phone_lbl)
-
-        self.phone_field = QLineEdit()
-        self.phone_field.setPlaceholderText(self.tr("+48 600 000 000"))
-        self.phone_field.setFixedHeight(36)
-        self.phone_field.textChanged.connect(self._on_contact_changed)
-        self.phone_field.returnPressed.connect(self._try_start)
-        inner.addWidget(self.phone_field)
-
         # Kliknięcie lub fokus na polu odblokuje formularz po HOME/PRIVATE
         self.email_field.installEventFilter(self)
-        self.phone_field.installEventFilter(self)
 
         # Wiersz z ikoną Telegrama i checkboxem — bezpośrednio po polach kontaktowych
         tg_row = QHBoxLayout()
@@ -279,12 +266,11 @@ class ConfigPanel(QWidget):
     # ─── logika formularza
 
     def _on_contact_changed(self):
-        """Wywoływane przy zmianie pola email lub telefonu."""
+        """Wywoływane przy zmianie pola email."""
         email = self.email_field.text().strip().lower()
-        phone = self.phone_field.text().strip()
-        self._update_mode_info(email, phone)
+        self._update_mode_info(email)
 
-    def _update_mode_info(self, email: str, phone: str = ""):
+    def _update_mode_info(self, email: str):
         """Aktualizuje info trybu i stan przycisku START."""
         if self.email_field.isReadOnly():
             # Tryb HOME lub PRIVATE ustawiony przyciskiem — nie nadpisuj
@@ -295,30 +281,23 @@ class ConfigPanel(QWidget):
             self._set_start_ready(True)
             self.btn_home.setEnabled(False)
             self.btn_private.setEnabled(True)
-        elif email == "" and phone == "":
-            # Oba puste → tryb prywatny (przycisk lub pusty formularz)
+        elif email == "":
             self.mode_info.setText("")
             self._set_start_ready(False)
             self.btn_home.setEnabled(True)
             self.btn_private.setEnabled(True)
-        elif EMAIL_RE.match(email) or phone:
-            # Przynajmniej jedno wypełnione → sesja kliencka
-            contact_info = []
-            if EMAIL_RE.match(email):
-                contact_info.append(email)
-            if phone:
-                contact_info.append(phone)
+        elif EMAIL_RE.match(email):
             self.mode_info.setText(
                 self.tr("Client session — photos will be sent to: %1.")
-                .replace("%1", " / ".join(contact_info))
+                .replace("%1", email)
             )
             self._set_start_ready(True)
             self.btn_home.setEnabled(True)
             self.btn_private.setEnabled(True)
         else:
-            # Niepoprawny email, pusty telefon
+            # Niepoprawny email
             self.mode_info.setText(
-                self.tr("Enter a valid email address or phone number (or both).")
+                self.tr("Enter a valid email address.")
             )
             self._set_start_ready(False)
             self.btn_home.setEnabled(True)
@@ -330,7 +309,7 @@ class ConfigPanel(QWidget):
         self.btn_start.setDefault(enabled)
 
     def eventFilter(self, obj, event):
-        if obj in (self.email_field, self.phone_field):
+        if obj is self.email_field:
             if event.type() == QEvent.Type.FocusIn:
                 self._unlock_contact_fields()
         return super().eventFilter(obj, event)
@@ -342,24 +321,22 @@ class ConfigPanel(QWidget):
         self.email_field.setReadOnly(False)
         self.email_field.setStyleSheet("")
         self.email_field.clear()
-        self.phone_field.setReadOnly(False)
-        self.phone_field.setStyleSheet("")
         self.btn_home.setEnabled(True)
         self.btn_private.setEnabled(True)
         _f = self.btn_home.font(); _f.setBold(False); self.btn_home.setFont(_f)
         _f = self.btn_private.font(); _f.setBold(False); self.btn_private.setFont(_f)
-        self._update_mode_info("", "")
+        self.chk_share_code.setEnabled(True)
+        self._update_mode_info("")
 
     def _on_home(self):
         self.email_field.setText("home")
         self.email_field.setReadOnly(True)
         self.email_field.setStyleSheet("color: #777;")
-        self.phone_field.setReadOnly(True)
-        self.phone_field.setStyleSheet("color: #777;")
         _f = self.btn_home.font(); _f.setBold(True); self.btn_home.setFont(_f)
         _f = self.btn_private.font(); _f.setBold(False); self.btn_private.setFont(_f)
         self.btn_home.setEnabled(True)
         self.btn_private.setEnabled(True)
+        self.chk_share_code.setEnabled(True)
         self._set_start_ready(True)
         self.mode_info.setText(self.tr("Local session — photos saved locally, no upload."))
         self.btn_start.setFocus()
@@ -368,13 +345,12 @@ class ConfigPanel(QWidget):
         self.email_field.clear()
         self.email_field.setReadOnly(True)
         self.email_field.setStyleSheet("color: #777;")
-        self.phone_field.clear()
-        self.phone_field.setReadOnly(True)
-        self.phone_field.setStyleSheet("color: #777;")
         _f = self.btn_private.font(); _f.setBold(True); self.btn_private.setFont(_f)
         _f = self.btn_home.font(); _f.setBold(False); self.btn_home.setFont(_f)
         self.btn_home.setEnabled(True)
         self.btn_private.setEnabled(True)
+        self.chk_share_code.setChecked(False)
+        self.chk_share_code.setEnabled(False)
         self._set_start_ready(True)
         self.mode_info.setText(self.tr("Private session — photos stay on SD card only."))
         self.btn_start.setFocus()
@@ -387,36 +363,24 @@ class ConfigPanel(QWidget):
     def _on_start(self):
         """Logika startu sesji — wspólna dla kliknięcia i Enter."""
         email = self.email_field.text().strip().lower()
-        phone = self.phone_field.text().strip()
         duration = int(self.duration_slider.get_value())
 
         if self.email_field.isReadOnly():
             # HOME lub PRIVATE ustawione przyciskiem
-            if not email or email == "":
+            if not email:
                 # PRIVATE (email wyczyszczony)
                 self.private_requested.emit(duration)
                 return
-            # HOME → start_requested z "home", bez telefonu
-            self.start_requested.emit(email, "", duration)
+            # HOME → start_requested z "home"
+            self.start_requested.emit(email, duration)
             return
 
-        # Tryb kliencki — przekaż email i telefon
-        self.start_requested.emit(email, phone, duration)
+        # Tryb kliencki
+        self.start_requested.emit(email, duration)
 
     def _on_share_code_toggled(self, checked: bool) -> None:
-        """Blokuje pola email/telefon gdy aktywny tryb kodu."""
-        self.email_field.setEnabled(not checked)
-        if checked:
-            self.email_field.clear()
-            self.mode_info.setText(self.tr("Sharing code session — client receives photos via Telegram QR code."))
-            self.btn_start.setEnabled(True)
-            self.btn_home.setEnabled(False)
-            self.btn_private.setEnabled(False)
-        else:
-            self.email_field.setEnabled(True)
-            self._on_contact_changed()
-            self.btn_home.setEnabled(True)
-            self.btn_private.setEnabled(True)
+        """Checkbox QR — nie wpływa na email ani przyciski, tylko ustawia share_code."""
+        pass
 
     @property
     def share_code_requested(self) -> bool:
@@ -428,9 +392,6 @@ class ConfigPanel(QWidget):
         self.email_field.setReadOnly(False)
         self.email_field.setStyleSheet("")
         self.email_field.clear()
-        self.phone_field.setReadOnly(False)
-        self.phone_field.setStyleSheet("")
-        self.phone_field.clear()
         self.mode_info.setText("")
         self._set_start_ready(False)
         self.btn_home.setEnabled(True)
@@ -438,6 +399,7 @@ class ConfigPanel(QWidget):
         self.btn_private.setEnabled(True)
         _f = self.btn_private.font(); _f.setBold(False); self.btn_private.setFont(_f)
         self.chk_share_code.setChecked(False)
+        self.chk_share_code.setEnabled(True)
 
 
 # ─────────────────────────── PANEL AKTYWNEJ SESJI
@@ -997,7 +959,7 @@ class SessionView(QWidget):
         # Sygnały paneli
         self._config_panel.start_requested.connect(self._on_start_session)
         self._config_panel.private_requested.connect(
-            lambda dur: self._on_start_session("", "", dur)
+            lambda dur: self._on_start_session("", dur)
         )
         self._active_panel.stop_requested.connect(self._on_stop_requested)
         self._summary_panel.new_session.connect(self._on_new_session)
@@ -1142,7 +1104,7 @@ class SessionView(QWidget):
 
     # ─────────────────────────── START SESJI
 
-    def _on_start_session(self, email: str, phone: str, duration_min: int):
+    def _on_start_session(self, email: str, duration_min: int):
         """Pokazuje dialog USB → tworzy kontekst i uruchamia SessionRunner."""
         # Zatrzymaj worker ustawień i polling USB — zwalnia USB przed dialogiem.
         # KRYTYCZNE: polling NIE może odpalać probe podczas disconnectu w dialogu.
@@ -1176,7 +1138,7 @@ class SessionView(QWidget):
         # Snapshot ustawień aparatu (opcjonalny — przekazywany z zewnątrz)
         cam_settings = self._current_camera_settings or CameraSettings()
 
-        ctx = make_session_context(email, duration_min, base_dir, captures, cam_settings, phone)
+        ctx = make_session_context(email, duration_min, base_dir, captures, cam_settings)
 
         # Tryb kodu: checkbox zaznaczony + brak emaila → wymusz CLIENT (pliki muszą być importowane)
         if self._config_panel.share_code_requested and ctx.mode == SessionMode.PRIVATE:
@@ -1217,7 +1179,7 @@ class SessionView(QWidget):
         self._stack.setCurrentIndex(self._PAGE_ACTIVE)
         QTimer.singleShot(0, self._active_panel.btn_stop.setFocus)
 
-        contact = " / ".join(filter(None, [ctx.email, ctx.phone]))
+        contact = ctx.email
         mode_msg = {
             "client":  f"Client session · {contact} · {duration_min} min",
             "home":    f"Home session · {duration_min} min",
