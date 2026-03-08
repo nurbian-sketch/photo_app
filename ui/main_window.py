@@ -3,8 +3,8 @@ from PyQt6.QtWidgets import (
     QMainWindow, QStackedWidget, QMenuBar, QStatusBar,
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QMessageBox, QApplication
 )
-from PyQt6.QtGui import QAction, QKeySequence, QShortcut, QKeyEvent, QPixmap, QImage, QPainter
-from PyQt6.QtCore import Qt, QTranslator, QSettings, QSize
+from PyQt6.QtGui import QAction, QIcon, QKeySequence, QShortcut, QKeyEvent, QPixmap, QImage, QPainter
+from PyQt6.QtCore import Qt, QTimer, QTranslator, QSettings, QSize
 import os
 import logging
 
@@ -113,21 +113,12 @@ class MainWindow(QMainWindow):
         self.set_status_icons(camera=self.camera_ready, sd=self.sd_ready)
         self.session_view.set_camera_ready(self.camera_ready, self.sd_ready)
         
-        # Logika wyboru widoku startowego
-        if self.camera_ready and self.sd_ready:
-            start_view = "Camera"
-        elif self.camera_ready:
-            start_view = "Darkroom"
-        else:
-            start_view = "Session"
+        # Logika wyboru widoku startowego: aparat → Camera, brak → Darkroom
+        start_view = "Camera" if self.camera_ready else "Darkroom"
 
         self.change_view(start_view)
         self.switcher.select_view(start_view) # Synchronizacja switchera
 
-        # reconnect_requested emitowany przez btn_lv (CONNECT/RECONNECT)
-        self.camera_view.reconnect_requested.connect(
-            lambda: self._probe_camera(enforce_fv=True)
-        )
         # camera_released: USB zwolnione po zatrzymaniu LV — odśwież stan we wszystkich widokach
         self.camera_view.camera_released.connect(self._probe_camera)
         # Dynamiczne menu podglądów
@@ -149,28 +140,24 @@ class MainWindow(QMainWindow):
         self.session_view.camera_detected.connect(self._probe_camera)
 
     def _make_status_pixmap(self, file_name, active=True):
-        """Tworzy pixmapÄ™ 24px: kolorowÄ… lub wyszarzonÄ… w locie"""
+        """Tworzy pixmapę 24px: kolorową lub przyciemnioną (nieaktywna)."""
         path = os.path.join("assets", "icons", file_name)
         if not os.path.exists(path):
             return QPixmap()
 
-        pix = QPixmap(path).scaled(24, 24, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-        
+        pix = QPixmap(path).scaled(24, 24, Qt.AspectRatioMode.KeepAspectRatio,
+                                   Qt.TransformationMode.SmoothTransformation)
         if active:
             return pix
 
-        # Wersja nieaktywna: szara i pÃ³Å‚przezroczysta
-        img = pix.toImage().convertToFormat(QImage.Format.Format_Grayscale8)
-        gray_pix = QPixmap.fromImage(img)
-        
-        out_pix = QPixmap(gray_pix.size())
-        out_pix.fill(Qt.GlobalColor.transparent)
-        
-        painter = QPainter(out_pix)
-        painter.setOpacity(0.3) 
-        painter.drawPixmap(0, 0, gray_pix)
+        # Nieaktywna: oryginał z alpha zachowanym, opacity 0.35
+        out = QPixmap(pix.size())
+        out.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(out)
+        painter.setOpacity(0.35)
+        painter.drawPixmap(0, 0, pix)
         painter.end()
-        return out_pix
+        return out
 
     def set_status_icons(self, camera=False, sd=False):
         """Aktualizuje ikony graficzne w pasku stanu"""
@@ -269,11 +256,13 @@ class MainWindow(QMainWindow):
         self.central_stack.setCurrentWidget(mapping[name])
         self._current_view_name = name
 
-        # --- Wchodzimy do Camera lub Session ---
+        # --- Wchodzimy do widoku ---
         if name == "Camera":
             self.camera_view.on_enter()
         elif name == "Session":
             self.session_view.on_enter()
+        elif name == "Darkroom":
+            QTimer.singleShot(150, self.darkroom_view.btn_open_folder.setFocus)
 
         # Sort By i Select aktywne tylko w Darkroom
         is_pictures = (name == "Darkroom")
@@ -319,8 +308,6 @@ class MainWindow(QMainWindow):
         self.camera_view.set_camera_ready(camera_ready)
         self.darkroom_view.set_sd_card_ready(sd_ready)
         self.session_view.set_camera_ready(camera_ready, sd_ready)
-        # Powiadom camera_view o wyniku probe — umożliwia auto-start po RECONNECT
-        self.camera_view.on_probe_completed(camera_ready)
         if camera_ready:
             self.status_bar.showMessage(
                 self.tr(f"Camera found: {model}") if model else self.tr("Camera found"), 4000

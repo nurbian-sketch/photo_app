@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
     QListWidget, QLabel, QPushButton, QMessageBox
 )
-from PyQt6.QtCore import Qt, QSettings, pyqtSignal
+from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal
 
 _SETTINGS_KEY = "profiles/last_selected"
 
@@ -27,8 +27,21 @@ class ProfileBrowserDialog(QDialog):
         self.setWindowFlags(
             Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint
         )
+        self.setStyleSheet(
+            "QPushButton { background-color: palette(button); }"
+            " QPushButton:hover { background-color: palette(midlight); }"
+            " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: palette(button); }"
+            " QPushButton:focus:hover { background-color: palette(midlight); }"
+            " QListWidget:focus { border: 1px solid rgba(180, 180, 180, 0.6); }"
+        )
         self._init_ui()
         self._refresh()
+        # setTabOrder musi być po _init_ui gdy wszystkie widgety istnieją
+        self.setTabOrder(self._list, self.btn_load)
+        self.setTabOrder(self.btn_load, self.btn_delete)
+        self.setTabOrder(self.btn_delete, self._btn_cancel)
+        self.setTabOrder(self._btn_cancel, self._list)
+        QTimer.singleShot(0, self._list.setFocus)
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
@@ -50,17 +63,21 @@ class ProfileBrowserDialog(QDialog):
         row = QHBoxLayout()
         self.btn_load = QPushButton(self.tr("Load"))
         self.btn_load.setEnabled(False)
+        self.btn_load.setAutoDefault(False)
         self.btn_delete = QPushButton(self.tr("Delete"))
         self.btn_delete.setEnabled(False)
-        btn_cancel = QPushButton(self.tr("Cancel"))
+        self.btn_delete.setAutoDefault(False)
+        self._btn_cancel = QPushButton(self.tr("Cancel"))
+        self._btn_cancel.setAutoDefault(False)
         self.btn_load.clicked.connect(self._on_load)
         self.btn_delete.clicked.connect(self._on_delete)
-        btn_cancel.clicked.connect(self.reject)
+        self._btn_cancel.clicked.connect(self.reject)
         row.addWidget(self.btn_load)
         row.addWidget(self.btn_delete)
         row.addStretch()
-        row.addWidget(btn_cancel)
+        row.addWidget(self._btn_cancel)
         layout.addLayout(row)
+
 
     def _refresh(self):
         self._list.clear()

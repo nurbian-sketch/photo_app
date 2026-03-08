@@ -53,6 +53,12 @@ class CameraStatusBar(QWidget):
             QPushButton:disabled {
                 background-color: #BDBDBD;
             }
+            QPushButton:focus {
+                border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: #FF9800;
+            }
+            QPushButton:focus:hover {
+                background-color: #F57C00;
+            }
         """)
         layout.addWidget(self.reset_btn)
         
@@ -74,7 +80,7 @@ class CameraStatusBar(QWidget):
             self.status_label.setStyleSheet("""
                 QLabel {
                     background-color: #FFEBEE;
-                    color: #C62828;
+                    color: #9e3535;
                     padding: 10px;
                     border-radius: 4px;
                     font-weight: bold;

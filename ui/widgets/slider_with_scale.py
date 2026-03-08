@@ -52,6 +52,7 @@ class SliderWithScale(QWidget):
     SCALE_COLOR = "color: #999; font-size: 11px;"
     SCALE_COLOR_LOCKED = "color: #555; font-size: 11px;"
     VALUE_STYLE = "font-size: 14px; font-weight: 600;"
+    VALUE_STYLE_FOCUSED = "font-size: 14px; font-weight: 600; color: #42a5f5;"
     VALUE_STYLE_LOCKED = "font-size: 14px; font-weight: 600; color: #555;"
 
     def __init__(self, title: str, values: list, parent=None):
@@ -91,11 +92,7 @@ class SliderWithScale(QWidget):
         self.slider.setStyle(_get_style())
         self.slider.setMinimumHeight(BigHandleStyle.HANDLE_H + 4)
 
-        # Paleta — zmiana koloru Highlight (pressed) z niebieskiego na neutralny
-        pal = self.slider.palette()
-        pal.setColor(QPalette.ColorRole.Highlight, QColor("#555555"))
-        self.slider.setPalette(pal)
-
+        self.slider.installEventFilter(self)
         slider_row.addWidget(self.slider)
         layout.addLayout(slider_row)
 
@@ -193,6 +190,16 @@ class SliderWithScale(QWidget):
             lbl.setStyleSheet(scale_color)
         self.value_label.setStyleSheet(value_style)
         self.title_label.setStyleSheet(title_style)
+
+    def eventFilter(self, obj, event):
+        """Podświetla etykietę wartości gdy suwak ma fokus."""
+        if obj is self.slider:
+            if event.type() == QEvent.Type.FocusIn:
+                if not (self._locked or not self.isEnabled()):
+                    self.value_label.setStyleSheet(self.VALUE_STYLE_FOCUSED)
+            elif event.type() == QEvent.Type.FocusOut:
+                self.value_label.setStyleSheet(self.VALUE_STYLE)
+        return super().eventFilter(obj, event)
 
     def _connect(self):
         self.slider.valueChanged.connect(self._on_change)

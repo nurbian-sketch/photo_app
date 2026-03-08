@@ -107,6 +107,7 @@ class SessionContext:
     # Ścieżki (puste dla PRIVATE)
     session_path:  str          = ""  # ~/Obrazy/sessions/SESSION_ID/
     captures_path: str          = ""  # session_path/captures/
+    phone:         str          = ""  # numer telefonu klienta (opcjonalny)
 
     # Ustawienia aparatu (snapshot przed startem)
     camera_settings: CameraSettings = field(default_factory=CameraSettings)
@@ -146,6 +147,7 @@ class SessionContext:
             "session_id":         self.session_id,
             "mode":               self.mode.value,
             "email":              self.email,
+            "phone":              self.phone,
             "duration_min":       self.duration_min,
             "started_at":         self.started_at.isoformat(),
             "ended_at":           self.ended_at.isoformat() if self.ended_at else None,
@@ -163,6 +165,7 @@ class SessionContext:
             session_id=d["session_id"],
             mode=SessionMode(d["mode"]),
             email=d.get("email", ""),
+            phone=d.get("phone", ""),
             duration_min=d.get("duration_min", 0),
         )
         ctx.started_at = datetime.fromisoformat(d["started_at"])
@@ -219,6 +222,7 @@ def make_session_context(
     session_base_dir: str,
     captures_subdir: str = "captures",
     camera_settings: Optional[CameraSettings] = None,
+    phone: str = "",
 ) -> SessionContext:
     """
     Fabryka SessionContext — tworzy kompletny kontekst przed startem sesji.
@@ -249,6 +253,7 @@ def make_session_context(
         session_id=session_id,
         mode=mode,
         email=email_clean,
+        phone=phone.strip(),
         duration_min=duration_min,
         session_path=session_path,
         captures_path=captures_path,

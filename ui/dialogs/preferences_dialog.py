@@ -8,8 +8,7 @@ from PyQt6.QtWidgets import (
     QLabel, QLineEdit, QPushButton, QFileDialog,
     QGroupBox, QDialogButtonBox, QMessageBox, QComboBox
 )
-from PyQt6.QtCore import QSettings
-
+from PyQt6.QtCore import QSettings, Qt
 
 class PreferencesDialog(QDialog):
     """Dialog ustawień aplikacji."""
@@ -28,6 +27,12 @@ class PreferencesDialog(QDialog):
             self.windowFlags() & ~__import__('PyQt6.QtCore', fromlist=['Qt']).Qt.WindowType.WindowContextHelpButtonHint
         )
         self.settings = QSettings("Grzeza", "SessionsAssistant")
+        self.setStyleSheet(
+            "QPushButton { background-color: palette(button); }"
+            " QPushButton:hover { background-color: palette(midlight); }"
+            " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: palette(button); }"
+            " QPushButton:focus:hover { background-color: palette(midlight); }"
+        )
         self._init_ui()
         self._load_settings()
 
@@ -37,6 +42,7 @@ class PreferencesDialog(QDialog):
 
         # === Session Directory Group ===
         dir_group = QGroupBox(self.tr("Session Directory"))
+        dir_group.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         dir_layout = QVBoxLayout(dir_group)
 
         description = QLabel(self.tr(
@@ -61,6 +67,7 @@ class PreferencesDialog(QDialog):
 
         # === Language Group ===
         lang_group = QGroupBox(self.tr("Language"))
+        lang_group.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         lang_layout = QVBoxLayout(lang_group)
 
         # (label, QSettings code) — "" = auto (system locale)
@@ -83,6 +90,37 @@ class PreferencesDialog(QDialog):
         lang_layout.addWidget(lang_note)
         layout.addWidget(lang_group)
 
+        # === Telegram Bot Group ===
+        tg_group = QGroupBox(self.tr("Telegram Bot"))
+        tg_group.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        tg_layout = QVBoxLayout(tg_group)
+
+        # Bot Token
+        token_label = QLabel(self.tr("Bot Token:"))
+        token_row = QHBoxLayout()
+        self.tg_token_edit = QLineEdit()
+        self.tg_token_edit.setPlaceholderText("123456789:ABCdefGHIjklMNOpqrsTUVwxyz")
+        self.tg_token_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        token_row.addWidget(self.tg_token_edit, 1)
+        btn_show = QPushButton(self.tr("Show"))
+        btn_show.setFixedWidth(55)
+        btn_show.setCheckable(True)
+        btn_show.toggled.connect(lambda checked: self.tg_token_edit.setEchoMode(
+            QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password
+        ))
+        token_row.addWidget(btn_show)
+        tg_layout.addWidget(token_label)
+        tg_layout.addLayout(token_row)
+
+        # Chat ID
+        chat_label = QLabel(self.tr("Recipient Chat ID:"))
+        self.tg_chat_edit = QLineEdit()
+        self.tg_chat_edit.setPlaceholderText("123456789")
+        tg_layout.addWidget(chat_label)
+        tg_layout.addWidget(self.tg_chat_edit)
+
+        layout.addWidget(tg_group)
+
         layout.addStretch()
 
         # === Dialog Buttons ===
@@ -91,6 +129,7 @@ class PreferencesDialog(QDialog):
             | QDialogButtonBox.StandardButton.Cancel
             | QDialogButtonBox.StandardButton.RestoreDefaults
         )
+        button_box.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         button_box.accepted.connect(self._save_and_accept)
         button_box.rejected.connect(self.reject)
         button_box.button(
@@ -108,6 +147,9 @@ class PreferencesDialog(QDialog):
         codes = [code for _, code in self._lang_items]
         idx = codes.index(current_lang) if current_lang in codes else 0
         self.lang_combo.setCurrentIndex(idx)
+
+        self.tg_token_edit.setText(self.settings.value("telegram/bot_token", ""))
+        self.tg_chat_edit.setText(self.settings.value("telegram/chat_id", ""))
 
     def _save_and_accept(self):
         directory = self.dir_edit.text().strip() or self.DEFAULT_SESSION_DIR
@@ -129,10 +171,15 @@ class PreferencesDialog(QDialog):
         lang_code = self._lang_items[self.lang_combo.currentIndex()][1]
         self.settings.setValue("app/language", lang_code)
 
+        self.settings.setValue("telegram/bot_token", self.tg_token_edit.text().strip())
+        self.settings.setValue("telegram/chat_id", self.tg_chat_edit.text().strip())
+
         self.accept()
 
     def _restore_defaults(self):
         self.dir_edit.setText(self.DEFAULT_SESSION_DIR)
+        self.tg_token_edit.clear()
+        self.tg_chat_edit.clear()
 
     def _browse_directory(self):
         current = self.dir_edit.text() or self.DEFAULT_SESSION_DIR

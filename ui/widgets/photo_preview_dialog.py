@@ -81,7 +81,9 @@ class PhotoPreviewDialog(QDialog):
             btn_close_all = QPushButton(self.tr("Close All"))
             btn_close_all.setFixedSize(90, 32)
             btn_close_all.setStyleSheet(
-                "background-color: #c62828; color: white; font-weight: bold;"
+                "QPushButton { background-color: #9e3535; color: white; font-weight: bold; }"
+                " QPushButton:focus { border: 1px solid rgba(255, 255, 255, 0.5); border-radius: 3px; background-color: #9e3535; }"
+                " QPushButton:focus:hover { background-color: #9e3535; }"
             )
             btn_close_all.clicked.connect(self._close_all_callback)
             bar.addWidget(btn_close_all)

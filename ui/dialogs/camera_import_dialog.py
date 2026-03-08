@@ -227,7 +227,9 @@ class CameraImportDialog(QDialog):
         self._btn_start = QPushButton(self.tr("Start Import"))
         self._btn_start.setFixedHeight(36)
         self._btn_start.setStyleSheet(
-            "background-color: #1565c0; color: white; font-weight: bold;"
+            "QPushButton { background-color: #1565c0; color: white; font-weight: bold; }"
+            " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: #1565c0; }"
+            " QPushButton:focus:hover { background-color: #1976d2; }"
         )
         self._btn_start.clicked.connect(self._start_import)
         row_btns.addWidget(self._btn_start)

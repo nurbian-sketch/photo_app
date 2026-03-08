@@ -42,6 +42,7 @@ class CameraSettingsPanel(QWidget):
         col1.setMinimumWidth(450)
         col1_layout = QVBoxLayout(col1)
         col1_layout.setContentsMargins(0, 0, 0, 0)
+        col1_layout.addStretch(1)              # wyśrodkowanie pionowe
         self.exposure_ctrl = ExposureControls()
         col1_layout.addWidget(self.exposure_ctrl, 3)
         col1_layout.addSpacing(20)
@@ -51,6 +52,7 @@ class CameraSettingsPanel(QWidget):
         col2.setMinimumWidth(280)
         col2_layout = QVBoxLayout(col2)
         col2_layout.setContentsMargins(0, 0, 0, 0)
+        col2_layout.addStretch(1)              # wyśrodkowanie pionowe
         self.image_ctrl = ImageControls()
         self.focus_ctrl = AutofocusControls()
         col2_layout.addWidget(self.image_ctrl, 2)

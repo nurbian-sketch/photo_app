@@ -41,6 +41,10 @@ class ExposureControls(QWidget):
         '2.3', '2.6', '3'
     ]
 
+    # Ograniczenia zakresu parametrów sesji
+    ISO_MAX = 800
+    SHUTTER_DESIRED = ["2", "1", "1/15", "1/30", "1/60", "1/125", "1/250", "1/500", "1/1000"]
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
@@ -84,8 +88,10 @@ class ExposureControls(QWidget):
                 btn_auto.setCheckable(True)
                 btn_auto.setStyleSheet(
                     "QPushButton:checked { background-color: #2e7d32; color: white; font-weight: bold; }"
-                    "QPushButton:disabled { background-color: #3a3a3a; color: #666; border: 1px solid #444; }"
-                    "QPushButton:checked:disabled { background-color: #3a3a3a; color: #666; border: 1px solid #444; }"
+                    " QPushButton:disabled { background-color: #3a3a3a; color: #666; border: 1px solid #444; }"
+                    " QPushButton:checked:disabled { background-color: #3a3a3a; color: #666; border: 1px solid #444; }"
+                    " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: palette(button); }"
+                    " QPushButton:focus:hover { background-color: palette(midlight); }"
                 )
                 btn_auto.clicked.connect(lambda _, k=key: self._handle_auto_press(k))
                 row.addWidget(btn_auto)
@@ -227,7 +233,15 @@ class ExposureControls(QWidget):
                 if key == "exposurecompensation":
                     continue
 
+                if key == "iso":
+                    filtered = [v for v in new_choices if v == 'Auto' or (v.isdigit() and int(v) <= self.ISO_MAX)]
+                    if filtered:
+                        new_choices = filtered
+
                 if key == "shutterspeed":
+                    desired = [v for v in self.SHUTTER_DESIRED if v in new_choices]
+                    if desired:
+                        new_choices = ['Auto'] + desired if 'Auto' in new_choices else desired
                     self.shutter_all = new_choices
                     if self.flash_check.isChecked():
                         new_choices = [c for c in new_choices if c in self.shutter_flash or c == 'Auto']

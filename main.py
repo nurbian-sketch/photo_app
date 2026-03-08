@@ -1,7 +1,7 @@
 import sys
 import os
 from PyQt6.QtWidgets import QApplication, QSplashScreen
-from PyQt6.QtGui import QPixmap, QIcon
+from PyQt6.QtGui import QColor, QPalette, QPixmap, QIcon
 from PyQt6.QtCore import qInstallMessageHandler, QtMsgType, QTranslator, QLocale, QSettings
 from ui.main_window import MainWindow
 from core.initializer import AppInitializer
@@ -41,7 +41,17 @@ def main():
     app.setStyle('Fusion')
     app.setStyleSheet(
         "QToolTip { color: #bbbbbb; background-color: #2b2b2b; border: 1px solid #555555; }"
+        " QPushButton { background-color: palette(button); }"
+        " QPushButton:hover { background-color: palette(midlight); }"
+        " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: palette(button); }"
+        " QPushButton:focus:hover { background-color: palette(midlight); }"
     )
+
+    # Biały/przygaszony focus ring zamiast niebieskiego — ujednolicony w całym projekcie
+    pal = app.palette()
+    pal.setColor(QPalette.ColorGroup.All, QPalette.ColorRole.Highlight, QColor(160, 160, 160))
+    pal.setColor(QPalette.ColorGroup.All, QPalette.ColorRole.HighlightedText, QColor(10, 10, 10))
+    app.setPalette(pal)
 
     # Ikona aplikacji
     app.setWindowIcon(QIcon("assets/icons/favicon/web-app-manifest-192x192.png"))
@@ -49,7 +59,7 @@ def main():
     app.setDesktopFileName("sessions_assistant")
 
     # Grafika startowa
-    pixmap = QPixmap("assets/pictures/startup-picture-3.jpg")
+    pixmap = QPixmap("assets/pictures/startup-picture-4.jpg")
     splash = QSplashScreen(pixmap)
     splash.show()
 

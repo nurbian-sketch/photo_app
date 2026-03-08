@@ -17,8 +17,6 @@ from ui.widgets.photo_preview_dialog import PhotoPreviewDialog
 
 class CameraView(QWidget):
 
-    # Sygnał żądania ponownego połączenia z aparatem
-    reconnect_requested = pyqtSignal()
     # Emitowany gdy lista otwartych podglądów się zmienia (open/close)
     preview_list_changed = pyqtSignal(list)  # lista (title, dialog) par
     # Komunikaty do status bar main window
@@ -40,10 +38,8 @@ class CameraView(QWidget):
         self.lv_thread = None
         self._dead_thread = None    # Wątek po _on_lv_error — USB nadal zajęte do czasu finish
         self._camera_ready = False
-        self._needs_reconnect = False  # Flaga: było zerwane połączenie
         self._error_stopped = False   # Flaga: wątek zatrzymany przez błąd (nie przez user)
         self._stopping = False    # Wątek w trakcie zatrzymywania
-        self._reconnecting = False  # Trwa próba reconnect
         self._capture_blocked = False  # Capture zablokowany po błędzie — odblokuj na klatce
         self._capture_secs = 0         # Licznik sekund oczekiwania na capture
         self._capture_timer = QTimer()
@@ -130,7 +126,12 @@ class CameraView(QWidget):
         self.btn_cap = QPushButton(self.tr("CAPTURE PHOTO"))
         self.btn_lv.setFixedSize(200, 40)
         self.btn_cap.setFixedSize(180, 40)
-        self.btn_cap.setStyleSheet("font-weight: bold;")
+        self.btn_lv.setStyleSheet(self.BTN_STYLE_NORMAL)
+        self.btn_cap.setStyleSheet(
+            "QPushButton { font-weight: bold; }"
+            " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: palette(button); }"
+            " QPushButton:focus:hover { background-color: palette(midlight); }"
+        )
 
         self.btn_lv_rotate_left = QPushButton("↶ 90°")
         self.btn_lv_rotate_left.setFixedSize(65, 40)
@@ -200,14 +201,25 @@ class CameraView(QWidget):
             )
             self.lv_screen.setPixmap(scaled)
             self.lv_screen.setStyleSheet(
-                "background: #3d3d3d; border: 2px solid #ff8a65;"
+                "background: #3d3d3d; border: 2px solid #924040;"
                 if is_blinking else
                 "background: #3d3d3d; border: 2px solid #555;"
             )
 
     # ─────────────────────────────── Stan aparatu
 
-    BTN_STYLE_STOP = "background-color: #c62828; color: white; font-weight: bold;"
+    BTN_STYLE_NORMAL = (
+        "QPushButton { background-color: palette(button); }"
+        " QPushButton:hover { background-color: palette(midlight); }"
+        " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: palette(button); }"
+        " QPushButton:focus:hover { background-color: palette(midlight); }"
+    )
+    BTN_STYLE_STOP = (
+        "QPushButton { background-color: #9e3535; color: white; font-weight: bold;"
+        " border: 1px solid rgba(0,0,0,0.3); border-radius: 3px; }"
+        " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: #9e3535; }"
+        " QPushButton:disabled { background-color: #9e3535; color: rgba(255,255,255,140); }"
+    )
 
     def set_camera_ready(self, ready):
         """Ustawia stan gotowości aparatu — włącza/wyłącza przyciski i kontrolki."""
@@ -229,16 +241,16 @@ class CameraView(QWidget):
             self.image_ctrl.setEnabled(ready)
             self.focus_ctrl.setEnabled(ready)
 
-        if self._reconnecting or self._stopping or self._needs_reconnect:
-            pass
+        if self._stopping:
+            pass  # LV zatrzymuje się — nie zmieniaj przycisku
         elif not ready:
-            self.btn_lv.setText(self.tr("CONNECT CAMERA"))
-            self.btn_lv.setStyleSheet("")
-            self.btn_lv.setEnabled(True)
+            self.btn_lv.setEnabled(False)
         elif not (self.lv_thread and self.lv_thread.isRunning()):
             self.btn_lv.setText(self.tr("START LIVE VIEW"))
-            self.btn_lv.setStyleSheet("")
+            self.btn_lv.setStyleSheet(self.BTN_STYLE_NORMAL)
             self.btn_lv.setEnabled(True)
+            if self._view_active:
+                QTimer.singleShot(50, self.btn_lv.setFocus)
 
         if not (self.lv_thread and self.lv_thread.isRunning()):
             self._set_buttons_enabled(ready)
@@ -253,51 +265,15 @@ class CameraView(QWidget):
     # ─────────────────────────────── Live View — sterowanie
 
     def _toggle_liveview(self):
-        """Przełącza stan wątku gphoto: CONNECT / START / STOP / RECONNECT."""
+        """Przełącza LV: START lub STOP."""
         if self.lv_thread and self.lv_thread.isRunning():
             self._stop_lv()
-        elif self._needs_reconnect:
-            self._try_reconnect()
-        elif not self._camera_ready:
-            self.reconnect_requested.emit()
-        else:
+        elif self._camera_ready:
             self._start_lv()
-
-    def _try_reconnect(self):
-        """Próbuje reconnect: probe + auto-start LV."""
-        self._reconnecting = True
-        self.btn_lv.setEnabled(False)
-        self.btn_lv.setText(self.tr("Connecting..."))
-        self.status_message.emit(self.tr("Reconnecting camera..."), 0)
-        self.reconnect_requested.emit()
-
-    def on_probe_completed(self, camera_ready: bool):
-        """Wywołane przez MainWindow po zakończeniu probe (gdy _reconnecting=True)."""
-        if not self._reconnecting:
-            return
-        self._reconnecting = False
-        if self._stopping:
-            self._needs_reconnect = True
-            self.btn_lv.setText(self.tr("RECONNECT"))
-            self.btn_lv.setEnabled(True)
-            self.btn_lv.setStyleSheet("")
-            self.status_message.emit(self.tr("Camera not found — try again"), 4000)
-            return
-        if camera_ready and not (self.lv_thread and self.lv_thread.isRunning()):
-            self._needs_reconnect = False
-            self._error_stopped = False
-            self.status_message.emit(self.tr("Camera connected"), 3000)
-            self._start_lv()
-        else:
-            self._needs_reconnect = True
-            self.btn_lv.setText(self.tr("RECONNECT"))
-            self.btn_lv.setEnabled(True)
-            self.btn_lv.setStyleSheet("")
-            self.status_message.emit(self.tr("Camera not found — try again"), 4000)
 
     def _start_lv(self):
         """Inicjalizuje i uruchamia interfejs gphoto."""
-        # Zatrzymaj worker ustawień — zwalnia USB dla GPhotoInterface
+        # Zatrzymaj worker i wyłącz panel — zwalnia USB dla GPhotoInterface
         self._settings_panel.deactivate()
 
         self.btn_lv.setEnabled(False)
@@ -326,6 +302,12 @@ class CameraView(QWidget):
         self.btn_lv.setText(self.tr("STOP LIVE VIEW"))
         self.btn_lv.setStyleSheet(self.BTN_STYLE_STOP)
 
+        # Kontrolki ustawień działają przez lv_thread podczas LV — re-enable panelu
+        self._settings_panel.setEnabled(True)
+        self.exposure_ctrl.setEnabled(True)
+        self.image_ctrl.setEnabled(True)
+        self.focus_ctrl.setEnabled(True)
+
     def _stop_settings_worker(self):
         """Deleguje zatrzymanie workera ustawień do panelu."""
         self._settings_panel._stop_worker()
@@ -349,6 +331,7 @@ class CameraView(QWidget):
         self._capture_timer.stop()
         self.btn_lv_rotate_left.setEnabled(False)
         self.btn_lv_rotate_right.setEnabled(False)
+        self.btn_lv.setStyleSheet(self.BTN_STYLE_STOP)
         self.btn_lv.setEnabled(False)
         self.btn_lv.setText(self.tr("Stopping..."))
 
@@ -376,7 +359,6 @@ class CameraView(QWidget):
 
     def _on_lv_error(self, error_msg):
         """Obsługa błędów live view — pokazuje RECONNECT natychmiast."""
-        self._reconnecting = False
         self._stopping = False
 
         dead_thread = self.lv_thread
@@ -398,17 +380,14 @@ class CameraView(QWidget):
         self.focus_ctrl.setEnabled(False)
         self._set_buttons_enabled(False)
         self.btn_cap.setText(self.tr("CAPTURE PHOTO"))
-        self.lv_screen.setText(self.tr("Connection lost.\nClick to reconnect."))
+        self.lv_screen.setText(self.tr("Connection lost."))
         self.lv_screen.setStyleSheet(
             "background: #3d3d3d; border: 2px solid #555; color: #888;"
         )
 
-        self._needs_reconnect = True
         self._error_stopped = True
         self._camera_ready = False
-        self.btn_lv.setText(self.tr("RECONNECT"))
-        self.btn_lv.setEnabled(True)
-        self.btn_lv.setStyleSheet("")
+        self.btn_lv.setEnabled(False)  # aparat auto-wykryty — ponownie włączy się po probe
 
         if dead_thread and dead_thread.isRunning():
             self._dead_thread = dead_thread
@@ -420,6 +399,9 @@ class CameraView(QWidget):
                 dead_thread.mutex.unlock()
             dead_thread.finished.connect(self._on_dead_thread_finished)
             QTimer.singleShot(4000, lambda: self._force_terminate(dead_thread))
+        else:
+            # Wątek już martwy — USB wolne, od razu uruchom probe.
+            self.camera_released.emit()
 
     def _force_terminate(self, thread):
         """Ostateczność: terminate jeśli wątek nie zakończył się sam."""
@@ -430,16 +412,17 @@ class CameraView(QWidget):
             pass
 
     def _on_dead_thread_finished(self):
-        """Wywoływane gdy umierający wątek zwolnił USB."""
+        """Wywoływane gdy umierający wątek zwolnił USB po błędzie LV."""
         self._dead_thread = None
+        # USB zwolnione — uruchom probe żeby wykryć powrót aparatu.
+        self.camera_released.emit()
 
     def _on_thread_finished(self):
         """Wywoływane gdy user kliknął STOP i wątek zakończył run()."""
         self._stopping = False
-        if not self._needs_reconnect:
-            self.btn_lv.setText(self.tr("START LIVE VIEW"))
-            self.btn_lv.setStyleSheet("")
-            self.btn_lv.setEnabled(self._camera_ready)
+        self.btn_lv.setText(self.tr("START LIVE VIEW"))
+        self.btn_lv.setStyleSheet(self.BTN_STYLE_NORMAL)
+        self.btn_lv.setEnabled(self._camera_ready)
         # USB zwolnione — sygnał do main_window żeby uruchomił probe.
         # Probe wywoła set_camera_ready(True) → dopiero wtedy worker startuje.
         self.camera_released.emit()
@@ -515,6 +498,9 @@ class CameraView(QWidget):
         self._view_active = True
         # NIE startujemy workera tu — probe (wywoływane po on_enter) wywoła
         # set_camera_ready(True), które dopiero uruchomi workera po zwolnieniu USB.
+        # Focus: jeśli aparat już gotowy i przycisk enabled — ustaw od razu.
+        if self._camera_ready and self.btn_lv.isEnabled():
+            QTimer.singleShot(150, self.btn_lv.setFocus)
 
     def on_leave(self):
         """Wywoływane przy opuszczeniu widoku Camera — zamyka sesję PTP."""
@@ -524,9 +510,7 @@ class CameraView(QWidget):
             self._stop_lv()
         self.lv_thread = None
         self._dead_thread = None
-        self._needs_reconnect = False
         self._error_stopped = False
-        self._reconnecting = False
         self.exposure_ctrl.gphoto = None
         self.image_ctrl.gphoto = None
         self.focus_ctrl.gphoto = None
@@ -539,7 +523,7 @@ class CameraView(QWidget):
             "background: #3d3d3d; border: 2px solid #555; color: white;"
         )
         self.btn_lv.setText(self.tr("START LIVE VIEW"))
-        self.btn_lv.setStyleSheet("")
+        self.btn_lv.setStyleSheet(self.BTN_STYLE_NORMAL)
         self.btn_lv.setEnabled(self._camera_ready)
         self._capture_timer.stop()
         self.btn_cap.setEnabled(False)
@@ -627,6 +611,10 @@ class CameraView(QWidget):
 
     def _apply_profile(self, settings: dict):
         """Aplikuje ustawienia z profilu do UI i aparatu."""
+        # Wybierz aktywny worker: LV lub settings panel
+        lv_active = self.lv_thread and self.lv_thread.isRunning()
+        worker = self.lv_thread if lv_active else self._settings_panel.worker
+
         # Exposure
         for key in ('shutterspeed', 'aperture', 'iso', 'exposurecompensation'):
             if key in settings:
@@ -637,8 +625,8 @@ class CameraView(QWidget):
                         self.exposure_ctrl._update_auto_visuals(
                             key, settings[key] == "Auto"
                         )
-                if self.lv_thread and self.lv_thread.isRunning():
-                    self.lv_thread.update_camera_param(key, settings[key])
+                if worker:
+                    worker.update_camera_param(key, str(settings[key]))
 
         # Image
         img_keys = ('picturestyle', 'imageformat', 'alomode',
@@ -660,9 +648,9 @@ class CameraView(QWidget):
                     combo.blockSignals(True)
                     combo.setCurrentText(display)
                     combo.blockSignals(False)
-            if self.lv_thread and self.lv_thread.isRunning():
+            if worker:
                 for k, v in img_s.items():
-                    self.lv_thread.update_camera_param(k, str(v))
+                    worker.update_camera_param(k, str(v))
 
         if af_s:
             for param, val in af_s.items():
@@ -672,9 +660,9 @@ class CameraView(QWidget):
                     combo.blockSignals(True)
                     combo.setCurrentText(display)
                     combo.blockSignals(False)
-            if self.lv_thread and self.lv_thread.isRunning():
+            if worker:
                 for k, v in af_s.items():
-                    self.lv_thread.update_camera_param(k, str(v))
+                    worker.update_camera_param(k, str(v))
 
         self.status_message.emit("Profile loaded", 3000)
 
