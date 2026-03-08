@@ -118,6 +118,7 @@ class SessionContext:
     # Stan końcowy
     end_reason:    Optional[EndReason] = None
     sync_status:   str          = "pending"  # pending | done | failed | skipped
+    share_code:    str          = ""          # 6-znakowy kod udostępniania (pusty = brak)
 
     # Przesunięcie zegara aparat↔system (sekundy) — ustalane przy imporcie
     camera_time_offset: int     = 0
@@ -156,6 +157,7 @@ class SessionContext:
             "imported_files":     self.imported_files,
             "end_reason":         self.end_reason.value if self.end_reason else None,
             "sync_status":        self.sync_status,
+            "share_code":         self.share_code,
             "camera_time_offset": self.camera_time_offset,
         }
 
@@ -176,6 +178,7 @@ class SessionContext:
         ctx.imported_files     = d.get("imported_files", [])
         ctx.end_reason         = EndReason(d["end_reason"]) if d.get("end_reason") else None
         ctx.sync_status        = d.get("sync_status", "pending")
+        ctx.share_code         = d.get("share_code", "")
         ctx.camera_time_offset = d.get("camera_time_offset", 0)
         return ctx
 

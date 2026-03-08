@@ -12,11 +12,11 @@ import re
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QEvent, QSettings, QTimer, pyqtSignal
-from PyQt6.QtGui import QPixmap, QPainter, QFont, QColor, QTransform
+from PyQt6.QtGui import QPixmap, QPainter, QFont, QColor, QTransform, QIcon
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget,
     QLabel, QLineEdit, QPushButton, QSizePolicy,
-    QProgressBar, QGroupBox, QFrame, QDialog, QSplitter,
+    QProgressBar, QGroupBox, QFrame, QDialog, QSplitter, QCheckBox,
 )
 
 from core.session_context import (
@@ -34,6 +34,10 @@ from ui.widgets.camera_settings_panel import CameraSettingsPanel
 from ui.dialogs.profile_browser_dialog import ProfileBrowserDialog
 from ui.dialogs.usb_disconnect_dialog import UsbDisconnectDialog, _lsusb_has_canon
 from ui.widgets.slider_with_scale import SliderWithScale
+
+import qrcode
+import core.session_codes as session_codes
+from ui.dialogs.preferences_dialog import PreferencesDialog
 
 # ─────────────────────────── STAŁE
 
@@ -212,6 +216,21 @@ class ConfigPanel(QWidget):
         self.email_field.installEventFilter(self)
         self.phone_field.installEventFilter(self)
 
+        # Wiersz z ikoną Telegrama i checkboxem — bezpośrednio po polach kontaktowych
+        tg_row = QHBoxLayout()
+        tg_icon = QLabel()
+        _tg_qicon = QIcon.fromTheme("telegram")
+        if not _tg_qicon.isNull():
+            tg_icon.setPixmap(_tg_qicon.pixmap(20, 20))
+        else:
+            tg_icon.setText("✈")
+        tg_row.addWidget(tg_icon)
+        self.chk_share_code = QCheckBox(self.tr("Create sharing code (Telegram)"))
+        self.chk_share_code.toggled.connect(self._on_share_code_toggled)
+        tg_row.addWidget(self.chk_share_code)
+        tg_row.addStretch()
+        inner.addLayout(tg_row)
+
         # Info trybu
         self.mode_info = QLabel("")
         self.mode_info.setStyleSheet("color: #aaa; font-style: italic;")
@@ -384,6 +403,26 @@ class ConfigPanel(QWidget):
         # Tryb kliencki — przekaż email i telefon
         self.start_requested.emit(email, phone, duration)
 
+    def _on_share_code_toggled(self, checked: bool) -> None:
+        """Blokuje pola email/telefon gdy aktywny tryb kodu."""
+        self.email_field.setEnabled(not checked)
+        if checked:
+            self.email_field.clear()
+            self.mode_info.setText(self.tr("Sharing code session — client receives photos via Telegram QR code."))
+            self.btn_start.setEnabled(True)
+            self.btn_home.setEnabled(False)
+            self.btn_private.setEnabled(False)
+        else:
+            self.email_field.setEnabled(True)
+            self._on_contact_changed()
+            self.btn_home.setEnabled(True)
+            self.btn_private.setEnabled(True)
+
+    @property
+    def share_code_requested(self) -> bool:
+        """Zwraca True gdy checkbox kodu jest zaznaczony."""
+        return self.chk_share_code.isChecked()
+
     def reset(self):
         """Przywraca formularz do stanu początkowego."""
         self.email_field.setReadOnly(False)
@@ -398,6 +437,7 @@ class ConfigPanel(QWidget):
         _f = self.btn_home.font(); _f.setBold(False); self.btn_home.setFont(_f)
         self.btn_private.setEnabled(True)
         _f = self.btn_private.font(); _f.setBold(False); self.btn_private.setFont(_f)
+        self.chk_share_code.setChecked(False)
 
 
 # ─────────────────────────── PANEL AKTYWNEJ SESJI
@@ -609,6 +649,22 @@ class SummaryPanel(QWidget):
 
         layout.addSpacing(8)
 
+        # Widget QR kodu (domyślnie ukryty)
+        self.qr_label = QLabel()
+        self.qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.qr_label.hide()
+        layout.addWidget(self.qr_label)
+
+        self.code_label = QLabel()
+        self.code_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        font_code = QFont()
+        font_code.setPointSize(16)
+        font_code.setBold(True)
+        font_code.setFamily("monospace")
+        self.code_label.setFont(font_code)
+        self.code_label.hide()
+        layout.addWidget(self.code_label)
+
         self.warnings_label = QLabel("")
         self.warnings_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.warnings_label.setStyleSheet("color: #e65100; font-size: 12px;")
@@ -679,6 +735,69 @@ class SummaryPanel(QWidget):
 
         # Darkroom niedostępny dla PRIVATE
         self.btn_darkroom.setVisible(ctx.mode != SessionMode.PRIVATE)
+
+        # QR kod — tylko gdy sesja miała share_code
+        if ctx.share_code:
+            self._show_qr(ctx.share_code)
+        else:
+            self.qr_label.hide()
+            self.code_label.hide()
+
+    def _show_qr(self, code: str) -> None:
+        """Generuje i wyświetla QR kod z deep linkiem do bota."""
+        bot_username = "pryzmat_studio_bot"
+        url = f"https://t.me/{bot_username}?start={code}"
+
+        qr = qrcode.QRCode(
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(url)
+        qr.make(fit=True)
+
+        # Czarno-biały QR
+        qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGBA")
+
+        # Logo w centrum (maks. 28% szerokości — ERROR_CORRECT_H toleruje 30%)
+        import io
+        from PIL import Image as _PilImage
+        logo_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__)))), "assets", "icons", "pryzmat-ico.png")
+        if os.path.exists(logo_path):
+            logo = _PilImage.open(logo_path).convert("RGBA")
+            max_logo = int(qr_img.width * 0.20)
+            logo.thumbnail((max_logo, max_logo), _PilImage.LANCZOS)
+            # Białe tło z marginesem pod logo
+            pad = 12
+            bg = _PilImage.new("RGBA", (logo.width + pad * 2, logo.height + pad * 2), (255, 255, 255, 255))
+            bg.paste(logo, (pad, pad), logo)
+            pos = ((qr_img.width - bg.width) // 2, (qr_img.height - bg.height) // 2)
+            qr_img.paste(bg, pos)
+
+        buf = io.BytesIO()
+        qr_img.save(buf, format="PNG")
+        pixmap_raw = QPixmap()
+        pixmap_raw.loadFromData(buf.getvalue())
+        pixmap_scaled = pixmap_raw.scaled(300, 300, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+
+        # Zaokrąglone rogi — maska przez QPainterPath
+        from PyQt6.QtGui import QPainterPath
+        radius = 16
+        pixmap = QPixmap(pixmap_scaled.size())
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(pixmap.rect().toRectF(), radius, radius)
+        painter.setClipPath(path)
+        painter.drawPixmap(0, 0, pixmap_scaled)
+        painter.end()
+
+        self.qr_label.setPixmap(pixmap)
+        self.qr_label.show()
+        self.code_label.setText(self.tr("Session code: %1").replace("%1", code))
+        self.code_label.show()
 
 
 # ─────────────────────────── GŁÓWNY WIDOK
@@ -1058,6 +1177,18 @@ class SessionView(QWidget):
         cam_settings = self._current_camera_settings or CameraSettings()
 
         ctx = make_session_context(email, duration_min, base_dir, captures, cam_settings, phone)
+
+        # Tryb kodu: checkbox zaznaczony + brak emaila → wymusz CLIENT (pliki muszą być importowane)
+        if self._config_panel.share_code_requested and ctx.mode == SessionMode.PRIVATE:
+            ctx.mode = SessionMode.CLIENT
+            ctx.session_path  = os.path.join(base_dir, ctx.session_id)
+            ctx.captures_path = ctx.session_path
+
+        # Generuj kod udostępniania jeśli zaznaczono checkbox
+        if self._config_panel.share_code_requested:
+            code = session_codes.generate_code()
+            ctx.share_code = code
+
         store = SessionStore(base_dir)
 
         self._runner = SessionRunner(ctx, store, rclone_rem, rclone_dst, pre_session_files)
@@ -1131,6 +1262,14 @@ class SessionView(QWidget):
     def _on_session_finished(self, summary: SessionSummary):
         self._active_panel.show_result(summary)
         self._summary_panel.populate(summary)
+
+        # Zarejestruj kod sesji jeśli istnieje
+        if summary.context.share_code and summary.context.session_path:
+            session_codes.register(
+                summary.context.share_code,
+                summary.context.session_path,
+            )
+
         self._left_panel.hide()
         self._stack.setCurrentIndex(self._PAGE_SUMMARY)
         self.session_finished.emit(summary)

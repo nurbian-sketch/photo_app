@@ -59,7 +59,7 @@ def main():
     app.setDesktopFileName("sessions_assistant")
 
     # Grafika startowa
-    pixmap = QPixmap("assets/pictures/startup-picture-4.jpg")
+    pixmap = QPixmap("assets/pictures/startup-picture-6.png")
     splash = QSplashScreen(pixmap)
     splash.show()
 

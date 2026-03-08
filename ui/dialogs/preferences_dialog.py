@@ -6,7 +6,7 @@ import os
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QFileDialog,
-    QGroupBox, QDialogButtonBox, QMessageBox, QComboBox
+    QGroupBox, QDialogButtonBox, QMessageBox, QComboBox, QSpinBox
 )
 from PyQt6.QtCore import QSettings, Qt
 
@@ -121,6 +121,21 @@ class PreferencesDialog(QDialog):
 
         layout.addWidget(tg_group)
 
+        # === Sharing Group ===
+        sharing_group = QGroupBox(self.tr("Sharing"))
+        sharing_layout = QVBoxLayout(sharing_group)
+
+        expiry_row = QHBoxLayout()
+        expiry_label = QLabel(self.tr("Share code expiry (days):"))
+        self.expiry_spin = QSpinBox()
+        self.expiry_spin.setRange(1, 365)
+        self.expiry_spin.setValue(14)
+        expiry_row.addWidget(expiry_label)
+        expiry_row.addWidget(self.expiry_spin)
+        expiry_row.addStretch()
+        sharing_layout.addLayout(expiry_row)
+        layout.addWidget(sharing_group)
+
         layout.addStretch()
 
         # === Dialog Buttons ===
@@ -151,6 +166,9 @@ class PreferencesDialog(QDialog):
         self.tg_token_edit.setText(self.settings.value("telegram/bot_token", ""))
         self.tg_chat_edit.setText(self.settings.value("telegram/chat_id", ""))
 
+        expiry = self.settings.value("sharing/code_expiry_days", 14, type=int)
+        self.expiry_spin.setValue(expiry)
+
     def _save_and_accept(self):
         directory = self.dir_edit.text().strip() or self.DEFAULT_SESSION_DIR
         directory = os.path.expanduser(directory)
@@ -173,6 +191,8 @@ class PreferencesDialog(QDialog):
 
         self.settings.setValue("telegram/bot_token", self.tg_token_edit.text().strip())
         self.settings.setValue("telegram/chat_id", self.tg_chat_edit.text().strip())
+
+        self.settings.setValue("sharing/code_expiry_days", self.expiry_spin.value())
 
         self.accept()
 
@@ -201,6 +221,12 @@ class PreferencesDialog(QDialog):
             PreferencesDialog.KEY_SESSION_DIR,
             PreferencesDialog.DEFAULT_SESSION_DIR
         )
+
+    @staticmethod
+    def get_code_expiry_days() -> int:
+        """Zwraca liczbę dni ważności kodu sesji."""
+        settings = QSettings("Grzeza", "SessionsAssistant")
+        return settings.value("sharing/code_expiry_days", 14, type=int)
 
     @staticmethod
     def get_captures_subdir() -> str:
