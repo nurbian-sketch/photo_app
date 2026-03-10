@@ -11,7 +11,7 @@ import os
 import re
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QEvent, QSettings, QTimer, pyqtSignal
+from PyQt6.QtCore import Qt, QSettings, QTimer, QSize, pyqtSignal
 from PyQt6.QtGui import QPixmap, QPainter, QFont, QColor, QTransform, QIcon
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget,
@@ -31,6 +31,7 @@ from core.session_context import (
 from core.session_runner import SessionRunner, COUNTDOWN_SEC
 from core.session_store import SessionStore
 from ui.widgets.camera_settings_panel import CameraSettingsPanel
+from ui.styles import BTN_STYLE_RED
 from ui.dialogs.profile_browser_dialog import ProfileBrowserDialog
 from ui.dialogs.usb_disconnect_dialog import UsbDisconnectDialog, _lsusb_has_canon
 from ui.widgets.slider_with_scale import SliderWithScale
@@ -94,22 +95,31 @@ def _snapshot_card_files() -> set:
 # ─────────────────────────── WIDGET TŁA
 
 class BackgroundWidget(QWidget):
-    """Widget wypełniający tło obrazem (skalowanie z zachowaniem proporcji)."""
+    """Widget wypełniający tło obrazem (skalowanie z zachowaniem proporcji).
+    Nie wpływa na sizeHint okna — bezpieczny w trybie fullscreen/windowed."""
 
-    def __init__(self, parent=None):
+    def __init__(self, fill_color: str = "#000000", parent=None):
         super().__init__(parent)
         self._pixmap: Optional[QPixmap] = None
+        self._fill = QColor(fill_color)
 
     def set_background(self, path: str):
-        """Ładuje nowe tło. Brak pliku = czarne tło."""
+        """Ładuje nowe tło. Brak pliku = tło kolorem fill."""
         if path and os.path.exists(path):
             self._pixmap = QPixmap(path)
         else:
             self._pixmap = None
         self.update()
 
+    def sizeHint(self):
+        return self.minimumSizeHint()
+
+    def minimumSizeHint(self):
+        return QSize(0, 0)
+
     def paintEvent(self, event):
         painter = QPainter(self)
+        painter.fillRect(self.rect(), self._fill)
         if self._pixmap and not self._pixmap.isNull():
             scaled = self._pixmap.scaled(
                 self.size(),
@@ -118,25 +128,26 @@ class BackgroundWidget(QWidget):
             )
             x = (self.width()  - scaled.width())  // 2
             y = (self.height() - scaled.height()) // 2
-            painter.fillRect(self.rect(), QColor("#000000"))
             painter.drawPixmap(x, y, scaled)
-        else:
-            painter.fillRect(self.rect(), QColor("#000000"))
 
 
 # ─────────────────────────── SKALOWALNY NAPIS
 
 class _ScalableLabel(QLabel):
-    """QLabel który skaluje czcionkę do dostępnej szerokości (max 72pt, bold, #e0e0e0)."""
+    """QLabel który skaluje czcionkę do dostępnej szerokości, bold, #e0e0e0."""
 
-    _MAX_PT = 50
-    _MIN_PT = 16
+    _MIN_PT = 14
 
-    def __init__(self, text: str, parent=None):
+    def __init__(self, text: str, max_pt: int = 50, parent=None):
         super().__init__(text, parent)
+        self._max_pt = max_pt
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setStyleSheet("color: #e0e0e0; background: transparent;")
-        self._apply_font(self._MAX_PT)
+        self._apply_font(max_pt)
+
+    def setText(self, text: str):
+        super().setText(text)
+        self._fit_font()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -146,7 +157,7 @@ class _ScalableLabel(QLabel):
         avail = self.width()
         if avail <= 0:
             return
-        pt = self._MAX_PT
+        pt = self._max_pt
         fm = self.fontMetrics()
         while pt > self._MIN_PT and fm.horizontalAdvance(self.text()) > avail - 8:
             pt -= 1
@@ -160,16 +171,44 @@ class _ScalableLabel(QLabel):
         self.setFont(f)
 
 
+class _ScalableImage(QLabel):
+    """QLabel który skaluje obraz do dostępnej szerokości, z ograniczeniem max_h."""
+
+    def __init__(self, max_h: int = 320, parent=None):
+        super().__init__(parent)
+        self._raw: Optional[QPixmap] = None
+        self._max_h = max_h
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+    def set_image(self, path: str):
+        self._raw = QPixmap(path) if path and os.path.exists(path) else None
+        self._rescale()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._rescale()
+
+    def _rescale(self):
+        if not self._raw or self._raw.isNull() or self.width() <= 0:
+            self.clear()
+            return
+        scaled = self._raw.scaledToWidth(self.width(), Qt.TransformationMode.SmoothTransformation)
+        if scaled.height() > self._max_h:
+            scaled = self._raw.scaledToHeight(self._max_h, Qt.TransformationMode.SmoothTransformation)
+        super().setPixmap(scaled)
+
+
 # ─────────────────────────── PANEL KONFIGURACJI
 
 class ConfigPanel(QWidget):
     """Formularz przed startem sesji."""
 
-    start_requested = pyqtSignal(str, int)    # email, duration_min
-    private_requested = pyqtSignal(int)      # duration_min
+    start_requested = pyqtSignal(str, int)    # email (""|"home"|adres), duration_min
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._mode = ""   # "client" | "home" | "private" | ""
         self._build_ui()
 
     def _build_ui(self):
@@ -177,8 +216,7 @@ class ConfigPanel(QWidget):
         outer.setContentsMargins(40, 40, 40, 40)
         outer.addStretch(1)
 
-        # Duży napis — skaluje czcionkę do dostępnej szerokości, max 72pt
-        prepare_lbl = _ScalableLabel(self.tr("Prepare session..."))
+        prepare_lbl = _ScalableLabel(self.tr("Prepare session..."), max_pt=24)
         outer.addWidget(prepare_lbl)
 
         outer.addSpacing(24)
@@ -188,32 +226,43 @@ class ConfigPanel(QWidget):
         inner = QVBoxLayout(group)
         inner.setSpacing(16)
 
-        # Email
-        email_lbl = QLabel(self.tr("Email / Home / Private"))
+        # Przyciski wyboru trybu — CLIENT | HOME | PRIVATE
+        mode_row = QHBoxLayout()
+        self.btn_client  = QPushButton(self.tr("CLIENT"))
+        self.btn_home    = QPushButton(self.tr("HOME"))
+        self.btn_private = QPushButton(self.tr("PRIVATE"))
+        for b in (self.btn_client, self.btn_home, self.btn_private):
+            b.setFixedHeight(38)
+            mode_row.addWidget(b)
+        mode_row.addStretch(1)
+        self.btn_client.clicked.connect(self._on_client)
+        self.btn_home.clicked.connect(self._on_home)
+        self.btn_private.clicked.connect(self._on_private)
+        inner.addLayout(mode_row)
+
+        # Email — aktywny tylko w trybie CLIENT
+        email_lbl = QLabel(self.tr("Client email"))
         email_lbl.setStyleSheet("font-weight: 600;")
         inner.addWidget(email_lbl)
 
         self.email_field = QLineEdit()
-        self.email_field.setPlaceholderText(self.tr("client@example.com  |  home  |  (empty = private)"))
+        self.email_field.setPlaceholderText(self.tr("client@example.com"))
         self.email_field.setFixedHeight(36)
-        self.email_field.textChanged.connect(self._on_contact_changed)
+        self.email_field.setEnabled(False)
+        self.email_field.textChanged.connect(self._on_email_changed)
         self.email_field.returnPressed.connect(self._try_start)
         inner.addWidget(self.email_field)
 
-        # Kliknięcie lub fokus na polu odblokuje formularz po HOME/PRIVATE
-        self.email_field.installEventFilter(self)
-
-        # Wiersz z ikoną Telegrama i checkboxem — bezpośrednio po polach kontaktowych
+        # Wiersz Telegram QR
         tg_row = QHBoxLayout()
-        tg_icon = QLabel()
+        self.tg_icon = QLabel()
         _tg_qicon = QIcon.fromTheme("telegram")
         if not _tg_qicon.isNull():
-            tg_icon.setPixmap(_tg_qicon.pixmap(20, 20))
+            self.tg_icon.setPixmap(_tg_qicon.pixmap(20, 20))
         else:
-            tg_icon.setText("✈")
-        tg_row.addWidget(tg_icon)
+            self.tg_icon.setText("✈")
+        tg_row.addWidget(self.tg_icon)
         self.chk_share_code = QCheckBox(self.tr("Create sharing code (Telegram)"))
-        self.chk_share_code.toggled.connect(self._on_share_code_toggled)
         tg_row.addWidget(self.chk_share_code)
         tg_row.addStretch()
         inner.addLayout(tg_row)
@@ -235,169 +284,114 @@ class ConfigPanel(QWidget):
 
         inner.addSpacing(12)
 
-        # Przyciski
-        btn_row = QHBoxLayout()
-
-        self.btn_home = QPushButton(self.tr("HOME"))
-        self.btn_home.setFixedHeight(38)
-        self.btn_home.clicked.connect(self._on_home)
-        btn_row.addWidget(self.btn_home)
-
-        self.btn_private = QPushButton(self.tr("PRIVATE"))
-        self.btn_private.setFixedHeight(38)
-        self.btn_private.clicked.connect(self._on_private)
-        btn_row.addWidget(self.btn_private)
-
-        btn_row.addStretch(1)
-
+        # Przycisk START
+        start_row = QHBoxLayout()
+        start_row.addStretch(1)
         self.btn_start = QPushButton(self.tr("▶  START SESSION"))
         self.btn_start.setFixedHeight(42)
         self.btn_start.setEnabled(False)
-        self.btn_start.setAutoDefault(True)   # Enter aktywuje gdy fokus na przycisku
-
+        self.btn_start.setAutoDefault(True)
         self.btn_start.clicked.connect(self._on_start)
-        btn_row.addWidget(self.btn_start)
-
-        inner.addLayout(btn_row)
+        start_row.addWidget(self.btn_start)
+        start_row.addStretch(1)
+        inner.addLayout(start_row)
 
         outer.addWidget(group, 0, Qt.AlignmentFlag.AlignCenter)
         outer.addStretch(1)
 
-    # ─── logika formularza
+    # ─── helpers
 
-    def _on_contact_changed(self):
-        """Wywoływane przy zmianie pola email."""
-        email = self.email_field.text().strip().lower()
-        self._update_mode_info(email)
-
-    def _update_mode_info(self, email: str):
-        """Aktualizuje info trybu i stan przycisku START."""
-        if self.email_field.isReadOnly():
-            # Tryb HOME lub PRIVATE ustawiony przyciskiem — nie nadpisuj
-            return
-
-        if email == "home":
-            self.mode_info.setText(self.tr("Local session — photos saved locally, no upload."))
-            self._set_start_ready(True)
-            self.btn_home.setEnabled(False)
-            self.btn_private.setEnabled(True)
-        elif email == "":
-            self.mode_info.setText("")
-            self._set_start_ready(False)
-            self.btn_home.setEnabled(True)
-            self.btn_private.setEnabled(True)
-        elif EMAIL_RE.match(email):
-            self.mode_info.setText(
-                self.tr("Client session — photos will be sent to: %1.")
-                .replace("%1", email)
-            )
-            self._set_start_ready(True)
-            self.btn_home.setEnabled(True)
-            self.btn_private.setEnabled(True)
-        else:
-            # Niepoprawny email
-            self.mode_info.setText(
-                self.tr("Enter a valid email address.")
-            )
-            self._set_start_ready(False)
-            self.btn_home.setEnabled(True)
-            self.btn_private.setEnabled(True)
+    def _set_mode_bold(self, active_btn):
+        """Pogrubia aktywny przycisk trybu, pozostałe normalne."""
+        for b in (self.btn_client, self.btn_home, self.btn_private):
+            f = b.font(); f.setBold(b is active_btn); b.setFont(f)
 
     def _set_start_ready(self, enabled: bool):
-        """Włącza/wyłącza przycisk START z niebieską obwódką (setDefault)."""
         self.btn_start.setEnabled(enabled)
         self.btn_start.setDefault(enabled)
 
-    def eventFilter(self, obj, event):
-        if obj is self.email_field:
-            if event.type() == QEvent.Type.FocusIn:
-                self._unlock_contact_fields()
-        return super().eventFilter(obj, event)
+    # ─── wybór trybu
 
-    def _unlock_contact_fields(self):
-        """Odblokuj pola po kliknięciu — anuluje wybór HOME/PRIVATE."""
-        if not self.email_field.isReadOnly():
-            return  # już odblokowane
-        self.email_field.setReadOnly(False)
-        self.email_field.setStyleSheet("")
-        self.email_field.clear()
-        self.btn_home.setEnabled(True)
-        self.btn_private.setEnabled(True)
-        _f = self.btn_home.font(); _f.setBold(False); self.btn_home.setFont(_f)
-        _f = self.btn_private.font(); _f.setBold(False); self.btn_private.setFont(_f)
+    def _on_client(self):
+        self._mode = "client"
+        self._set_mode_bold(self.btn_client)
+        self.email_field.setEnabled(True)
+        self.tg_icon.setEnabled(True)
         self.chk_share_code.setEnabled(True)
-        self._update_mode_info("")
+        self.email_field.setFocus()
+        self._validate_client()
 
     def _on_home(self):
-        self.email_field.setText("home")
-        self.email_field.setReadOnly(True)
-        self.email_field.setStyleSheet("color: #777;")
-        _f = self.btn_home.font(); _f.setBold(True); self.btn_home.setFont(_f)
-        _f = self.btn_private.font(); _f.setBold(False); self.btn_private.setFont(_f)
-        self.btn_home.setEnabled(True)
-        self.btn_private.setEnabled(True)
+        self._mode = "home"
+        self._set_mode_bold(self.btn_home)
+        self.email_field.setEnabled(False)
+        self.email_field.clear()
+        self.tg_icon.setEnabled(True)
         self.chk_share_code.setEnabled(True)
         self._set_start_ready(True)
         self.mode_info.setText(self.tr("Local session — photos saved locally, no upload."))
         self.btn_start.setFocus()
 
     def _on_private(self):
+        self._mode = "private"
+        self._set_mode_bold(self.btn_private)
+        self.email_field.setEnabled(False)
         self.email_field.clear()
-        self.email_field.setReadOnly(True)
-        self.email_field.setStyleSheet("color: #777;")
-        _f = self.btn_private.font(); _f.setBold(True); self.btn_private.setFont(_f)
-        _f = self.btn_home.font(); _f.setBold(False); self.btn_home.setFont(_f)
-        self.btn_home.setEnabled(True)
-        self.btn_private.setEnabled(True)
+        self.tg_icon.setEnabled(False)
         self.chk_share_code.setChecked(False)
         self.chk_share_code.setEnabled(False)
         self._set_start_ready(True)
         self.mode_info.setText(self.tr("Private session — photos stay on SD card only."))
         self.btn_start.setFocus()
 
+    # ─── walidacja emaila (tylko CLIENT)
+
+    def _on_email_changed(self):
+        if self._mode == "client":
+            self._validate_client()
+
+    def _validate_client(self):
+        email = self.email_field.text().strip().lower()
+        if EMAIL_RE.match(email):
+            self.mode_info.setText(
+                self.tr("Client session — photos will be sent to: %1.").replace("%1", email)
+            )
+            self._set_start_ready(True)
+        elif email:
+            self.mode_info.setText(self.tr("Enter a valid email address."))
+            self._set_start_ready(False)
+        else:
+            self.mode_info.setText("")
+            self._set_start_ready(False)
+
+    # ─── start
+
     def _try_start(self):
-        """Wywoływane przez returnPressed — startuje tylko gdy btn_start aktywny."""
         if self.btn_start.isEnabled():
             self._on_start()
 
     def _on_start(self):
-        """Logika startu sesji — wspólna dla kliknięcia i Enter."""
-        email = self.email_field.text().strip().lower()
         duration = int(self.duration_slider.get_value())
-
-        if self.email_field.isReadOnly():
-            # HOME lub PRIVATE ustawione przyciskiem
-            if not email:
-                # PRIVATE (email wyczyszczony)
-                self.private_requested.emit(duration)
-                return
-            # HOME → start_requested z "home"
-            self.start_requested.emit(email, duration)
-            return
-
-        # Tryb kliencki
-        self.start_requested.emit(email, duration)
-
-    def _on_share_code_toggled(self, checked: bool) -> None:
-        """Checkbox QR — nie wpływa na email ani przyciski, tylko ustawia share_code."""
-        pass
+        if self._mode == "private":
+            self.start_requested.emit("", duration)
+        elif self._mode == "home":
+            self.start_requested.emit("home", duration)
+        else:
+            self.start_requested.emit(self.email_field.text().strip().lower(), duration)
 
     @property
     def share_code_requested(self) -> bool:
-        """Zwraca True gdy checkbox kodu jest zaznaczony."""
         return self.chk_share_code.isChecked()
 
     def reset(self):
         """Przywraca formularz do stanu początkowego."""
-        self.email_field.setReadOnly(False)
-        self.email_field.setStyleSheet("")
+        self._mode = ""
+        self._set_mode_bold(None)
+        self.email_field.setEnabled(False)
         self.email_field.clear()
         self.mode_info.setText("")
         self._set_start_ready(False)
-        self.btn_home.setEnabled(True)
-        _f = self.btn_home.font(); _f.setBold(False); self.btn_home.setFont(_f)
-        self.btn_private.setEnabled(True)
-        _f = self.btn_private.font(); _f.setBold(False); self.btn_private.setFont(_f)
+        self.tg_icon.setEnabled(True)
         self.chk_share_code.setChecked(False)
         self.chk_share_code.setEnabled(True)
 
@@ -411,7 +405,6 @@ class ActiveSessionPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._raw_pixmap: Optional[QPixmap] = None
         self._build_ui()
         self.set_background(BG_ACTIVE)
 
@@ -457,9 +450,8 @@ class ActiveSessionPanel(QWidget):
         layout.addWidget(top)
 
         # --- Środek: obrazek z zachowaniem proporcji ---
-        self._img_label = QLabel()
-        self._img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._img_label.setStyleSheet("background-color: #3d3d3d;")
+        # BackgroundWidget rysuje przez paintEvent — nie wpływa na sizeHint okna
+        self._img_label = BackgroundWidget(fill_color="#3d3d3d")
         self._img_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         layout.addWidget(self._img_label, 1)
 
@@ -489,13 +481,7 @@ class ActiveSessionPanel(QWidget):
         btn_row.addStretch(1)
         self.btn_stop = QPushButton(self.tr("■  STOP SESSION"))
         self.btn_stop.setFixedSize(220, 48)
-        self.btn_stop.setStyleSheet(
-            "QPushButton { font-weight: bold; font-size: 14px; "
-            "background-color: #9e3535; color: #e8e8e8; border-radius: 4px; "
-            "border: 1px solid transparent; }"
-            " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 4px; background-color: #9e3535; }"
-            " QPushButton:disabled { background-color: #9e3535; color: rgba(255,255,255,140); }"
-        )
+        self.btn_stop.setStyleSheet(BTN_STYLE_RED)
         self.btn_stop.clicked.connect(self.stop_requested.emit)
         btn_row.addWidget(self.btn_stop)
         btn_row.addStretch(1)
@@ -505,27 +491,7 @@ class ActiveSessionPanel(QWidget):
 
     def set_background(self, path: str):
         """Ładuje nowe tło."""
-        if path and os.path.exists(path):
-            self._raw_pixmap = QPixmap(path)
-        else:
-            self._raw_pixmap = None
-        self._scale_image()
-
-    def _scale_image(self):
-        size = self._img_label.size()
-        if not self._raw_pixmap or self._raw_pixmap.isNull() or size.width() <= 0 or size.height() <= 0:
-            self._img_label.clear()
-            return
-        scaled = self._raw_pixmap.scaled(
-            size,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        self._img_label.setPixmap(scaled)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._scale_image()
+        self._img_label.set_background(path)
 
     def update_countdown(self, remaining_sec: int, total_sec: int):
         """Aktualizuje wyświetlacz czasu i pasek postępu."""
@@ -581,8 +547,10 @@ class ActiveSessionPanel(QWidget):
 class SummaryPanel(QWidget):
     """Ekran po zakończeniu sesji — wyniki i przyciski nawigacji."""
 
-    go_darkroom   = pyqtSignal()
-    new_session   = pyqtSignal()
+    go_darkroom      = pyqtSignal()
+    new_session      = pyqtSignal()
+    import_requested = pyqtSignal()   # użytkownik chce importować (INTERRUPTED)
+    delete_requested = pyqtSignal()   # użytkownik chce usunąć bez importu (INTERRUPTED)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -593,21 +561,42 @@ class SummaryPanel(QWidget):
         layout.setContentsMargins(40, 40, 40, 40)
         layout.addStretch(1)
 
-        self.title = QLabel(self.tr("Session complete"))
-        self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        font = QFont()
-        font.setPointSize(20)
-        font.setBold(True)
-        self.title.setFont(font)
+        self.title = _ScalableLabel(self.tr("Session complete"), max_pt=24)
         layout.addWidget(self.title)
 
         layout.addSpacing(12)
+
+        # Obrazek instrukcji SD card — widoczny tylko dla trybu PRIVATE
+        self.sd_card_image = _ScalableImage(max_h=320)
+        self.sd_card_image.set_image(os.path.join("assets", "pictures", "remove-sdcard.jpg"))
+        self.sd_card_image.hide()
+        layout.addWidget(self.sd_card_image)
+
+        layout.addSpacing(8)
 
         self.details = QLabel("")
         self.details.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.details.setStyleSheet("color: #aaa; font-size: 13px;")
         self.details.setWordWrap(True)
         layout.addWidget(self.details)
+
+        layout.addSpacing(8)
+
+        # Ramka z przypomnieniem o karcie SD — widoczna tylko dla trybu PRIVATE
+        self._sd_reminder_frame = QFrame()
+        self._sd_reminder_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        self._sd_reminder_frame.setStyleSheet(
+            "QFrame { border: 2px solid #888; border-radius: 6px; margin: 8px 40px; }"
+        )
+        _sd_rem_layout = QVBoxLayout(self._sd_reminder_frame)
+        _sd_rem_layout.setContentsMargins(16, 12, 16, 12)
+        self._sd_reminder_label = QLabel("")
+        self._sd_reminder_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._sd_reminder_label.setStyleSheet("color: #c0c0c0; font-size: 15px; border: none;")
+        self._sd_reminder_label.setWordWrap(True)
+        _sd_rem_layout.addWidget(self._sd_reminder_label)
+        self._sd_reminder_frame.hide()
+        layout.addWidget(self._sd_reminder_frame)
 
         layout.addSpacing(8)
 
@@ -632,6 +621,32 @@ class SummaryPanel(QWidget):
         self.warnings_label.setStyleSheet("color: #e65100; font-size: 12px;")
         self.warnings_label.setWordWrap(True)
         layout.addWidget(self.warnings_label)
+
+        layout.addStretch(1)
+
+        # Przyciski dla sesji przerwanej (CLIENT/HOME) — domyślnie ukryte
+        self._interrupted_row = QHBoxLayout()
+        self._interrupted_row_widget = QWidget()
+        irw = QHBoxLayout(self._interrupted_row_widget)
+        irw.setContentsMargins(0, 0, 0, 0)
+        irw.setSpacing(12)
+
+        irw.addStretch(1)
+
+        self.btn_import_card = QPushButton(self.tr("⬇  Import photos from card"))
+        self.btn_import_card.setFixedHeight(42)
+        self.btn_import_card.clicked.connect(self.import_requested.emit)
+        irw.addWidget(self.btn_import_card)
+
+        self.btn_delete_card = QPushButton(self.tr("🗑  Delete photos"))
+        self.btn_delete_card.setFixedHeight(42)
+        self.btn_delete_card.clicked.connect(self.delete_requested.emit)
+        irw.addWidget(self.btn_delete_card)
+
+        irw.addStretch(1)
+
+        self._interrupted_row_widget.hide()
+        layout.addWidget(self._interrupted_row_widget)
 
         layout.addStretch(1)
 
@@ -663,7 +678,10 @@ class SummaryPanel(QWidget):
     def populate(self, summary: SessionSummary):
         """Wypełnia panel danymi z podsumowania."""
         ctx = summary.context
+        interrupted = summary.end_reason not in (EndReason.TIMEOUT, EndReason.USB_DETECTED)
+        needs_import = ctx.mode in (SessionMode.CLIENT, SessionMode.HOME)
 
+        # Tytuł
         if summary.end_reason == EndReason.TIMEOUT:
             self.title.setText(self.tr("Session finished"))
         elif summary.end_reason == EndReason.USB_DETECTED:
@@ -671,34 +689,48 @@ class SummaryPanel(QWidget):
         else:
             self.title.setText(self.tr("Session interrupted"))
 
-        shots_str = str(summary.shot_count) if ctx.mode != SessionMode.PRIVATE else self.tr("unknown (private)")
-        sync_str  = {
-            "done":    self.tr("✓ Synced to Google Drive"),
-            "pending": self.tr("Sync pending..."),
-            "failed":  self.tr("⚠ Sync failed"),
-            "skipped": "",
-        }.get(ctx.sync_status, "")
-
-        lines = [
-            self.tr("Duration: %1").replace("%1", summary.duration_str),
-            self.tr("Shots imported: %1").replace("%1", shots_str),
-        ]
-        if ctx.session_path:
-            lines.append(self.tr("Folder: %1").replace("%1", ctx.session_path))
-        if sync_str:
-            lines.append(sync_str)
-
-        self.details.setText("\n".join(lines))
+        # Szczegóły
+        if ctx.mode == SessionMode.PRIVATE:
+            self.sd_card_image.show()
+            self._sd_reminder_frame.show()
+            self.details.setText(
+                self.tr("Duration: %1").replace("%1", summary.duration_str) + "\n" +
+                self.tr("Your photos are on the camera's SD card.")
+            )
+            self._sd_reminder_label.setText(
+                self.tr("Don't forget to disconnect the camera, turn it off and remove the SD card.")
+            )
+        else:
+            self.sd_card_image.hide()
+            self._sd_reminder_frame.hide()
+            shots_str = str(summary.shot_count) if not interrupted else "—"
+            sync_str  = {
+                "done":    self.tr("✓ Synced to Google Drive"),
+                "pending": self.tr("Sync pending..."),
+                "failed":  self.tr("⚠ Sync failed"),
+                "skipped": "",
+            }.get(ctx.sync_status, "")
+            lines = [self.tr("Duration: %1").replace("%1", summary.duration_str)]
+            if not interrupted:
+                lines.append(self.tr("Shots imported: %1").replace("%1", shots_str))
+            if ctx.session_path:
+                lines.append(self.tr("Folder: %1").replace("%1", ctx.session_path))
+            if sync_str:
+                lines.append(sync_str)
+            self.details.setText("\n".join(lines))
 
         if summary.warnings:
             self.warnings_label.setText(self.tr("Warnings: %1").replace("%1", " · ".join(summary.warnings[:3])))
         else:
             self.warnings_label.setText("")
 
-        # Darkroom niedostępny dla PRIVATE
-        self.btn_darkroom.setVisible(ctx.mode != SessionMode.PRIVATE)
+        # Przyciski przerwanej sesji — tylko dla CLIENT/HOME
+        self._interrupted_row_widget.setVisible(interrupted and needs_import)
 
-        # QR kod — tylko gdy sesja miała share_code
+        # Darkroom: niedostępny dla PRIVATE i dla przerwanych (brak importu)
+        self.btn_darkroom.setVisible(needs_import and not interrupted)
+
+        # QR kod
         if ctx.share_code:
             self._show_qr(ctx.share_code)
         else:
@@ -845,7 +877,6 @@ class SessionView(QWidget):
         controls_layout.addWidget(self._profiles_row)
 
         # Ramka z komunikatem o trybie bezprzewodowym — widoczna tylko podczas sesji
-        from PyQt6.QtWidgets import QFrame
         self._session_msg = QFrame()
         self._session_msg.setFrameShape(QFrame.Shape.StyledPanel)
         self._session_msg.setStyleSheet(
@@ -860,7 +891,7 @@ class SessionView(QWidget):
                     "Use remote shutter to take photos.")
         )
         self._session_msg_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._session_msg_label.setStyleSheet("color: #e0e0e0; font-size: 15px; border: none;")
+        self._session_msg_label.setStyleSheet("color: #c0c0c0; font-size: 15px; border: none;")
         self._session_msg_label.setWordWrap(True)
         msg_layout.addWidget(self._session_msg_label)
         self._session_msg.hide()
@@ -958,12 +989,11 @@ class SessionView(QWidget):
 
         # Sygnały paneli
         self._config_panel.start_requested.connect(self._on_start_session)
-        self._config_panel.private_requested.connect(
-            lambda dur: self._on_start_session("", dur)
-        )
         self._active_panel.stop_requested.connect(self._on_stop_requested)
         self._summary_panel.new_session.connect(self._on_new_session)
         self._summary_panel.go_darkroom.connect(self._on_go_darkroom)
+        self._summary_panel.import_requested.connect(self._on_import_requested)
+        self._summary_panel.delete_requested.connect(self._on_delete_requested)
 
     # ─────────────────────────── Cykl życia widoku
 
@@ -1106,6 +1136,10 @@ class SessionView(QWidget):
 
     def _on_start_session(self, email: str, duration_min: int):
         """Pokazuje dialog USB → tworzy kontekst i uruchamia SessionRunner."""
+        # Ustaw samowyzwalacz 2s — pilot BT działa tylko w tym trybie.
+        # Musi być przed deactivate(), bo worker przetwarza kolejkę przy zamknięciu.
+        self._settings_panel.set_drivemode("Timer 2 sec")
+
         # Zatrzymaj worker ustawień i polling USB — zwalnia USB przed dialogiem.
         # KRYTYCZNE: polling NIE może odpalać probe podczas disconnectu w dialogu.
         self._settings_panel.deactivate()
@@ -1236,15 +1270,93 @@ class SessionView(QWidget):
         self._stack.setCurrentIndex(self._PAGE_SUMMARY)
         self.session_finished.emit(summary)
 
-        # Cleanup runnera
-        if self._runner:
-            self._runner.deleteLater()
-            self._runner = None
+        needs_import = summary.context.mode in (SessionMode.CLIENT, SessionMode.HOME)
+        interrupted  = summary.end_reason not in (EndReason.TIMEOUT, EndReason.USB_DETECTED)
+
+        if needs_import and not interrupted:
+            # TIMEOUT + CLIENT/HOME: autoimport już zrobiony — zapytaj o usunięcie z karty
+            self._ask_delete_from_card()
+        elif not (interrupted and needs_import):
+            # PRIVATE lub INTERRUPTED bez potrzeby importu — wyczyść runner
+            if self._runner:
+                self._runner.deleteLater()
+                self._runner = None
+        # else: INTERRUPTED + CLIENT/HOME — runner żyje, obsługują go przyciski SummaryPanel
 
         # Aparat jest teraz bezprzewodowy (USB odłączone) — czekaj na podłączenie
         self._camera_on = False
         self._sd_on = False
         self._start_usb_polling()
+
+    def _on_import_requested(self):
+        """Użytkownik kliknął 'Import photos from card' w SummaryPanel (sesja przerwana)."""
+        if not self._runner:
+            return
+        self._summary_panel.btn_import_card.setEnabled(False)
+        self._summary_panel.btn_delete_card.setEnabled(False)
+        self._summary_panel.btn_import_card.setText(self.tr("Importing..."))
+        # Połącz sygnały importu do panelu aktywnego i słuchaj zakończenia
+        self._runner.import_progress.connect(self._active_panel.show_import_progress)
+        self._runner.session_finished.connect(self._on_deferred_import_finished)
+        self._runner.start_import_only()
+
+    def _on_deferred_import_finished(self, summary: SessionSummary):
+        """Import na żądanie zakończony — aktualizuj SummaryPanel i zapytaj o usunięcie."""
+        self._summary_panel.populate(summary)
+        self._summary_panel._interrupted_row_widget.hide()
+        self._summary_panel.btn_darkroom.setVisible(True)
+        if self._runner:
+            self._runner.deleteLater()
+            self._runner = None
+        self._ask_delete_from_card()
+
+    def _on_delete_requested(self):
+        """Użytkownik kliknął 'Delete photos' w SummaryPanel — usuń bez importu."""
+        from PyQt6.QtWidgets import QMessageBox
+        ans = QMessageBox.question(
+            self,
+            self.tr("Delete photos?"),
+            self.tr("Delete all photos from this session from the camera's SD card?\n"
+                    "This cannot be undone."),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if ans != QMessageBox.StandardButton.Yes:
+            return
+        if self._runner:
+            self._summary_panel.btn_delete_card.setEnabled(False)
+            self._summary_panel.btn_delete_card.setText(self.tr("Deleting..."))
+            self._runner.session_finished.connect(self._on_delete_finished)
+            self._runner.start_delete_from_card()
+
+    def _on_delete_finished(self, _summary):
+        """Usuwanie zakończone — zamknij runner."""
+        self._summary_panel.btn_import_card.hide()
+        self._summary_panel.btn_delete_card.hide()
+        if self._runner:
+            self._runner.deleteLater()
+            self._runner = None
+
+    def _ask_delete_from_card(self):
+        """Po imporcie (CLIENT/HOME) — pytanie o usunięcie z karty SD."""
+        if not self._runner:
+            return
+        from PyQt6.QtWidgets import QMessageBox
+        ans = QMessageBox.question(
+            self,
+            self.tr("Delete from SD card?"),
+            self.tr("Photos imported successfully.\n"
+                    "Delete imported photos from the camera's SD card?"),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if ans == QMessageBox.StandardButton.Yes:
+            self._runner.session_finished.connect(self._on_delete_finished)
+            self._runner.start_delete_from_card()
+        else:
+            if self._runner:
+                self._runner.deleteLater()
+                self._runner = None
 
     # ─────────────────────────── STOP / NAWIGACJA
 

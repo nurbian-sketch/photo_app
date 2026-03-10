@@ -21,9 +21,10 @@ from PyQt6.QtCore import QMutex, QThread, pyqtSignal
 
 logger = logging.getLogger(__name__)
 
-# Wymagane wartości konfiguracji przed sesją
-_SESSION_CAMERA_MODE = 'Fv'
-_SESSION_DRIVE_MODE  = 'Timer 2 sec'
+# Wymagane wartości konfiguracji przy starcie / po zakończeniu sesji
+_SESSION_CAMERA_MODE   = 'Fv'
+_DEFAULT_DRIVE_MODE    = 'Single'   # pilot BT nie działa — tryb normalny
+_SESSION_DRIVE_MODE    = 'Timer 2 sec'  # pilot BT działa — ustawiany tuż przed sesją
 
 # Parametry exposure mające wartość Auto = 00ff
 _EXPOSURE_PARAMS = {'shutterspeed', 'aperture', 'iso', 'exposurecompensation'}
@@ -87,6 +88,9 @@ class CameraSettingsWorker(QThread):
             while self.keep_running:
                 self._process_queue()
                 time.sleep(0.1)
+
+            # Opróżnij kolejkę przed wyjściem — obsługuje komendy dodane tuż przed stop()
+            self._process_queue()
 
         except Exception as e:
             logger.exception(f"CameraSettingsWorker: nieoczekiwany błąd: {e}")
@@ -202,16 +206,14 @@ class CameraSettingsWorker(QThread):
             except Exception as e:
                 logger.warning(f"CameraSettingsWorker: nie można ustawić trybu Fv: {e}")
 
-            # ── Drive mode → Timer 2 sec
+            # ── Drive mode → Single (pilot BT nie powinien działać poza sesją)
             try:
                 w    = config.get_child_by_name('drivemode')
                 curr = w.get_value()
-                if curr != _SESSION_DRIVE_MODE:
-                    w.set_value(_SESSION_DRIVE_MODE)
+                if curr != _DEFAULT_DRIVE_MODE:
+                    w.set_value(_DEFAULT_DRIVE_MODE)
                     self.camera.set_config(config, self.context)
-                    msg = f"Drive mode: {curr} → {_SESSION_DRIVE_MODE}"
-                    logger.info(f"CameraSettingsWorker: {msg}")
-                    self.status_message.emit(msg)
+                    logger.info(f"CameraSettingsWorker: drive mode {curr} → {_DEFAULT_DRIVE_MODE}")
             except Exception as e:
                 logger.warning(f"CameraSettingsWorker: nie można ustawić drivemode: {e}")
 

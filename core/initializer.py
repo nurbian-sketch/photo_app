@@ -2,9 +2,12 @@
 Startup diagnostics — wyświetla info na splash screen.
 Używa CameraProbe do komunikacji z aparatem.
 """
+import os
+import sys
 import platform
+import subprocess
 import gphoto2 as gp
-from PyQt6.QtCore import Qt, QObject
+from PyQt6.QtCore import Qt, QObject, QSettings
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QApplication
 
@@ -14,6 +17,35 @@ from core.camera_probe import CameraProbe
 class AppInitializer(QObject):
     def __init__(self):
         super().__init__()
+
+    def _ensure_share_bot(self) -> str:
+        """Uruchamia share_bot.py jeśli nie działa. Zwraca komunikat do splash."""
+        settings = QSettings("Grzeza", "SessionsAssistant")
+        token = settings.value("telegram/bot_token", "").strip()
+        if not token:
+            return "Share bot: brak tokenu Telegram — pomijam"
+
+        # Sprawdź czy bot już działa
+        result = subprocess.run(
+            ["pgrep", "-f", "share_bot.py"],
+            capture_output=True,
+        )
+        if result.returncode == 0:
+            return "Share bot: już uruchomiony"
+
+        # Uruchom jako niezależny proces (przeżywa zamknięcie aplikacji)
+        bot_path = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), "core", "share_bot.py")
+        env = os.environ.copy()
+        env["SHARE_BOT_TOKEN"] = token
+        subprocess.Popen(
+            [sys.executable, bot_path],
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=env,
+        )
+        return "Share bot: uruchomiony"
 
     def run_all_checks(self, splash) -> dict:
         def msg(text):
@@ -33,6 +65,9 @@ class AppInitializer(QObject):
         gp_ver = gp.gp_library_version(gp.GP_VERSION_SHORT)[0]
         sys_info = f"{platform.system()} {platform.release()}"
         msg(f"gphoto2 library version {gp_ver} detected on {sys_info}")
+
+        # Share bot
+        msg(self._ensure_share_bot())
 
         # Probe aparatu
         probe = CameraProbe()

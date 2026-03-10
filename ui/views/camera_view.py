@@ -11,6 +11,7 @@ from core.gphoto_interface import GPhotoInterface
 from ui.widgets.camera_settings_panel import CameraSettingsPanel
 from ui.dialogs.profile_browser_dialog import ProfileBrowserDialog
 from ui.widgets.photo_preview_dialog import PhotoPreviewDialog
+from ui.styles import BTN_STYLE_RED
 
 
 # ─────────────────────────────── Widok kamery
@@ -214,12 +215,7 @@ class CameraView(QWidget):
         " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: palette(button); }"
         " QPushButton:focus:hover { background-color: palette(midlight); }"
     )
-    BTN_STYLE_STOP = (
-        "QPushButton { background-color: #9e3535; color: white; font-weight: bold;"
-        " border: 1px solid rgba(0,0,0,0.3); border-radius: 3px; }"
-        " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: #9e3535; }"
-        " QPushButton:disabled { background-color: #9e3535; color: rgba(255,255,255,140); }"
-    )
+    BTN_STYLE_STOP = BTN_STYLE_RED
 
     def set_camera_ready(self, ready):
         """Ustawia stan gotowości aparatu — włącza/wyłącza przyciski i kontrolki."""

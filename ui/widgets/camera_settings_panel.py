@@ -71,6 +71,11 @@ class CameraSettingsPanel(QWidget):
         self._start_worker()
         self.setEnabled(True)
 
+    def set_drivemode(self, mode: str):
+        """Enqueue zmiany drive mode — wykona się jako ostatnia komenda przed deactivate()."""
+        if self._worker and self._worker.isRunning():
+            self._worker.update_camera_param("drivemode", mode)
+
     def deactivate(self):
         """Brak aparatu lub sesja aktywna — zatrzymaj workera, wyłącz kontrolki."""
         self._stop_worker()

@@ -10,6 +10,8 @@ from PyQt6.QtCore import Qt, QSize, QTimer, QRect, pyqtSignal
 import os
 from pathlib import Path
 
+from ui.styles import BTN_STYLE_RED
+
 from core.darkcache.cache_manager import PreviewCache
 from core.darkcache.preview_generator import PreviewGenerator
 from core.darkcache.thumbnail_reader import ExifThumbnailReader
@@ -296,11 +298,7 @@ class DarkroomView(QWidget):
 
         self.btn_format_card = QPushButton(self.tr("Format Card"))
         self.btn_format_card.setMinimumHeight(BTN_H)
-        self.btn_format_card.setStyleSheet(
-            "QPushButton { background-color: #9e3535; color: white; font-weight: bold; }"
-            " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: #9e3535; }"
-            " QPushButton:focus:hover { background-color: #9e3535; }"
-        )
+        self.btn_format_card.setStyleSheet(BTN_STYLE_RED)
         self.btn_format_card.setVisible(False)
 
         for w in [self.btn_select, self.btn_send, self.btn_delete,

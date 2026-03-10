@@ -43,7 +43,7 @@ class ExposureControls(QWidget):
 
     # Ograniczenia zakresu parametrów sesji
     ISO_MAX = 800
-    SHUTTER_DESIRED = ["2", "1", "1/15", "1/30", "1/60", "1/125", "1/250", "1/500", "1/1000"]
+    SHUTTER_DESIRED = ["2", "1", "1/15", "1/30", "1/60", "1/125", "1/160", "1/250", "1/500", "1/1000"]
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -92,6 +92,8 @@ class ExposureControls(QWidget):
                     " QPushButton:checked:disabled { background-color: #3a3a3a; color: #666; border: 1px solid #444; }"
                     " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: palette(button); }"
                     " QPushButton:focus:hover { background-color: palette(midlight); }"
+                    " QPushButton:checked:focus { background-color: #2e7d32; border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; }"
+                    " QPushButton:checked:focus:hover { background-color: #388e3c; }"
                 )
                 btn_auto.clicked.connect(lambda _, k=key: self._handle_auto_press(k))
                 row.addWidget(btn_auto)
