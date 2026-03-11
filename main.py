@@ -1,9 +1,15 @@
 import sys
 import os
+
+# Logging musi być skonfigurowany przed importem pozostałych modułów
+import core.log_setup as _log_setup
+_log_setup.setup(verbose=("-verbose" in sys.argv))
+
 from PyQt6.QtWidgets import QApplication, QSplashScreen
 from PyQt6.QtGui import QColor, QPalette, QPixmap, QIcon
 from PyQt6.QtCore import qInstallMessageHandler, QtMsgType, QTranslator, QLocale, QSettings
 from ui.main_window import MainWindow
+from ui.styles import APP_STYLE
 from core.initializer import AppInitializer
 
 
@@ -39,13 +45,7 @@ def main():
     app = QApplication(sys.argv)
     _load_translator(app)
     app.setStyle('Fusion')
-    app.setStyleSheet(
-        "QToolTip { color: #bbbbbb; background-color: #2b2b2b; border: 1px solid #555555; }"
-        " QPushButton { background-color: palette(button); }"
-        " QPushButton:hover { background-color: palette(midlight); }"
-        " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: palette(button); }"
-        " QPushButton:focus:hover { background-color: palette(midlight); }"
-    )
+    app.setStyleSheet(APP_STYLE)
 
     # Biały/przygaszony focus ring zamiast niebieskiego — ujednolicony w całym projekcie
     pal = app.palette()

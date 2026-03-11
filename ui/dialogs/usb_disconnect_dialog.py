@@ -42,7 +42,6 @@ class UsbDisconnectDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Prepare camera"))
-        self.setMinimumWidth(400)
         self.setModal(True)
         self._state = self._WAIT_DISCONNECT
         self._reconnect_after = 0.0  # timestamp — krok 2 aktywny dopiero po tym czasie
@@ -55,18 +54,18 @@ class UsbDisconnectDialog(QDialog):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(4)
-        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(8)
+        layout.setContentsMargins(12, 12, 12, 12)
 
         img_label = QLabel()
         img_path = os.path.join("assets", "pictures", "turn_switch-on-and-off.jpg")
         if os.path.exists(img_path):
-            pix = QPixmap(img_path).scaled(
-                460, 280,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            img_label.setPixmap(pix)
+            raw = QPixmap(img_path)
+            scaled = raw.scaled(280, 280, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                                Qt.TransformationMode.SmoothTransformation)
+            x = (scaled.width()  - 280) // 2
+            y = (scaled.height() - 280) // 2
+            img_label.setPixmap(scaled.copy(x, y, 280, 280))
         img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(img_label)
 
@@ -101,6 +100,7 @@ class UsbDisconnectDialog(QDialog):
         btn_row.addWidget(self._btn_start)
 
         layout.addLayout(btn_row)
+        QTimer.singleShot(0, btn_cancel.setFocus)
 
     def _poll(self):
         """Polling USB co ~1.2s — lsusb, bez gphoto2."""

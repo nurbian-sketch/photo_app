@@ -154,11 +154,6 @@ class CameraDownloadDialog(QDialog):
         btn_row.addStretch()
         self._btn_download = QPushButton(self.tr("Download Selected"))
         self._btn_download.setEnabled(False)
-        self._btn_download.setStyleSheet(
-            "QPushButton { font-weight: bold; background-color: #1565c0; color: white; }"
-            " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: #1565c0; }"
-            " QPushButton:focus:hover { background-color: #1976d2; }"
-        )
         self._btn_download.clicked.connect(self._start_download)
         btn_cancel = QPushButton(self.tr("Cancel"))
         btn_cancel.clicked.connect(self.reject)

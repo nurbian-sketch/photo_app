@@ -27,12 +27,6 @@ class PreferencesDialog(QDialog):
             self.windowFlags() & ~__import__('PyQt6.QtCore', fromlist=['Qt']).Qt.WindowType.WindowContextHelpButtonHint
         )
         self.settings = QSettings("Grzeza", "SessionsAssistant")
-        self.setStyleSheet(
-            "QPushButton { background-color: palette(button); }"
-            " QPushButton:hover { background-color: palette(midlight); }"
-            " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: palette(button); }"
-            " QPushButton:focus:hover { background-color: palette(midlight); }"
-        )
         self._init_ui()
         self._load_settings()
 

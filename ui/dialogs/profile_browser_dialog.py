@@ -28,11 +28,7 @@ class ProfileBrowserDialog(QDialog):
             Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint
         )
         self.setStyleSheet(
-            "QPushButton { background-color: palette(button); }"
-            " QPushButton:hover { background-color: palette(midlight); }"
-            " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: palette(button); }"
-            " QPushButton:focus:hover { background-color: palette(midlight); }"
-            " QListWidget:focus { border: 1px solid rgba(180, 180, 180, 0.6); }"
+            "QListWidget:focus { border: 1px solid rgba(180, 180, 180, 0.6); }"
         )
         self._init_ui()
         self._refresh()
@@ -63,12 +59,10 @@ class ProfileBrowserDialog(QDialog):
         row = QHBoxLayout()
         self.btn_load = QPushButton(self.tr("Load"))
         self.btn_load.setEnabled(False)
-        self.btn_load.setAutoDefault(False)
         self.btn_delete = QPushButton(self.tr("Delete"))
         self.btn_delete.setEnabled(False)
-        self.btn_delete.setAutoDefault(False)
         self._btn_cancel = QPushButton(self.tr("Cancel"))
-        self._btn_cancel.setAutoDefault(False)
+        self._btn_cancel.setDefault(True)
         self.btn_load.clicked.connect(self._on_load)
         self.btn_delete.clicked.connect(self._on_delete)
         self._btn_cancel.clicked.connect(self.reject)

@@ -186,14 +186,14 @@ class PreviewPanel(QWidget):
         btn_rotate_left = QPushButton("↶")
         btn_rotate_left.setFixedSize(32, 32)
         btn_rotate_left.setToolTip(self.tr("Rotate left 90° [←]"))
-        btn_rotate_left.setStyleSheet("font-size: 16px;")
+        _f16 = btn_rotate_left.font(); _f16.setPixelSize(16); btn_rotate_left.setFont(_f16)
         btn_rotate_left.clicked.connect(self.rotate_left)
         ctrl.addWidget(btn_rotate_left)
 
         btn_rotate_right = QPushButton("↷")
         btn_rotate_right.setFixedSize(32, 32)
         btn_rotate_right.setToolTip(self.tr("Rotate right 90° [→]"))
-        btn_rotate_right.setStyleSheet("font-size: 16px;")
+        _f16 = btn_rotate_right.font(); _f16.setPixelSize(16); btn_rotate_right.setFont(_f16)
         btn_rotate_right.clicked.connect(self.rotate_right)
         ctrl.addWidget(btn_rotate_right)
 
@@ -203,7 +203,7 @@ class PreviewPanel(QWidget):
 
         btn_zoom_out = QPushButton("−")
         btn_zoom_out.setFixedSize(32, 32)
-        btn_zoom_out.setStyleSheet("font-size: 18px; font-weight: bold;")
+        _f18 = btn_zoom_out.font(); _f18.setPixelSize(18); _f18.setBold(True); btn_zoom_out.setFont(_f18)
         btn_zoom_out.clicked.connect(self._zoom_out)
         ctrl.addWidget(btn_zoom_out)
 
@@ -215,7 +215,7 @@ class PreviewPanel(QWidget):
 
         btn_zoom_in = QPushButton("+")
         btn_zoom_in.setFixedSize(32, 32)
-        btn_zoom_in.setStyleSheet("font-size: 18px; font-weight: bold;")
+        _f18 = btn_zoom_in.font(); _f18.setPixelSize(18); _f18.setBold(True); btn_zoom_in.setFont(_f18)
         btn_zoom_in.clicked.connect(self._zoom_in)
         ctrl.addWidget(btn_zoom_in)
 

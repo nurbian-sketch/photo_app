@@ -127,12 +127,9 @@ class CameraView(QWidget):
         self.btn_cap = QPushButton(self.tr("CAPTURE PHOTO"))
         self.btn_lv.setFixedSize(200, 40)
         self.btn_cap.setFixedSize(180, 40)
-        self.btn_lv.setStyleSheet(self.BTN_STYLE_NORMAL)
-        self.btn_cap.setStyleSheet(
-            "QPushButton { font-weight: bold; }"
-            " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: palette(button); }"
-            " QPushButton:focus:hover { background-color: palette(midlight); }"
-        )
+        f = self.btn_cap.font()
+        f.setBold(True)
+        self.btn_cap.setFont(f)
 
         self.btn_lv_rotate_left = QPushButton("↶ 90°")
         self.btn_lv_rotate_left.setFixedSize(65, 40)
@@ -209,12 +206,6 @@ class CameraView(QWidget):
 
     # ─────────────────────────────── Stan aparatu
 
-    BTN_STYLE_NORMAL = (
-        "QPushButton { background-color: palette(button); }"
-        " QPushButton:hover { background-color: palette(midlight); }"
-        " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: palette(button); }"
-        " QPushButton:focus:hover { background-color: palette(midlight); }"
-    )
     BTN_STYLE_STOP = BTN_STYLE_RED
 
     def set_camera_ready(self, ready):
@@ -243,7 +234,7 @@ class CameraView(QWidget):
             self.btn_lv.setEnabled(False)
         elif not (self.lv_thread and self.lv_thread.isRunning()):
             self.btn_lv.setText(self.tr("START LIVE VIEW"))
-            self.btn_lv.setStyleSheet(self.BTN_STYLE_NORMAL)
+            self.btn_lv.setStyleSheet("")
             self.btn_lv.setEnabled(True)
             if self._view_active:
                 QTimer.singleShot(50, self.btn_lv.setFocus)
@@ -417,7 +408,7 @@ class CameraView(QWidget):
         """Wywoływane gdy user kliknął STOP i wątek zakończył run()."""
         self._stopping = False
         self.btn_lv.setText(self.tr("START LIVE VIEW"))
-        self.btn_lv.setStyleSheet(self.BTN_STYLE_NORMAL)
+        self.btn_lv.setStyleSheet("")
         self.btn_lv.setEnabled(self._camera_ready)
         # USB zwolnione — sygnał do main_window żeby uruchomił probe.
         # Probe wywoła set_camera_ready(True) → dopiero wtedy worker startuje.
@@ -519,7 +510,7 @@ class CameraView(QWidget):
             "background: #3d3d3d; border: 2px solid #555; color: white;"
         )
         self.btn_lv.setText(self.tr("START LIVE VIEW"))
-        self.btn_lv.setStyleSheet(self.BTN_STYLE_NORMAL)
+        self.btn_lv.setStyleSheet("")
         self.btn_lv.setEnabled(self._camera_ready)
         self._capture_timer.stop()
         self.btn_cap.setEnabled(False)

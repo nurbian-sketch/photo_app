@@ -101,6 +101,8 @@ class SessionRunner(QThread):
         self._end_reason: Optional[EndReason] = None
         self._errors:   list[str] = []
         self._warnings: list[str] = []
+        self._run_mode: str = ""          # "" | "import_only" | "delete"
+        self._card_file_pairs: list = []  # (folder, filename) — wypełniane podczas importu
 
     # ─────────────────────────── API PUBLICZNE
 
@@ -110,6 +112,17 @@ class SessionRunner(QThread):
         self._end_reason = reason
         self._stop_flag  = True
 
+    def start_import_only(self):
+        """Uruchamia tylko import+sync (dla sesji przerwanej — decyzja użytkownika)."""
+        self._run_mode  = "import_only"
+        self._stop_flag = False
+        self.start()
+
+    def start_delete_from_card(self):
+        """Usuwa z karty SD pliki zaimportowane w tej sesji."""
+        self._run_mode = "delete"
+        self.start()
+
     @property
     def state(self) -> SessionState:
         return self._state
@@ -118,13 +131,33 @@ class SessionRunner(QThread):
 
     def run(self):
         """Główna pętla wątku — sekwencja stanów."""
+        # Tryby dodatkowe (po zakończeniu normalnej sesji)
+        if self._run_mode == "import_only":
+            try:
+                self._run_import()
+                self._run_sync()
+            except Exception as e:
+                logger.exception("SessionRunner: błąd import_only")
+                self._errors.append(str(e))
+            self._finish()
+            return
+        if self._run_mode == "delete":
+            try:
+                self._run_delete_from_card()
+            except Exception as e:
+                logger.exception("SessionRunner: błąd delete")
+                self._errors.append(str(e))
+            self._finish()
+            return
+
         try:
             self._run_countdown()
             if not self._stop_flag:
                 self._run_active()
             self._run_stopping()
 
-            if self.context.mode != SessionMode.PRIVATE:
+            # PRIVATE: brak importu. INTERRUPTED: decyzja w SessionView (przyciski).
+            if self.context.mode != SessionMode.PRIVATE and self._end_reason == EndReason.TIMEOUT:
                 self._run_import()
                 self._run_sync()
 
@@ -226,6 +259,9 @@ class SessionRunner(QThread):
 
             # Utwórz katalog sesji (zdjęcia trafiają bezpośrednio tu)
             os.makedirs(self.context.session_path, exist_ok=True)
+
+            # Zapisz pary do ewentualnego późniejszego usunięcia z karty
+            self._card_file_pairs = list(files_to_import)
 
             # Reset flagi — import musi działać niezależnie od powodu zakończenia sesji
             self._stop_flag = False
@@ -420,6 +456,38 @@ class SessionRunner(QThread):
             print(f"[DL] Exception {filename}: {type(e).__name__}: {e}", flush=True)
             logger.exception(f"Nieoczekiwany błąd pobierania {filename}")
             return False
+
+    # ─────────────────────────── USUWANIE Z KARTY
+
+    def _run_delete_from_card(self):
+        """Usuwa z karty SD pliki zarejestrowane podczas importu."""
+        if not self._card_file_pairs:
+            logger.warning("Brak plików do usunięcia z karty")
+            return
+
+        camera, gp_context = self._connect_camera()
+        if camera is None:
+            logger.warning("Usuwanie z karty: nie można połączyć z aparatem")
+            self._warnings.append("Delete: cannot connect to camera")
+            return
+
+        deleted = 0
+        try:
+            for folder, filename in self._card_file_pairs:
+                try:
+                    camera.file_delete(folder, filename, gp_context)
+                    deleted += 1
+                    logger.info(f"Usunięto z karty: {filename}")
+                except Exception as e:
+                    logger.warning(f"Nie można usunąć {filename}: {e}")
+                    self._warnings.append(f"Delete: {filename}: {e}")
+        finally:
+            try:
+                camera.exit(gp_context)
+            except Exception:
+                pass
+
+        logger.info(f"Usunięto {deleted}/{len(self._card_file_pairs)} plików z karty SD")
 
     # ─────────────────────────── SYNC (rclone)
 

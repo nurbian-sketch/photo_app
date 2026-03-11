@@ -123,6 +123,9 @@ class SessionContext:
     # Przesunięcie zegara aparat↔system (sekundy) — ustalane przy imporcie
     camera_time_offset: int     = 0
 
+    # Nadpisanie czasu trwania w sekundach (0 = użyj duration_min * 60); tylko do testów
+    duration_sec_override: int  = 0
+
     @property
     def folder_name(self) -> str:
         """Nazwa folderu sesji — data_godzina_email."""
@@ -130,7 +133,7 @@ class SessionContext:
 
     @property
     def duration_sec(self) -> int:
-        return self.duration_min * 60
+        return self.duration_sec_override if self.duration_sec_override else self.duration_min * 60
 
     @property
     def elapsed_sec(self) -> int:

@@ -4,7 +4,7 @@ Przyciski: Cancel (reject → prawy panel zostaje nieaktywny) / OK (accept → c
 """
 import os
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -34,12 +34,12 @@ class NoSdCardDialog(QDialog):
 
         img_label = QLabel()
         if os.path.exists(_IMG):
-            pix = QPixmap(_IMG).scaled(
-                360, 200,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            img_label.setPixmap(pix)
+            raw = QPixmap(_IMG)
+            scaled = raw.scaled(280, 280, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                                Qt.TransformationMode.SmoothTransformation)
+            x = (scaled.width()  - 280) // 2
+            y = (scaled.height() - 280) // 2
+            img_label.setPixmap(scaled.copy(x, y, 280, 280))
         img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(img_label)
 
@@ -72,3 +72,4 @@ class NoSdCardDialog(QDialog):
         btn_row.addWidget(btn_ok)
 
         layout.addLayout(btn_row)
+        QTimer.singleShot(0, btn_ok.setFocus)

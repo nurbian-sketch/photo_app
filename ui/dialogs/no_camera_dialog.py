@@ -40,12 +40,12 @@ class NoCameraDialog(QDialog):
 
         img_label = QLabel()
         if os.path.exists(_IMG):
-            pix = QPixmap(_IMG).scaled(
-                460, 300,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            img_label.setPixmap(pix)
+            raw = QPixmap(_IMG)
+            scaled = raw.scaled(280, 280, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                                Qt.TransformationMode.SmoothTransformation)
+            x = (scaled.width()  - 280) // 2
+            y = (scaled.height() - 280) // 2
+            img_label.setPixmap(scaled.copy(x, y, 280, 280))
         img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(img_label)
 
@@ -63,8 +63,7 @@ class NoCameraDialog(QDialog):
         btn_row.addStretch()
         btn_cancel = QPushButton(self.tr("Cancel"))
         btn_cancel.setFixedSize(90, 34)
-        btn_cancel.setAutoDefault(False)
-        btn_cancel.setDefault(False)
+        btn_cancel.setDefault(True)
         btn_cancel.clicked.connect(self.reject)
         btn_row.addWidget(btn_cancel)
         btn_row.addStretch()
