@@ -16,7 +16,8 @@ from PyQt6.QtWidgets import (
 )
 
 from core.session_context import SessionContext, SessionSummary, SessionState, SessionMode, EndReason
-from ui.styles import BTN_STYLE_RED
+from ui.dialogs.session_summary_dialog import ACTION_NEW_SESSION
+from ui.styles import BTN_STYLE_RED, center_on_parent
 
 BG_ACTIVE      = os.path.join("assets", "pictures", "session-active.jpg")
 BG_FINISHED    = os.path.join("assets", "pictures", "session-finished-3.jpg")
@@ -66,6 +67,7 @@ class SessionActiveDialog(QDialog):
         super().__init__(parent)
         self._ctx = ctx
         self._summary: Optional[SessionSummary] = None
+        self._runner = None
         self._build_ui()
         self.setWindowTitle(self.tr("Session"))
         self.setMinimumSize(540, 550)
@@ -83,6 +85,7 @@ class SessionActiveDialog(QDialog):
 
     def showEvent(self, event):
         super().showEvent(event)
+        center_on_parent(self)
         self.btn_stop.setFocus()
 
     def resizeEvent(self, event):
@@ -163,6 +166,38 @@ class SessionActiveDialog(QDialog):
         self.import_label.hide()
         bot_layout.addWidget(self.import_label)
 
+        # Widget przycisków przerwanej sesji (widoczność zależna od trybu)
+        self._interrupted_widget = QWidget()
+        int_layout = QHBoxLayout(self._interrupted_widget)
+        int_layout.setContentsMargins(0, 0, 0, 0)
+        int_layout.setSpacing(12)
+        int_layout.addStretch(1)
+
+        if self._ctx.mode in (SessionMode.CLIENT, SessionMode.HOME):
+            btn_import = QPushButton(self.tr("⬇  Import photos"))
+            btn_import.setFixedHeight(42)
+            btn_import.clicked.connect(self._on_interrupted_import)
+            int_layout.addWidget(btn_import)
+
+            btn_del_int = QPushButton(self.tr("🗑  Delete photos"))
+            btn_del_int.setFixedHeight(42)
+            btn_del_int.clicked.connect(self._on_interrupted_delete)
+            int_layout.addWidget(btn_del_int)
+        else:  # PRIVATE
+            btn_del_priv = QPushButton(self.tr("🗑  Delete photos"))
+            btn_del_priv.setFixedHeight(42)
+            btn_del_priv.clicked.connect(self._on_interrupted_delete)
+            int_layout.addWidget(btn_del_priv)
+
+            btn_leave = QPushButton(self.tr("Leave"))
+            btn_leave.setFixedHeight(42)
+            btn_leave.clicked.connect(self._on_interrupted_leave)
+            int_layout.addWidget(btn_leave)
+
+        int_layout.addStretch(1)
+        self._interrupted_widget.hide()
+        bot_layout.addWidget(self._interrupted_widget)
+
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
 
@@ -177,6 +212,12 @@ class SessionActiveDialog(QDialog):
         self.btn_continue.clicked.connect(self.accept)
         self.btn_continue.hide()
         btn_row.addWidget(self.btn_continue)
+
+        self.btn_new_session = QPushButton(self.tr("New Session"))
+        self.btn_new_session.setFixedHeight(42)
+        self.btn_new_session.clicked.connect(lambda: self.done(ACTION_NEW_SESSION))
+        self.btn_new_session.hide()
+        btn_row.addWidget(self.btn_new_session)
 
         btn_row.addStretch(1)
         bot_layout.addLayout(btn_row)
@@ -195,7 +236,8 @@ class SessionActiveDialog(QDialog):
     # ─── Podłączenie do SessionRunner
 
     def connect_runner(self, runner):
-        """Łączy sygnały SessionRunner z dialogiem."""
+        """Łączy sygnały SessionRunner z dialogiem i zachowuje referencję."""
+        self._runner = runner
         runner.timer_tick.connect(self._on_timer_tick)
         runner.countdown_tick.connect(self._on_countdown_tick)
         runner.import_progress.connect(self._on_import_progress)
@@ -233,18 +275,65 @@ class SessionActiveDialog(QDialog):
 
     def _on_session_finished(self, summary: SessionSummary):
         self._summary = summary
-        if summary.end_reason == EndReason.TIMEOUT:
-            self._bg.set_background(BG_FINISHED)
-            self.countdown_label.setText(self.tr("Finished"))
-        else:
-            self._bg.set_background(BG_INTERRUPTED)
-            self.countdown_label.setText(self.tr("Interrupted"))
         self.progress.setValue(0)
         self.import_label.hide()
         self.btn_stop.hide()
-        self.btn_continue.show()
-        self.btn_continue.setDefault(True)
-        QTimer.singleShot(50, self.btn_continue.setFocus)
+
+        if summary.end_reason == EndReason.TIMEOUT:
+            self._bg.set_background(BG_FINISHED)
+            self.countdown_label.setText(self.tr("Session finished"))
+            self.btn_continue.show()
+            self.btn_continue.setDefault(True)
+            QTimer.singleShot(50, self.btn_continue.setFocus)
+        else:
+            self._bg.set_background(BG_INTERRUPTED)
+            self.countdown_label.setText(self.tr("Session interrupted"))
+            elapsed_min = summary.context.elapsed_sec // 60
+            self.info_label.setText(
+                self.tr(
+                    "Your session was interrupted after %1 min.\n"
+                    "Your photos are on the SD card."
+                ).replace("%1", str(elapsed_min))
+            )
+            self._interrupted_widget.show()
+
+    # ─── Handlery przerwanej sesji
+
+    def _on_interrupted_import(self):
+        """Import zdjęć po przerwaniu sesji (CLIENT/HOME)."""
+        self._interrupted_widget.hide()
+        self.import_label.show()
+        self.import_label.setText(self.tr("Starting import..."))
+        # session_finished przekieruj do _on_import_finished
+        self._runner.session_finished.disconnect(self._on_session_finished)
+        self._runner.session_finished.connect(self._on_import_finished)
+        self._runner.start_import_only()
+
+    def _on_import_finished(self, summary: SessionSummary):
+        self._summary = summary
+        self.import_label.hide()
+        self.accept()
+
+    def _on_interrupted_delete(self):
+        """Usuń zdjęcia z karty SD bez importu."""
+        self._interrupted_widget.hide()
+        self.import_label.show()
+        self.import_label.setText(self.tr("Deleting photos from card..."))
+        self._runner.session_finished.disconnect(self._on_session_finished)
+        self._runner.session_finished.connect(self._on_delete_finished)
+        self._runner.start_delete_from_card()
+
+    def _on_delete_finished(self, summary: SessionSummary):
+        self._summary = summary
+        self.import_label.hide()
+        self.info_label.setText(self.tr("Your photos have been deleted."))
+        self.btn_new_session.show()
+        self.btn_new_session.setDefault(True)
+        QTimer.singleShot(50, self.btn_new_session.setFocus)
+
+    def _on_interrupted_leave(self):
+        """Wyjdź bez importu i bez usunięcia (PRIVATE)."""
+        self.accept()
 
     # ─── Publiczne API
 

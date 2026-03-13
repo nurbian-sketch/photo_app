@@ -14,6 +14,7 @@ from ui.dialogs.usb_disconnect_dialog import _lsusb_has_canon
 from ui.styles import (
     DIALOG_SPACING, DIALOG_MARGINS, DIALOG_MIN_WIDTH,
     DIALOG_IMG_SIZE, DIALOG_BTN_W, DIALOG_BTN_H, DIALOG_TEXT_STYLE,
+    center_on_parent,
 )
 
 _IMG = os.path.join("assets", "pictures", "korpus-canon-eos-rp-not-presented-full.jpg")
@@ -31,8 +32,17 @@ class NoCameraDialog(QDialog):
         self.setWindowTitle(self.tr("Camera not detected"))
         self.setMinimumWidth(DIALOG_MIN_WIDTH)
         self.setModal(True)
+        self._focus_btn = None
         self._build_ui()
         self._timer = QTimer(self)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        center_on_parent(self)
+        if self._focus_btn:
+            self._focus_btn.setFocus()
+
+
         self._timer.setInterval(2000)
         self._timer.timeout.connect(self._check_camera)
         self._timer.start()
@@ -73,7 +83,7 @@ class NoCameraDialog(QDialog):
         btn_row.addWidget(btn_cancel)
         btn_row.addStretch()
         layout.addLayout(btn_row)
-        QTimer.singleShot(0, btn_cancel.setFocus)
+        self._focus_btn = btn_cancel
 
     def _check_camera(self):
         """Sprawdza lsusb — jeśli Canon wykryty, zamknij dialog automatycznie."""

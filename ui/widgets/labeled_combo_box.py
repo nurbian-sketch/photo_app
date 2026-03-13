@@ -52,6 +52,7 @@ class LabeledComboBox(QWidget):
         
         # ComboBox - zachowuje standardowy rozmiar (brak Policy.Expanding dla kontrolki)
         self.combo = QComboBox()
+        self.combo.setMaximumWidth(500)   # nie rozciągaj w nieskończoność przy szerokim panelu
         self.combo.setIconSize(self.combo.iconSize().__class__(24, 24))
         self.combo.addItems([str(item) for item in items])
         layout.addWidget(self.combo)

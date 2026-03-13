@@ -15,6 +15,7 @@ from typing import Optional
 import gphoto2 as gp
 from PyQt6.QtCore import QThread, pyqtSignal
 
+import core.session_codes as session_codes
 from core.session_context import (
     CameraSettings,
     EndReason,
@@ -134,8 +135,7 @@ class SessionRunner(QThread):
         # Tryby dodatkowe (po zakończeniu normalnej sesji)
         if self._run_mode == "import_only":
             try:
-                self._run_import()
-                self._run_sync()
+                self.finalize()
             except Exception as e:
                 logger.exception("SessionRunner: błąd import_only")
                 self._errors.append(str(e))
@@ -156,10 +156,9 @@ class SessionRunner(QThread):
                 self._run_active()
             self._run_stopping()
 
-            # PRIVATE: brak importu. INTERRUPTED: decyzja w SessionView (przyciski).
+            # PRIVATE: brak importu. INTERRUPTED: decyzja użytkownika (przyciski w dialogu).
             if self.context.mode != SessionMode.PRIVATE and self._end_reason == EndReason.TIMEOUT:
-                self._run_import()
-                self._run_sync()
+                self.finalize()
 
             self._finish()
 
@@ -224,16 +223,21 @@ class SessionRunner(QThread):
             f"elapsed={self.context.elapsed_sec}s"
         )
 
-    # ─────────────────────────── IMPORT
+    # ─────────────────────────── FINALIZE
 
-    def _run_import(self):
+    def finalize(self) -> None:
         """
-        Pobiera zdjęcia z karty SD aparatu.
-        Tylko pliki nowsze niż session_start (z korektą offsetu zegarów).
+        Sekwencja po zakończeniu sesji (TIMEOUT lub import_only po przerwaniu):
+          1. Połącz z aparatem i sprawdź czy są nowe zdjęcia.
+          2. Jeśli nie ma — zakończ bez kodu, katalogu i JSON.
+          3. Generuj kod, utwórz katalog.
+          4. Pobierz zdjęcia (to samo połączenie).
+          5. Zapisz session.json.
+          6. Odpal rclone async (tylko CLIENT).
         """
         self._set_state(SessionState.IMPORTING)
 
-        # Połącz z aparatem
+        # Krok 1: połącz z aparatem
         camera, gp_context = self._connect_camera()
         print(f"[IMPORT] connect: {'OK' if camera else 'FAIL'}", flush=True)
         if camera is None:
@@ -243,39 +247,50 @@ class SessionRunner(QThread):
             return
 
         try:
-            # Odczytaj offset zegarów
+            # Odczytaj offset zegarów i wylistuj nowe pliki
             self.context.camera_time_offset = self._get_time_offset(camera, gp_context)
             print(f"[IMPORT] offset={self.context.camera_time_offset}s  started_at={self.context.started_at}", flush=True)
             logger.info(f"Offset zegarów aparat↔system: {self.context.camera_time_offset}s")
 
-            # Snapshot karty — pliki nowsze niż start sesji
             files_to_import = self._list_new_files(camera, gp_context)
             print(f"[IMPORT] znaleziono {len(files_to_import)} plików do importu", flush=True)
             logger.info(f"Import: znaleziono {len(files_to_import)} nowych plików")
 
+            # Krok 2: brak zdjęć — nie ma po co tworzyć katalogu ani kodu
             if not files_to_import:
                 self._warnings.append("Import: brak nowych plików na karcie")
+                logger.info("finalize: brak zdjęć — pomijam kod i katalog")
                 return
 
-            # Utwórz katalog sesji (zdjęcia trafiają bezpośrednio tu)
-            os.makedirs(self.context.session_path, exist_ok=True)
+            # Krok 3: kod sesji i katalog (dopiero gdy wiadomo że są zdjęcia)
+            self.warning.emit("Generating session code...")
+            code = session_codes.generate_code()
+            self.context.share_code = code
 
-            # Zapisz pary do ewentualnego późniejszego usunięcia z karty
+            self.warning.emit("Creating session directory...")
+            date_str = datetime.today().strftime("%Y-%m-%d")
+            if self.context.mode == SessionMode.CLIENT:
+                folder_name  = f"{self.context.email}_{date_str}_code{code}"
+                session_path = os.path.join(self.store.base_dir, "cloud", folder_name)
+            else:  # HOME
+                folder_name  = f"nosend_{date_str}_code{code}"
+                session_path = os.path.join(self.store.base_dir, "home", folder_name)
+
+            self.context.session_id    = folder_name
+            self.context.session_path  = session_path
+            self.context.captures_path = session_path
+            os.makedirs(session_path, exist_ok=True)
+
+            # Krok 4: transfer (reużywamy otwartego połączenia)
             self._card_file_pairs = list(files_to_import)
-
-            # Reset flagi — import musi działać niezależnie od powodu zakończenia sesji
             self._stop_flag = False
-
-            # Transfer
             total = len(files_to_import)
+
             for idx, (folder, filename) in enumerate(files_to_import, 1):
                 if self._stop_flag:
                     break
-
                 self.import_progress.emit(idx, total, filename)
-                success = self._download_file(camera, gp_context, folder, filename)
-
-                if success:
+                if self._download_file(camera, gp_context, folder, filename):
                     self.context.imported_files.append(filename)
                 else:
                     self._warnings.append(f"Import: błąd transferu {filename}")
@@ -286,11 +301,31 @@ class SessionRunner(QThread):
             except Exception:
                 pass
 
-        # Zapis metadanych po imporcie
-        self.store.save(self.context)
         logger.info(
             f"Import zakończony: {len(self.context.imported_files)}/{len(files_to_import)} plików"
         )
+
+        # Krok 5: zapis JSON
+        self.warning.emit("Saving session summary...")
+        self.store.save(self.context)
+
+        # Krok 6: rclone asynchronicznie (tylko CLIENT)
+        if (
+            self.context.mode == SessionMode.CLIENT
+            and self.rclone_remote
+            and self.rclone_dest
+        ):
+            self.warning.emit("Sync scheduled")
+            source = os.path.join(self.store.base_dir, "cloud")
+            dest   = f"{self.rclone_remote}:{self.rclone_dest}"
+            subprocess.Popen(
+                ["rclone", "sync", source, dest, "--progress"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            self.context.sync_status = "pending"
+        else:
+            self.context.sync_status = "skipped"
 
     # Maksymalna liczba prób połączenia podczas importu (15 × 2s = 30s)
     _CONNECT_MAX_ATTEMPTS = 15
@@ -460,20 +495,38 @@ class SessionRunner(QThread):
     # ─────────────────────────── USUWANIE Z KARTY
 
     def _run_delete_from_card(self):
-        """Usuwa z karty SD pliki zarejestrowane podczas importu."""
-        if not self._card_file_pairs:
-            logger.warning("Brak plików do usunięcia z karty")
-            return
-
+        """
+        Usuwa z karty SD pliki sesji.
+        Jeśli import był wcześniej — używa _card_file_pairs.
+        Jeśli nie (sesja przerwana bez importu) — listuje nowe pliki z karty.
+        """
         camera, gp_context = self._connect_camera()
         if camera is None:
             logger.warning("Usuwanie z karty: nie można połączyć z aparatem")
             self._warnings.append("Delete: cannot connect to camera")
             return
 
+        # Jeśli brak listy z importu — ustal pliki sesji bezpośrednio z karty
+        file_pairs = self._card_file_pairs
+        if not file_pairs:
+            try:
+                self.context.camera_time_offset = self._get_time_offset(camera, gp_context)
+                file_pairs = self._list_new_files(camera, gp_context)
+            except Exception as e:
+                logger.warning(f"Delete: nie można ustalić plików z karty: {e}")
+                file_pairs = []
+
+        if not file_pairs:
+            logger.warning("Brak plików do usunięcia z karty")
+            try:
+                camera.exit(gp_context)
+            except Exception:
+                pass
+            return
+
         deleted = 0
         try:
-            for folder, filename in self._card_file_pairs:
+            for folder, filename in file_pairs:
                 try:
                     camera.file_delete(folder, filename, gp_context)
                     deleted += 1
@@ -487,81 +540,7 @@ class SessionRunner(QThread):
             except Exception:
                 pass
 
-        logger.info(f"Usunięto {deleted}/{len(self._card_file_pairs)} plików z karty SD")
-
-    # ─────────────────────────── SYNC (rclone)
-
-    def _run_sync(self):
-        """
-        Uruchamia rclone sync po zakończeniu importu.
-        Pomija HOME i PRIVATE.
-        Nie blokuje kolejnej sesji — uruchamia subprocess i śledzi stdout.
-        """
-        if self.context.mode != SessionMode.CLIENT:
-            self.context.sync_status = "skipped"
-            self.store.save(self.context)
-            return
-
-        if not self.rclone_remote or not self.rclone_dest:
-            logger.warning("SessionRunner: rclone nie skonfigurowany — pomijam sync")
-            self.context.sync_status = "skipped"
-            self.store.save(self.context)
-            return
-
-        self._set_state(SessionState.SYNCING)
-        self.context.sync_status = "pending"
-
-        source = self.store.base_dir
-        dest   = f"{self.rclone_remote}:{self.rclone_dest}"
-
-        cmd = [
-            "rclone", "sync", source, dest,
-            "--exclude", "*_home/**",
-            "--exclude", "*_private/**",
-            "--progress",
-            "--stats", "1s",
-        ]
-
-        logger.info(f"rclone sync: {source} → {dest}")
-
-        try:
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-            )
-
-            for line in proc.stdout:
-                line = line.strip()
-                if line:
-                    self.sync_progress.emit(line)
-                    logger.debug(f"rclone: {line}")
-
-            proc.wait()
-
-            if proc.returncode == 0:
-                self.context.sync_status = "done"
-                logger.info("rclone sync: zakończony sukcesem")
-            else:
-                self.context.sync_status = "failed"
-                msg = f"rclone zakończył się kodem {proc.returncode}"
-                logger.warning(msg)
-                self._warnings.append(msg)
-
-        except FileNotFoundError:
-            self.context.sync_status = "failed"
-            msg = "rclone nie jest zainstalowany lub niedostępny w PATH"
-            logger.error(msg)
-            self._warnings.append(msg)
-
-        except Exception as e:
-            self.context.sync_status = "failed"
-            logger.exception("Nieoczekiwany błąd rclone")
-            self._warnings.append(str(e))
-
-        self.store.save(self.context)
+        logger.info(f"Usunięto {deleted}/{len(file_pairs)} plików z karty SD")
 
     # ─────────────────────────── FINISH
 

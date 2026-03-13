@@ -55,7 +55,7 @@ class TelegramConfigDialog(QDialog):
         show_row = QHBoxLayout()
         show_row.addWidget(self.edit_token)
         btn_show = QPushButton(self.tr("Show"))
-        btn_show.setFixedWidth(DIALOG_BTN_SHOW_W)
+        btn_show.setMinimumHeight(28)
         btn_show.setCheckable(True)
         btn_show.toggled.connect(lambda checked: self.edit_token.setEchoMode(
             QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password

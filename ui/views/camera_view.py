@@ -100,6 +100,8 @@ class CameraView(QWidget):
         row1 = QHBoxLayout()
         self.btn_save = QPushButton(self.tr("Save"))
         self.btn_load = QPushButton(self.tr("Load"))
+        self.btn_save.setMinimumHeight(28)
+        self.btn_load.setMinimumHeight(28)
         row1.addWidget(self.btn_save)
         row1.addWidget(self.btn_load)
         row1.addStretch()

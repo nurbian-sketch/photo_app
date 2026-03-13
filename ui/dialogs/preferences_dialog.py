@@ -55,6 +55,7 @@ class PreferencesDialog(QDialog):
         row.addWidget(self.dir_edit, 1)
 
         self.btn_browse = QPushButton(self.tr("Browse..."))
+        self.btn_browse.setMinimumHeight(28)
         self.btn_browse.clicked.connect(self._browse_directory)
         row.addWidget(self.btn_browse)
 
@@ -99,7 +100,7 @@ class PreferencesDialog(QDialog):
         self.tg_token_edit.setEchoMode(QLineEdit.EchoMode.Password)
         token_row.addWidget(self.tg_token_edit, 1)
         btn_show = QPushButton(self.tr("Show"))
-        btn_show.setFixedWidth(DIALOG_BTN_SHOW_W)
+        btn_show.setMinimumHeight(28)
         btn_show.setCheckable(True)
         btn_show.toggled.connect(lambda checked: self.tg_token_edit.setEchoMode(
             QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password

@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
 from ui.styles import (
     DIALOG_SPACING, DIALOG_MARGINS, DIALOG_MIN_WIDTH,
     DIALOG_IMG_SIZE, DIALOG_BTN_W, DIALOG_BTN_H, DIALOG_TEXT_STYLE,
+    center_on_parent,
 )
 
 _IMG = os.path.join("assets", "pictures", "sdcard-not-presented.jpg")
@@ -30,7 +31,15 @@ class NoSdCardDialog(QDialog):
         self.setWindowTitle(self.tr("SD card not found"))
         self.setMinimumWidth(DIALOG_MIN_WIDTH)
         self.setModal(True)
+        self._focus_btn = None
         self._build_ui()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        center_on_parent(self)
+        if self._focus_btn:
+            self._focus_btn.setFocus()
+
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -74,4 +83,4 @@ class NoSdCardDialog(QDialog):
         btn_row.addWidget(btn_ok)
 
         layout.addLayout(btn_row)
-        QTimer.singleShot(0, btn_ok.setFocus)
+        self._focus_btn = btn_ok

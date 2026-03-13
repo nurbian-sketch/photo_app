@@ -15,12 +15,13 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QPainter, QPainterPath, QPixmap
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QWidget, QMessageBox,
+    QWidget,
 )
 
 from core.session_context import (
     EndReason, SessionMode, SessionSummary,
 )
+from ui.styles import center_on_parent
 
 
 # ─── stałe dialogu
@@ -81,7 +82,6 @@ def _center_crop(pixmap: QPixmap, w: int, h: int) -> QPixmap:
 class SessionSummaryDialog(QDialog):
     """
     Dialog podsumowania sesji.
-    Dla przerwanych sesji CLIENT/HOME obsługuje wybór import/usuń wewnętrznie.
     Zamknięcie przez "New Session" → done(ACTION_NEW_SESSION),
     przez "Darkroom" → done(ACTION_DARKROOM).
     """
@@ -89,13 +89,10 @@ class SessionSummaryDialog(QDialog):
     def __init__(
         self,
         summary: SessionSummary,
-        runner=None,
         parent=None,
     ):
         super().__init__(parent)
         self._summary = summary
-        self._runner = runner
-        self._final_summary: Optional[SessionSummary] = summary
         self._focus_btn = None
         self._build_ui()
         self.setWindowTitle(self.tr("Session summary"))
@@ -106,6 +103,7 @@ class SessionSummaryDialog(QDialog):
 
     def showEvent(self, event):
         super().showEvent(event)
+        center_on_parent(self)
         if self._focus_btn:
             self._focus_btn.setFocus()
 
@@ -165,37 +163,7 @@ class SessionSummaryDialog(QDialog):
         self.warnings_label.setWordWrap(True)
         layout.addWidget(self.warnings_label)
 
-        layout.addSpacing(8)
-
-        # Postęp importu (widoczny podczas importu)
-        self.import_progress_label = QLabel("")
-        self.import_progress_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.import_progress_label.setStyleSheet("color: #aaa; font-size: 13px;")
-        self.import_progress_label.hide()
-        layout.addWidget(self.import_progress_label)
-
         layout.addStretch(1)
-
-        # Przyciski wyboru dla przerwanej sesji CLIENT/HOME
-        self._choice_widget = QWidget()
-        choice_layout = QHBoxLayout(self._choice_widget)
-        choice_layout.setContentsMargins(0, 0, 0, 0)
-        choice_layout.setSpacing(12)
-        choice_layout.addStretch(1)
-
-        self.btn_import_card = QPushButton(self.tr("⬇  Import photos"))
-        self.btn_import_card.setFixedHeight(42)
-        self.btn_import_card.clicked.connect(self._on_import)
-        choice_layout.addWidget(self.btn_import_card)
-
-        self.btn_delete_card = QPushButton(self.tr("🗑  Delete photos"))
-        self.btn_delete_card.setFixedHeight(42)
-        self.btn_delete_card.clicked.connect(self._on_delete)
-        choice_layout.addWidget(self.btn_delete_card)
-
-        choice_layout.addStretch(1)
-        self._choice_widget.hide()
-        layout.addWidget(self._choice_widget)
 
         layout.addSpacing(8)
 
@@ -222,64 +190,33 @@ class SessionSummaryDialog(QDialog):
 
     def _populate(self, summary: SessionSummary):
         ctx = summary.context
-        interrupted = summary.end_reason not in (EndReason.TIMEOUT, EndReason.USB_DETECTED)
-        needs_import = ctx.mode in (SessionMode.CLIENT, SessionMode.HOME)
 
         # Tytuł
-        if summary.end_reason == EndReason.TIMEOUT:
-            self.title.setText(self.tr("Session finished"))
-        elif summary.end_reason == EndReason.USB_DETECTED:
-            self.title.setText(self.tr("Session stopped — camera connected"))
+        if ctx.share_code:
+            self.title.setText(self.tr("Code generated"))
+        elif ctx.mode == SessionMode.PRIVATE:
+            self.title.setText(self.tr("Session summary"))
         else:
-            self.title.setText(self.tr("Session interrupted"))
+            self.title.setText(self.tr("Session finished"))
 
         # Warianty
         if ctx.mode == SessionMode.PRIVATE:
             self.sd_card_image.show()
             self.btn_darkroom.hide()
-            self._choice_widget.hide()
+            shots_str = str(summary.shot_count) if summary.shot_count else "—"
             self.details.setText("\n".join([
                 self.tr("Private session"),
-                self.tr("Photos stay on SD card only."),
-                self.tr("Duration: %1").replace("%1", summary.duration_str),
+                self.tr("Duration: %1  ·  %2 shots")
+                    .replace("%1", summary.duration_str)
+                    .replace("%2", shots_str),
                 self.tr("Don't forget to remove the SD card from the camera."),
             ]))
             self.btn_new.setDefault(True)
             self._focus_btn = self.btn_new
 
-        elif interrupted and needs_import:
-            # Przerwana CLOUD/HOME: pokaż wybór import/usuń
-            line1 = (
-                self.tr("Cloud session — %1").replace("%1", ctx.email)
-                if ctx.mode == SessionMode.CLIENT
-                else self.tr("Home session")
-            )
-            line2 = (
-                self.tr("Photos uploaded to remote server.")
-                if ctx.mode == SessionMode.CLIENT
-                else self.tr("Photos saved locally.")
-            )
-            self.details.setText("\n".join([
-                line1,
-                line2,
-                self.tr("Session interrupted · Duration: %1").replace("%1", summary.duration_str),
-                self.tr("Photos are on the camera's SD card."),
-            ]))
-            self._choice_widget.show()
-            self.btn_darkroom.hide()
-            self.btn_new.hide()
-            self.btn_import_card.setDefault(True)
-            self._focus_btn = self.btn_import_card
-
         else:
-            # Normalne zakończenie CLOUD/HOME
+            # Normalne zakończenie CLIENT/HOME (po finalize — zawsze mamy kod i import)
             shots_str = str(summary.shot_count)
-            sync_str = {
-                "done":    self.tr("✓ Synced to Google Drive"),
-                "pending": self.tr("Sync pending..."),
-                "failed":  self.tr("⚠ Sync failed"),
-                "skipped": "",
-            }.get(ctx.sync_status, "")
             line1 = (
                 self.tr("Cloud session — %1").replace("%1", ctx.email)
                 if ctx.mode == SessionMode.CLIENT
@@ -295,7 +232,7 @@ class SessionSummaryDialog(QDialog):
                 .replace("%1", summary.duration_str)
                 .replace("%2", shots_str)
             )
-            line4 = sync_str or (ctx.session_path or "")
+            line4 = ctx.session_path or ""
             self.details.setText("\n".join([line1, line2, line3, line4]))
             if ctx.share_code:
                 self._show_qr(ctx.share_code)
@@ -306,130 +243,6 @@ class SessionSummaryDialog(QDialog):
             self.warnings_label.setText(
                 self.tr("Warnings: %1").replace("%1", " · ".join(summary.warnings[:3]))
             )
-
-    # ─── Import i usuń dla przerwanej sesji
-
-    def _on_import(self):
-        if not self._runner:
-            return
-        self._choice_widget.hide()
-        self.import_progress_label.show()
-        self.import_progress_label.setText(self.tr("Starting import..."))
-        self._runner.import_progress.connect(self._on_import_progress)
-        self._runner.session_finished.connect(self._on_import_done)
-        self._runner.start_import_only()
-
-    def _on_import_progress(self, current: int, total: int, filename: str):
-        self.import_progress_label.setText(
-            self.tr("Importing %1/%2: %3")
-            .replace("%1", str(current))
-            .replace("%2", str(total))
-            .replace("%3", filename)
-        )
-
-    def _on_import_done(self, summary: SessionSummary):
-        self._final_summary = summary
-        self.import_progress_label.hide()
-        ctx = summary.context
-        shots_str = str(summary.shot_count)
-        line1 = (
-            self.tr("Cloud session — %1").replace("%1", ctx.email)
-            if ctx.mode == SessionMode.CLIENT
-            else self.tr("Home session")
-        )
-        line2 = (
-            self.tr("Photos uploaded to remote server.")
-            if ctx.mode == SessionMode.CLIENT
-            else self.tr("Photos saved locally.")
-        )
-        line3 = (
-            self.tr("Duration: %1 · %2 shots imported")
-            .replace("%1", summary.duration_str)
-            .replace("%2", shots_str)
-        )
-        line4 = ctx.session_path or ""
-        self.details.setText("\n".join([line1, line2, line3, line4]))
-        if ctx.share_code:
-            self._show_qr(ctx.share_code)
-        self.btn_darkroom.show()
-        self.btn_new.show()
-        self.btn_darkroom.setDefault(True)
-        self.btn_darkroom.setFocus()
-        self._focus_btn = self.btn_darkroom
-        self._ask_delete()
-
-    def _on_delete(self):
-        if not self._runner:
-            self._finish_without_qr()
-            return
-        ans = QMessageBox.question(
-            self,
-            self.tr("Delete photos?"),
-            self.tr(
-                "Delete all photos from this session from the camera's SD card?\n"
-                "This cannot be undone."
-            ),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if ans != QMessageBox.StandardButton.Yes:
-            return
-        self._choice_widget.hide()
-        self.import_progress_label.show()
-        self.import_progress_label.setText(self.tr("Deleting photos from card..."))
-        self.btn_delete_card.setEnabled(False)
-        self._runner.session_finished.connect(self._on_delete_done)
-        self._runner.start_delete_from_card()
-
-    def _on_delete_done(self, summary: SessionSummary):
-        self._final_summary = summary
-        self.import_progress_label.hide()
-        # Wyniki bez QR
-        self._finish_without_qr()
-
-    def _finish_without_qr(self):
-        ctx = self._summary.context
-        line1 = (
-            self.tr("Cloud session — %1").replace("%1", ctx.email)
-            if ctx.mode == SessionMode.CLIENT
-            else self.tr("Home session")
-        )
-        line2 = (
-            self.tr("Photos uploaded to remote server.")
-            if ctx.mode == SessionMode.CLIENT
-            else self.tr("Photos saved locally.")
-        )
-        line3 = (
-            self.tr("Session interrupted · Duration: %1")
-            .replace("%1", self._summary.duration_str)
-        )
-        line4 = self.tr("Photos deleted from SD card.")
-        self.details.setText("\n".join([line1, line2, line3, line4]))
-        self.btn_new.show()
-        self.btn_new.setDefault(True)
-        self.btn_new.setFocus()
-        self._focus_btn = self.btn_new
-
-    def _ask_delete(self):
-        """Po imporcie — pytanie o usunięcie z karty SD."""
-        if not self._runner:
-            return
-        ans = QMessageBox.question(
-            self,
-            self.tr("Delete from SD card?"),
-            self.tr(
-                "Photos imported successfully.\n"
-                "Delete imported photos from the camera's SD card?"
-            ),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No,
-        )
-        if ans == QMessageBox.StandardButton.Yes:
-            self._runner.session_finished.connect(self._on_delete_after_import)
-            self._runner.start_delete_from_card()
-
-    def _on_delete_after_import(self, _summary):
-        pass  # Usunięto — nic do zrobienia w UI
 
     # ─── QR kod
 
@@ -507,5 +320,5 @@ class SessionSummaryDialog(QDialog):
     # ─── Publiczne API
 
     def get_final_summary(self) -> Optional[SessionSummary]:
-        """Zwraca ostateczne podsumowanie (po imporcie, jeśli był)."""
-        return self._final_summary
+        """Zwraca podsumowanie sesji."""
+        return self._summary

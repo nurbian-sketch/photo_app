@@ -335,6 +335,8 @@ class SessionView(QWidget):
         row_profiles.setContentsMargins(6, 4, 6, 4)
         self.btn_save_profile = QPushButton(self.tr("Save"))
         self.btn_load_profile = QPushButton(self.tr("Load"))
+        self.btn_save_profile.setMinimumHeight(28)
+        self.btn_load_profile.setMinimumHeight(28)
         row_profiles.addWidget(self.btn_save_profile)
         row_profiles.addWidget(self.btn_load_profile)
         row_profiles.addStretch()
@@ -449,6 +451,7 @@ class SessionView(QWidget):
         """Wywoływane przez MainWindow przy przejściu do widoku Session."""
         self._view_active = True
         self._last_bad_state = None
+        self._config_panel.reset()
         QTimer.singleShot(0, self._config_panel.btn_cloud.setFocus)
 
     def on_leave(self):
@@ -604,10 +607,7 @@ class SessionView(QWidget):
         if self._config_panel.duration_slider.get_value() == DURATION_TEST_LABEL:
             ctx.duration_sec_override = 5
 
-        # QR generowany obligatoryjnie dla CLIENT i HOME
-        if ctx.mode in (SessionMode.CLIENT, SessionMode.HOME):
-            code = session_codes.generate_code()
-            ctx.share_code = code
+        # Kod sesji i ścieżka generowane przez runner.finalize() po zakończeniu
 
         store = SessionStore(base_dir)
         self._runner = SessionRunner(ctx, store, rclone_rem, rclone_dst, pre_session_files)
@@ -664,7 +664,7 @@ class SessionView(QWidget):
         from ui.dialogs.session_summary_dialog import (
             SessionSummaryDialog, ACTION_DARKROOM, ACTION_NEW_SESSION,
         )
-        summary_dlg = SessionSummaryDialog(summary, runner=self._runner, parent=self)
+        summary_dlg = SessionSummaryDialog(summary, parent=self)
         result = summary_dlg.exec()
 
         # Zaktualizuj summary po ewentualnym imporcie

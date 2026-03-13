@@ -213,29 +213,19 @@ class SessionSummary:
 
 # ─────────────────────────────────────────── FACTORY
 
-def make_session_id(email: str) -> str:
-    """
-    Tworzy ID sesji na podstawie aktualnego czasu i emaila.
-    Format: YYYY-MM-DD_HHMM_email
-    """
-    now = datetime.now()
-    return f"{now.strftime('%Y-%m-%d_%H%M')}_{email}"
-
-
 def make_session_context(
     email: str,
     duration_min: int,
     session_base_dir: str,
-    captures_subdir: str = "captures",
+    captures_subdir: str = "captures",   # zachowane dla zgodności — nieużywane
     camera_settings: Optional[CameraSettings] = None,
     phone: str = "",
 ) -> SessionContext:
     """
-    Fabryka SessionContext — tworzy kompletny kontekst przed startem sesji.
-    Nie tworzy folderów na dysku (to robi SessionRunner).
+    Fabryka SessionContext — tworzy kontekst przed startem sesji.
+    Ścieżki i session_id są puste — ustawiane przez SessionRunner.finalize().
+    Nie tworzy folderów na dysku.
     """
-    import os
-
     # Wykryj tryb
     email_clean = email.strip().lower()
     if email_clean == "home":
@@ -245,23 +235,13 @@ def make_session_context(
     else:
         mode = SessionMode.CLIENT
 
-    session_id = make_session_id(email_clean if mode != SessionMode.PRIVATE else "private")
-
-    # Ścieżki tylko dla trybów z importem
-    if mode != SessionMode.PRIVATE:
-        session_path  = os.path.join(session_base_dir, session_id)
-        captures_path = session_path  # zdjęcia bezpośrednio w katalogu sesji
-    else:
-        session_path  = ""
-        captures_path = ""
-
     return SessionContext(
-        session_id=session_id,
+        session_id="",
         mode=mode,
         email=email_clean,
         phone=phone.strip(),
         duration_min=duration_min,
-        session_path=session_path,
-        captures_path=captures_path,
+        session_path="",
+        captures_path="",
         camera_settings=camera_settings or CameraSettings(),
     )

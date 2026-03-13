@@ -40,3 +40,13 @@ DIALOG_BTN_SHOW_W = 55   # przycisk "Show" przy polach hasła
 DIALOG_TEXT_STYLE = "font-size: 15px;"
 DIALOG_HINT_STYLE = "color: #888; font-size: 11px;"
 DIALOG_HINT_STYLE_PADDED = "color: #888; font-size: 11px; padding: 4px;"
+
+
+def center_on_parent(dialog) -> None:
+    """Centruje dialog na rodzicu. Bez rodzica — bez przesunięcia."""
+    parent = dialog.parent()
+    if parent is None:
+        return
+    geo = dialog.frameGeometry()
+    geo.moveCenter(parent.frameGeometry().center())
+    dialog.move(geo.topLeft())
