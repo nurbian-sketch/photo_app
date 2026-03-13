@@ -10,6 +10,8 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QSettings, Qt
 
+from ui.styles import DIALOG_BTN_SHOW_W, DIALOG_HINT_STYLE
+
 class PreferencesDialog(QDialog):
     """Dialog ustawień aplikacji."""
 
@@ -43,7 +45,7 @@ class PreferencesDialog(QDialog):
             "Photos captured in Camera view will be saved to:\n"
             "{directory}/captures/"
         ))
-        description.setStyleSheet("color: #888; font-size: 11px;")
+        description.setStyleSheet(DIALOG_HINT_STYLE)
         dir_layout.addWidget(description)
 
         # Directory input row
@@ -77,7 +79,7 @@ class PreferencesDialog(QDialog):
             self.lang_combo.addItem(label)
 
         lang_note = QLabel(self.tr("Language change takes effect after restarting the application."))
-        lang_note.setStyleSheet("color: #888; font-size: 11px;")
+        lang_note.setStyleSheet(DIALOG_HINT_STYLE)
         lang_note.setWordWrap(True)
 
         lang_layout.addWidget(self.lang_combo)
@@ -97,7 +99,7 @@ class PreferencesDialog(QDialog):
         self.tg_token_edit.setEchoMode(QLineEdit.EchoMode.Password)
         token_row.addWidget(self.tg_token_edit, 1)
         btn_show = QPushButton(self.tr("Show"))
-        btn_show.setFixedWidth(55)
+        btn_show.setFixedWidth(DIALOG_BTN_SHOW_W)
         btn_show.setCheckable(True)
         btn_show.toggled.connect(lambda checked: self.tg_token_edit.setEchoMode(
             QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password

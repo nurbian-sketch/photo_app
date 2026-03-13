@@ -9,21 +9,8 @@ import logging
 
 
 def _setup_logger() -> logging.Logger:
-    log = logging.getLogger("gphoto")
-    if log.handlers:
-        return log
-    log.setLevel(logging.DEBUG)
-    fmt = logging.Formatter(
-        "%(asctime)s.%(msecs)03d  %(levelname)-5s  %(message)s",
-        datefmt="%H:%M:%S"
-    )
-    ch = logging.StreamHandler()
-    ch.setFormatter(fmt)
-    log.addHandler(ch)
-    fh = logging.FileHandler("log.txt", mode="a", encoding="utf-8")
-    fh.setFormatter(fmt)
-    log.addHandler(fh)
-    return log
+    # Poziom i handlery zarządza log_setup.setup() wywoływany w main.py
+    return logging.getLogger("gphoto")
 
 
 logger = _setup_logger()

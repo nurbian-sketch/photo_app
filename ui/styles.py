@@ -22,3 +22,21 @@ BTN_STYLE_RED = (
     " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: #c55d61; }"
     " QPushButton:focus:hover { background-color: #d06e72; }"
 )
+
+# ── Stałe dla dialogów informacyjnych ────────────────────────────────────────
+
+# Geometria
+DIALOG_SPACING    = 8
+DIALOG_MARGINS    = (12, 12, 12, 12)
+DIALOG_MIN_WIDTH  = 480
+DIALOG_IMG_SIZE   = 280
+
+# Rozmiary przycisków
+DIALOG_BTN_W      = 90
+DIALOG_BTN_H      = 34
+DIALOG_BTN_SHOW_W = 55   # przycisk "Show" przy polach hasła
+
+# Style tekstu
+DIALOG_TEXT_STYLE = "font-size: 15px;"
+DIALOG_HINT_STYLE = "color: #888; font-size: 11px;"
+DIALOG_HINT_STYLE_PADDED = "color: #888; font-size: 11px; padding: 4px;"

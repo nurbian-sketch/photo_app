@@ -11,6 +11,10 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.dialogs.usb_disconnect_dialog import _lsusb_has_canon
+from ui.styles import (
+    DIALOG_SPACING, DIALOG_MARGINS, DIALOG_MIN_WIDTH,
+    DIALOG_IMG_SIZE, DIALOG_BTN_W, DIALOG_BTN_H, DIALOG_TEXT_STYLE,
+)
 
 _IMG = os.path.join("assets", "pictures", "korpus-canon-eos-rp-not-presented-full.jpg")
 
@@ -25,7 +29,7 @@ class NoCameraDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Camera not detected"))
-        self.setMinimumWidth(480)
+        self.setMinimumWidth(DIALOG_MIN_WIDTH)
         self.setModal(True)
         self._build_ui()
         self._timer = QTimer(self)
@@ -35,17 +39,18 @@ class NoCameraDialog(QDialog):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(4)
-        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(DIALOG_SPACING)
+        layout.setContentsMargins(*DIALOG_MARGINS)
 
         img_label = QLabel()
         if os.path.exists(_IMG):
             raw = QPixmap(_IMG)
-            scaled = raw.scaled(280, 280, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            scaled = raw.scaled(DIALOG_IMG_SIZE, DIALOG_IMG_SIZE,
+                                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                                 Qt.TransformationMode.SmoothTransformation)
-            x = (scaled.width()  - 280) // 2
-            y = (scaled.height() - 280) // 2
-            img_label.setPixmap(scaled.copy(x, y, 280, 280))
+            x = (scaled.width()  - DIALOG_IMG_SIZE) // 2
+            y = (scaled.height() - DIALOG_IMG_SIZE) // 2
+            img_label.setPixmap(scaled.copy(x, y, DIALOG_IMG_SIZE, DIALOG_IMG_SIZE))
         img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(img_label)
 
@@ -55,14 +60,14 @@ class NoCameraDialog(QDialog):
                     "Make sure the camera is turned on.")
         )
         msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        msg.setStyleSheet("font-size: 15px;")
+        msg.setStyleSheet(DIALOG_TEXT_STYLE)
         msg.setWordWrap(True)
         layout.addWidget(msg)
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
         btn_cancel = QPushButton(self.tr("Cancel"))
-        btn_cancel.setFixedSize(90, 34)
+        btn_cancel.setFixedSize(DIALOG_BTN_W, DIALOG_BTN_H)
         btn_cancel.setDefault(True)
         btn_cancel.clicked.connect(self.reject)
         btn_row.addWidget(btn_cancel)

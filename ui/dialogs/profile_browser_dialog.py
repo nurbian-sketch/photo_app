@@ -11,6 +11,8 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal
 
+from ui.styles import DIALOG_HINT_STYLE, DIALOG_HINT_STYLE_PADDED
+
 _SETTINGS_KEY = "profiles/last_selected"
 
 
@@ -25,7 +27,9 @@ class ProfileBrowserDialog(QDialog):
         self.setWindowTitle(self.tr("Camera Profiles"))
         self.setMinimumSize(480, 360)
         self.setWindowFlags(
-            Qt.WindowType.Dialog | Qt.WindowType.WindowCloseButtonHint
+            Qt.WindowType.Dialog
+            | Qt.WindowType.WindowCloseButtonHint
+            & ~Qt.WindowType.WindowContextHelpButtonHint
         )
         self.setStyleSheet(
             "QListWidget:focus { border: 1px solid rgba(180, 180, 180, 0.6); }"
@@ -51,7 +55,7 @@ class ProfileBrowserDialog(QDialog):
         # Podgląd zawartości profilu
         self._detail = QLabel("")
         self._detail.setStyleSheet(
-            "color: #aaa; font-size: 11px; padding: 4px;"
+            DIALOG_HINT_STYLE_PADDED
         )
         self._detail.setWordWrap(True)
         layout.addWidget(self._detail)

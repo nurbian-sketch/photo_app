@@ -9,6 +9,8 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QSettings, Qt
 
+from ui.styles import DIALOG_BTN_SHOW_W, DIALOG_HINT_STYLE
+
 
 class TelegramConfigDialog(QDialog):
     """Dialog do wprowadzenia bot tokenu i chat ID."""
@@ -30,7 +32,7 @@ class TelegramConfigDialog(QDialog):
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(14)
+        layout.setSpacing(15)
 
         # ── Instrukcja ────────────────────────────────────────────────
         info = QLabel(self.tr(
@@ -40,7 +42,7 @@ class TelegramConfigDialog(QDialog):
             "3. Start a chat with your bot, then send /start.\n"
             "4. To get your Chat ID, message @userinfobot."
         ))
-        info.setStyleSheet("color: #aaa; font-size: 11px;")
+        info.setStyleSheet(DIALOG_HINT_STYLE)
         info.setWordWrap(True)
         layout.addWidget(info)
 
@@ -53,7 +55,7 @@ class TelegramConfigDialog(QDialog):
         show_row = QHBoxLayout()
         show_row.addWidget(self.edit_token)
         btn_show = QPushButton(self.tr("Show"))
-        btn_show.setFixedWidth(55)
+        btn_show.setFixedWidth(DIALOG_BTN_SHOW_W)
         btn_show.setCheckable(True)
         btn_show.toggled.connect(lambda checked: self.edit_token.setEchoMode(
             QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password
@@ -69,7 +71,7 @@ class TelegramConfigDialog(QDialog):
             "Enter your personal Chat ID (number) or a group Chat ID.\n"
             "The bot must be a member of the group to send there."
         ))
-        hint.setStyleSheet("color: #888; font-size: 11px;")
+        hint.setStyleSheet(DIALOG_HINT_STYLE)
         hint.setWordWrap(True)
         self.edit_chat = QLineEdit()
         self.edit_chat.setPlaceholderText("123456789")

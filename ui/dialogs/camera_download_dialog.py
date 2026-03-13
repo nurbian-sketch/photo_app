@@ -11,6 +11,8 @@ from PyQt6.QtWidgets import (
     QCheckBox
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
+
+from ui.styles import DIALOG_SPACING, DIALOG_MARGINS
 import logging
 
 logger = logging.getLogger(__name__)
@@ -129,6 +131,8 @@ class CameraDownloadDialog(QDialog):
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
+        layout.setSpacing(DIALOG_SPACING)
+        layout.setContentsMargins(*DIALOG_MARGINS)
 
         self._status = QLabel(self.tr("Connecting to camera…"))
         layout.addWidget(self._status)

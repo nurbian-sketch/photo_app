@@ -10,6 +10,11 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
 )
 
+from ui.styles import (
+    DIALOG_SPACING, DIALOG_MARGINS, DIALOG_MIN_WIDTH,
+    DIALOG_IMG_SIZE, DIALOG_BTN_W, DIALOG_BTN_H, DIALOG_TEXT_STYLE,
+)
+
 _IMG = os.path.join("assets", "pictures", "sdcard-not-presented.jpg")
 
 
@@ -23,41 +28,38 @@ class NoSdCardDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle(self.tr("SD card not found"))
-        self.setMinimumWidth(380)
+        self.setMinimumWidth(DIALOG_MIN_WIDTH)
         self.setModal(True)
         self._build_ui()
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(8)
-        layout.setContentsMargins(20, 14, 20, 14)
+        layout.setSpacing(DIALOG_SPACING)
+        layout.setContentsMargins(*DIALOG_MARGINS)
 
         img_label = QLabel()
         if os.path.exists(_IMG):
             raw = QPixmap(_IMG)
-            scaled = raw.scaled(280, 280, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            scaled = raw.scaled(DIALOG_IMG_SIZE, DIALOG_IMG_SIZE,
+                                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                                 Qt.TransformationMode.SmoothTransformation)
-            x = (scaled.width()  - 280) // 2
-            y = (scaled.height() - 280) // 2
-            img_label.setPixmap(scaled.copy(x, y, 280, 280))
+            x = (scaled.width()  - DIALOG_IMG_SIZE) // 2
+            y = (scaled.height() - DIALOG_IMG_SIZE) // 2
+            img_label.setPixmap(scaled.copy(x, y, DIALOG_IMG_SIZE, DIALOG_IMG_SIZE))
         img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(img_label)
 
-        layout.addSpacing(4)
-
         msg = QLabel(self.tr("Insert SD card into camera."))
         msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        msg.setStyleSheet("font-size: 13px;")
+        msg.setStyleSheet(DIALOG_TEXT_STYLE)
         msg.setWordWrap(True)
         layout.addWidget(msg)
-
-        layout.addSpacing(6)
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
 
         btn_cancel = QPushButton(self.tr("Cancel"))
-        btn_cancel.setFixedSize(90, 34)
+        btn_cancel.setFixedSize(DIALOG_BTN_W, DIALOG_BTN_H)
         btn_cancel.setAutoDefault(False)
         btn_cancel.setDefault(False)
         btn_cancel.clicked.connect(self.reject)
@@ -66,7 +68,7 @@ class NoSdCardDialog(QDialog):
         btn_row.addSpacing(8)
 
         btn_ok = QPushButton(self.tr("OK"))
-        btn_ok.setFixedSize(90, 34)
+        btn_ok.setFixedSize(DIALOG_BTN_W, DIALOG_BTN_H)
         btn_ok.setDefault(True)
         btn_ok.clicked.connect(self.accept)
         btn_row.addWidget(btn_ok)

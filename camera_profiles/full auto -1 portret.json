@@ -1,0 +1,18 @@
+{
+  "name": "full auto -1 portret",
+  "settings": {
+    "shutterspeed": "Auto",
+    "aperture": "Auto",
+    "iso": "Auto",
+    "exposurecompensation": "-1",
+    "meteringmode": "Partial",
+    "picturestyle": "Portrait",
+    "imageformat": "M",
+    "alomode": "x1",
+    "whitebalance": "Auto",
+    "colortemperature": "5600",
+    "focusmode": "AI Servo",
+    "afmethod": "Live",
+    "continuousaf": "On"
+  }
+}

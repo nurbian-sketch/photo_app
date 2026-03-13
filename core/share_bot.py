@@ -419,7 +419,7 @@ def _send_menu(chat_id: int, lang: str) -> None:
         "inline_keyboard": [
             [
                 {"text": _t(lang, "btn_location"), "callback_data": "location"},
-                {"text": _t(lang, "btn_call"),     "callback_data": "call"},
+                {"text": _t(lang, "btn_call"),     "url": "tel:+48603666111"},
             ],
             [
                 {"text": _t(lang, "btn_photos"),   "callback_data": "get_photos"},
