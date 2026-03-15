@@ -12,8 +12,8 @@ from PyQt6.QtWidgets import (
 
 from ui.dialogs.usb_disconnect_dialog import _lsusb_has_canon
 from ui.styles import (
-    DIALOG_SPACING, DIALOG_MARGINS, DIALOG_MIN_WIDTH,
-    DIALOG_IMG_SIZE, DIALOG_BTN_W, DIALOG_BTN_H, DIALOG_TEXT_STYLE,
+    DIALOG_SPACING, DIALOG_MARGINS, DIALOG_MIN_WIDTH, DIALOG_MIN_HEIGHT,
+    DIALOG_IMG_SIZE, DIALOG_BTN_H, DIALOG_TEXT_STYLE,
     center_on_parent,
 )
 
@@ -31,6 +31,7 @@ class NoCameraDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Camera not detected"))
         self.setMinimumWidth(DIALOG_MIN_WIDTH)
+        self.setMinimumHeight(DIALOG_MIN_HEIGHT)
         self.setModal(True)
         self._focus_btn = None
         self._build_ui()
@@ -77,7 +78,7 @@ class NoCameraDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.addStretch()
         btn_cancel = QPushButton(self.tr("Cancel"))
-        btn_cancel.setFixedSize(DIALOG_BTN_W, DIALOG_BTN_H)
+        btn_cancel.setFixedHeight(DIALOG_BTN_H)
         btn_cancel.setDefault(True)
         btn_cancel.clicked.connect(self.reject)
         btn_row.addWidget(btn_cancel)

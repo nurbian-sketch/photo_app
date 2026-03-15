@@ -173,26 +173,16 @@ class SessionActiveDialog(QDialog):
         int_layout.setSpacing(12)
         int_layout.addStretch(1)
 
-        if self._ctx.mode in (SessionMode.CLIENT, SessionMode.HOME):
-            btn_import = QPushButton(self.tr("⬇  Import photos"))
-            btn_import.setFixedHeight(42)
-            btn_import.clicked.connect(self._on_interrupted_import)
-            int_layout.addWidget(btn_import)
+        # Przyciski akcji tylko dla CLIENT/HOME — PRIVATE nie wymaga żadnej decyzji
+        btn_import = QPushButton(self.tr("⬇  Import photos"))
+        btn_import.setFixedHeight(42)
+        btn_import.clicked.connect(self._on_interrupted_import)
+        int_layout.addWidget(btn_import)
 
-            btn_del_int = QPushButton(self.tr("🗑  Delete photos"))
-            btn_del_int.setFixedHeight(42)
-            btn_del_int.clicked.connect(self._on_interrupted_delete)
-            int_layout.addWidget(btn_del_int)
-        else:  # PRIVATE
-            btn_del_priv = QPushButton(self.tr("🗑  Delete photos"))
-            btn_del_priv.setFixedHeight(42)
-            btn_del_priv.clicked.connect(self._on_interrupted_delete)
-            int_layout.addWidget(btn_del_priv)
-
-            btn_leave = QPushButton(self.tr("Leave"))
-            btn_leave.setFixedHeight(42)
-            btn_leave.clicked.connect(self._on_interrupted_leave)
-            int_layout.addWidget(btn_leave)
+        btn_del_int = QPushButton(self.tr("🗑  Delete photos"))
+        btn_del_int.setFixedHeight(42)
+        btn_del_int.clicked.connect(self._on_interrupted_delete)
+        int_layout.addWidget(btn_del_int)
 
         int_layout.addStretch(1)
         self._interrupted_widget.hide()
@@ -279,7 +269,16 @@ class SessionActiveDialog(QDialog):
         self.import_label.hide()
         self.btn_stop.hide()
 
-        if summary.end_reason == EndReason.TIMEOUT:
+        if self._ctx.mode == SessionMode.PRIVATE:
+            # Prywatna — niezależnie od powodu: zdjęcia na karcie, brak akcji
+            bg = BG_FINISHED if summary.end_reason == EndReason.TIMEOUT else BG_INTERRUPTED
+            self._bg.set_background(bg)
+            self.countdown_label.setText(self.tr("Session ended"))
+            self.info_label.setText(self.tr("Take your SD card."))
+            self.btn_continue.show()
+            self.btn_continue.setDefault(True)
+            QTimer.singleShot(50, self.btn_continue.setFocus)
+        elif summary.end_reason == EndReason.TIMEOUT:
             self._bg.set_background(BG_FINISHED)
             self.countdown_label.setText(self.tr("Session finished"))
             self.btn_continue.show()
@@ -330,10 +329,6 @@ class SessionActiveDialog(QDialog):
         self.btn_new_session.show()
         self.btn_new_session.setDefault(True)
         QTimer.singleShot(50, self.btn_new_session.setFocus)
-
-    def _on_interrupted_leave(self):
-        """Wyjdź bez importu i bez usunięcia (PRIVATE)."""
-        self.accept()
 
     # ─── Publiczne API
 

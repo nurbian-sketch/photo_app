@@ -260,7 +260,7 @@ class ConfigPanel(QWidget):
         self._set_mode_bold(None)
         self.email_field.setEnabled(False)
         self.email_field.clear()
-        self.mode_info.setText("")
+        self.mode_info.setText(self.tr("Select a session mode to continue."))
         self._set_start_ready(False)
 
 
@@ -660,7 +660,15 @@ class SessionView(QWidget):
         # Wyemituj session_finished (MainWindow auto-load w darkroom)
         self.session_finished.emit(summary)
 
-        # Otwórz dialog podsumowania
+        if summary.context.mode == SessionMode.PRIVATE:
+            # Brak podsumowania — zdjęcia zostają na karcie SD, brak importu/kodu
+            if self._runner:
+                self._runner.deleteLater()
+                self._runner = None
+            self._on_new_session()
+            return
+
+        # Otwórz dialog podsumowania (CLIENT/HOME)
         from ui.dialogs.session_summary_dialog import (
             SessionSummaryDialog, ACTION_DARKROOM, ACTION_NEW_SESSION,
         )

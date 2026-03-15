@@ -552,7 +552,10 @@ class SessionRunner(QThread):
                 if self._end_reason == EndReason.TIMEOUT
                 else SessionState.INTERRUPTED
             )
-            self._set_state(final_state)
+            # Emituj tylko jeśli stan się zmienił (np. po finalize IMPORTING → FINISHED).
+            # Bez guard: INTERRUPTED byłby emitowany podwójnie (już ustawiony w _run_stopping).
+            if self._state != final_state:
+                self._set_state(final_state)
 
         self.store.save(self.context)
 

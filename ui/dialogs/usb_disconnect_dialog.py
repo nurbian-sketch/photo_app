@@ -10,8 +10,8 @@ from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
 
 from ui.styles import (
-    DIALOG_SPACING, DIALOG_MARGINS, DIALOG_MIN_WIDTH,
-    DIALOG_IMG_SIZE, DIALOG_BTN_W, DIALOG_BTN_H, DIALOG_TEXT_STYLE,
+    DIALOG_SPACING, DIALOG_MARGINS, DIALOG_MIN_WIDTH, DIALOG_MIN_HEIGHT,
+    DIALOG_IMG_SIZE, DIALOG_BTN_H, DIALOG_TEXT_STYLE,
     center_on_parent,
 )
 
@@ -57,7 +57,7 @@ class UsbDisconnectDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(self.tr("Prepare camera"))
         self.setMinimumWidth(DIALOG_MIN_WIDTH)
-        self.setMinimumHeight(520)
+        self.setMinimumHeight(DIALOG_MIN_HEIGHT)
         self.setModal(True)
         self._state = self._WAIT_DISCONNECT
         self._reconnect_after = 0.0
@@ -120,7 +120,7 @@ class UsbDisconnectDialog(QDialog):
         btn_row.addStretch(1)
 
         btn_cancel = QPushButton(self.tr("Cancel"))
-        btn_cancel.setFixedSize(DIALOG_BTN_W, DIALOG_BTN_H)
+        btn_cancel.setFixedHeight(DIALOG_BTN_H)
         btn_cancel.setAutoDefault(False)
         btn_cancel.setDefault(False)
         btn_cancel.clicked.connect(self.reject)
@@ -130,7 +130,7 @@ class UsbDisconnectDialog(QDialog):
         btn_row.addSpacing(8)
 
         self._btn_start = QPushButton(self.tr("Start Session"))
-        self._btn_start.setFixedSize(130, DIALOG_BTN_H)
+        self._btn_start.setFixedHeight(DIALOG_BTN_H)
         self._btn_start.setEnabled(False)
         self._btn_start.clicked.connect(self.accept)
         btn_row.addWidget(self._btn_start)

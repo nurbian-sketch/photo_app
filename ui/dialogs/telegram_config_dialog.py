@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QSettings, Qt
 
-from ui.styles import DIALOG_BTN_SHOW_W, DIALOG_HINT_STYLE
+from ui.styles import DIALOG_HINT_STYLE
 
 
 class TelegramConfigDialog(QDialog):

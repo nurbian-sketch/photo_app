@@ -6,20 +6,17 @@ Wspólne style przycisków — używane we wszystkich widokach.
 # Zastosować: app.setStyleSheet(APP_STYLE) w main.py
 APP_STYLE = (
     "QToolTip { color: #bbbbbb; background-color: #2b2b2b; border: 1px solid #555555; }"
-    " QPushButton { background-color: palette(button); }"
-    " QPushButton:hover { background-color: palette(midlight); }"
+    " QPushButton { background-color: palette(button); padding: 0 12px; }"
     " QPushButton:focus, QPushButton:default {"
-    " border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px;"
-    " background-color: palette(midlight); }"
-    " QPushButton:focus:hover, QPushButton:default:hover { background-color: palette(midlight); }"
+    " border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; padding: 0 12px; }"
 )
 
 # Czerwony przycisk destruktywny / stop (STOP SESSION, Format Card, Close All)
 BTN_STYLE_RED = (
-    "QPushButton { background-color: #c55d61; color: white; font-weight: bold; }"
+    "QPushButton { background-color: #c55d61; color: white; font-weight: bold; padding: 0 12px; }"
     " QPushButton:hover { background-color: #d06e72; }"
     " QPushButton:disabled { background-color: #c55d61; color: rgba(255,255,255,140); }"
-    " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: #c55d61; }"
+    " QPushButton:focus { border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; background-color: #c55d61; padding: 0 12px; }"
     " QPushButton:focus:hover { background-color: #d06e72; }"
 )
 
@@ -29,12 +26,11 @@ BTN_STYLE_RED = (
 DIALOG_SPACING    = 8
 DIALOG_MARGINS    = (12, 12, 12, 12)
 DIALOG_MIN_WIDTH  = 480
+DIALOG_MIN_HEIGHT = 520
 DIALOG_IMG_SIZE   = 280
 
 # Rozmiary przycisków
-DIALOG_BTN_W      = 90
 DIALOG_BTN_H      = 34
-DIALOG_BTN_SHOW_W = 55   # przycisk "Show" przy polach hasła
 
 # Style tekstu
 DIALOG_TEXT_STYLE = "font-size: 15px;"

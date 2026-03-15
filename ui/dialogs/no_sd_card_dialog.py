@@ -11,8 +11,8 @@ from PyQt6.QtWidgets import (
 )
 
 from ui.styles import (
-    DIALOG_SPACING, DIALOG_MARGINS, DIALOG_MIN_WIDTH,
-    DIALOG_IMG_SIZE, DIALOG_BTN_W, DIALOG_BTN_H, DIALOG_TEXT_STYLE,
+    DIALOG_SPACING, DIALOG_MARGINS, DIALOG_MIN_WIDTH, DIALOG_MIN_HEIGHT,
+    DIALOG_IMG_SIZE, DIALOG_BTN_H, DIALOG_TEXT_STYLE,
     center_on_parent,
 )
 
@@ -30,6 +30,7 @@ class NoSdCardDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(self.tr("SD card not found"))
         self.setMinimumWidth(DIALOG_MIN_WIDTH)
+        self.setMinimumHeight(DIALOG_MIN_HEIGHT)
         self.setModal(True)
         self._focus_btn = None
         self._build_ui()
@@ -68,7 +69,7 @@ class NoSdCardDialog(QDialog):
         btn_row.addStretch()
 
         btn_cancel = QPushButton(self.tr("Cancel"))
-        btn_cancel.setFixedSize(DIALOG_BTN_W, DIALOG_BTN_H)
+        btn_cancel.setFixedHeight(DIALOG_BTN_H)
         btn_cancel.setAutoDefault(False)
         btn_cancel.setDefault(False)
         btn_cancel.clicked.connect(self.reject)
@@ -77,7 +78,7 @@ class NoSdCardDialog(QDialog):
         btn_row.addSpacing(8)
 
         btn_ok = QPushButton(self.tr("OK"))
-        btn_ok.setFixedSize(DIALOG_BTN_W, DIALOG_BTN_H)
+        btn_ok.setFixedHeight(DIALOG_BTN_H)
         btn_ok.setDefault(True)
         btn_ok.clicked.connect(self.accept)
         btn_row.addWidget(btn_ok)
