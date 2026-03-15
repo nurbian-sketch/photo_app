@@ -17,7 +17,12 @@ from PyQt6.QtWidgets import (
 
 from core.session_context import SessionContext, SessionSummary, SessionState, SessionMode, EndReason
 from ui.dialogs.session_summary_dialog import ACTION_NEW_SESSION
-from ui.styles import BTN_STYLE_RED, center_on_parent
+from ui.styles import (
+    BTN_STYLE_RED, center_on_parent, set_panel_bg,
+    SESSION_COUNTDOWN_STYLE, SESSION_PROGRESS_STYLE,
+    SESSION_INFO_STYLE, SESSION_IMPORT_STYLE,
+    SESSION_BTN_H, SESSION_BTN_STOP_H,
+)
 
 BG_ACTIVE      = os.path.join("assets", "pictures", "session-active.jpg")
 BG_FINISHED    = os.path.join("assets", "pictures", "session-finished-3.jpg")
@@ -74,23 +79,13 @@ class SessionActiveDialog(QDialog):
         self.setMaximumSize(640, 770)
         self.resize(640, 770)
         self.setModal(True)
-        # Blokuj zamknięcie przez X podczas aktywnej sesji
         self.setWindowFlag(Qt.WindowType.WindowCloseButtonHint, False)
         self._set_info(ctx)
-        self._resize_print_timer = QTimer(self)
-        self._resize_print_timer.setSingleShot(True)
-        self._resize_print_timer.timeout.connect(
-            lambda: print(f"SessionActiveDialog: {self.width()} x {self.height()}")
-        )
 
     def showEvent(self, event):
         super().showEvent(event)
         center_on_parent(self)
         self.btn_stop.setFocus()
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._resize_print_timer.start(300)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -99,7 +94,7 @@ class SessionActiveDialog(QDialog):
 
         # Górny pasek: countdown + progress
         top = QWidget()
-        top.setStyleSheet("background-color: #3d3d3d;")
+        set_panel_bg(top)
         top_layout = QVBoxLayout(top)
         top_layout.setContentsMargins(40, 20, 40, 12)
         top_layout.setSpacing(12)
@@ -110,7 +105,7 @@ class SessionActiveDialog(QDialog):
         font.setPointSize(40)
         font.setBold(True)
         self.countdown_label.setFont(font)
-        self.countdown_label.setStyleSheet("color: #e0e0e0; background: transparent;")
+        self.countdown_label.setStyleSheet(SESSION_COUNTDOWN_STYLE)
         top_layout.addWidget(self.countdown_label)
 
         self.progress = QProgressBar()
@@ -118,18 +113,7 @@ class SessionActiveDialog(QDialog):
         self.progress.setValue(100)
         self.progress.setFixedHeight(12)
         self.progress.setTextVisible(False)
-        self.progress.setStyleSheet("""
-            QProgressBar {
-                background-color: rgba(0,0,0,120);
-                border-radius: 0px;
-                border: 1px solid rgba(255,255,255,40);
-            }
-            QProgressBar::chunk {
-                background-color: rgba(255,255,255,200);
-                border-radius: 0px;
-            }
-        """)
-        # Progress bar węższy o 20% — stretch 1:8:1
+        self.progress.setStyleSheet(SESSION_PROGRESS_STYLE)
         pb_row = QHBoxLayout()
         pb_row.setContentsMargins(0, 0, 0, 0)
         pb_row.addStretch(1)
@@ -144,43 +128,38 @@ class SessionActiveDialog(QDialog):
         self._bg.set_background(BG_ACTIVE)
         layout.addWidget(self._bg, 1)
 
-        # Dolny panel: info + import + przyciski
+        # Dolny panel: info + przyciski
         bottom = QWidget()
-        bottom.setStyleSheet("background-color: #3d3d3d;")
+        set_panel_bg(bottom)
         bot_layout = QVBoxLayout(bottom)
         bot_layout.setContentsMargins(40, 12, 40, 20)
         bot_layout.setSpacing(8)
 
         self.info_label = QLabel("")
         self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.info_label.setStyleSheet(
-            "color: rgba(255,255,255,180); font-size: 14px; background: transparent;"
-        )
+        self.info_label.setStyleSheet(SESSION_INFO_STYLE)
         bot_layout.addWidget(self.info_label)
 
         self.import_label = QLabel("")
         self.import_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.import_label.setStyleSheet(
-            "color: rgba(255,255,255,180); font-size: 13px; background: transparent;"
-        )
+        self.import_label.setStyleSheet(SESSION_IMPORT_STYLE)
         self.import_label.hide()
         bot_layout.addWidget(self.import_label)
 
-        # Widget przycisków przerwanej sesji (widoczność zależna od trybu)
+        # Widget przycisków przerwanej sesji — tylko CLIENT/HOME
         self._interrupted_widget = QWidget()
         int_layout = QHBoxLayout(self._interrupted_widget)
         int_layout.setContentsMargins(0, 0, 0, 0)
         int_layout.setSpacing(12)
         int_layout.addStretch(1)
 
-        # Przyciski akcji tylko dla CLIENT/HOME — PRIVATE nie wymaga żadnej decyzji
         btn_import = QPushButton(self.tr("⬇  Import photos"))
-        btn_import.setFixedHeight(42)
+        btn_import.setFixedHeight(SESSION_BTN_H)
         btn_import.clicked.connect(self._on_interrupted_import)
         int_layout.addWidget(btn_import)
 
         btn_del_int = QPushButton(self.tr("🗑  Delete photos"))
-        btn_del_int.setFixedHeight(42)
+        btn_del_int.setFixedHeight(SESSION_BTN_H)
         btn_del_int.clicked.connect(self._on_interrupted_delete)
         int_layout.addWidget(btn_del_int)
 
@@ -192,19 +171,19 @@ class SessionActiveDialog(QDialog):
         btn_row.addStretch(1)
 
         self.btn_stop = QPushButton(self.tr("■  STOP SESSION"))
-        self.btn_stop.setFixedHeight(48)
+        self.btn_stop.setFixedHeight(SESSION_BTN_STOP_H)
         self.btn_stop.setStyleSheet(BTN_STYLE_RED)
         self.btn_stop.setDefault(True)
         btn_row.addWidget(self.btn_stop)
 
         self.btn_continue = QPushButton(self.tr("Continue →"))
-        self.btn_continue.setFixedHeight(42)
+        self.btn_continue.setFixedHeight(SESSION_BTN_H)
         self.btn_continue.clicked.connect(self.accept)
         self.btn_continue.hide()
         btn_row.addWidget(self.btn_continue)
 
         self.btn_new_session = QPushButton(self.tr("New Session"))
-        self.btn_new_session.setFixedHeight(42)
+        self.btn_new_session.setFixedHeight(SESSION_BTN_H)
         self.btn_new_session.clicked.connect(lambda: self.done(ACTION_NEW_SESSION))
         self.btn_new_session.hide()
         btn_row.addWidget(self.btn_new_session)
@@ -303,7 +282,6 @@ class SessionActiveDialog(QDialog):
         self._interrupted_widget.hide()
         self.import_label.show()
         self.import_label.setText(self.tr("Starting import..."))
-        # session_finished przekieruj do _on_import_finished
         self._runner.session_finished.disconnect(self._on_session_finished)
         self._runner.session_finished.connect(self._on_import_finished)
         self._runner.start_import_only()

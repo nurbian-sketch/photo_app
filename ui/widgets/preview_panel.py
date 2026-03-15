@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
 from PyQt6.QtGui import QPixmap, QTransform, QCursor
+from ui.styles import set_panel_bg
 
 
 # ─────────────────────────────── Kursor WB picker
@@ -178,7 +179,7 @@ class PreviewPanel(QWidget):
 
         # Control bar
         control_bar = QWidget()
-        control_bar.setStyleSheet("background: #3d3d3d;")
+        set_panel_bg(control_bar)
         ctrl = QHBoxLayout(control_bar)
         ctrl.setContentsMargins(10, 5, 10, 5)
         ctrl.setSpacing(8)

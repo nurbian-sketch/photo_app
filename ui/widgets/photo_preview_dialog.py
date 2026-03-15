@@ -9,7 +9,7 @@ Sygnały:
 """
 import os
 
-from ui.styles import BTN_STYLE_RED
+from ui.styles import BTN_STYLE_RED, set_panel_bg
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
 )
@@ -92,7 +92,7 @@ class PhotoPreviewDialog(QDialog):
 
         from PyQt6.QtWidgets import QWidget
         bar_widget = QWidget()
-        bar_widget.setStyleSheet("background: #3d3d3d;")
+        set_panel_bg(bar_widget)
         bar_widget.setLayout(bar)
         layout.addWidget(bar_widget)
 

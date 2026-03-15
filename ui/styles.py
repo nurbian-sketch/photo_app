@@ -6,9 +6,8 @@ Wspólne style przycisków — używane we wszystkich widokach.
 # Zastosować: app.setStyleSheet(APP_STYLE) w main.py
 APP_STYLE = (
     "QToolTip { color: #bbbbbb; background-color: #2b2b2b; border: 1px solid #555555; }"
-    " QPushButton { background-color: palette(button); padding: 0 12px; }"
     " QPushButton:focus, QPushButton:default {"
-    " border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; padding: 0 12px; }"
+    " border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; }"
 )
 
 # Czerwony przycisk destruktywny / stop (STOP SESSION, Format Card, Close All)
@@ -36,6 +35,38 @@ DIALOG_BTN_H      = 34
 DIALOG_TEXT_STYLE = "font-size: 15px;"
 DIALOG_HINT_STYLE = "color: #888; font-size: 11px;"
 DIALOG_HINT_STYLE_PADDED = "color: #888; font-size: 11px; padding: 4px;"
+
+
+# ── SessionActiveDialog ──────────────────────────────────────────────────────
+
+SESSION_PANEL_BG = "#3d3d3d"
+
+# Countdown (duży zegar na ciemnym tle)
+SESSION_COUNTDOWN_STYLE = "color: #e0e0e0; background: transparent;"
+
+# Pasek postępu sesji
+SESSION_PROGRESS_STYLE = (
+    "QProgressBar { background-color: rgba(0,0,0,120); border-radius: 0px;"
+    " border: 1px solid rgba(255,255,255,40); }"
+    " QProgressBar::chunk { background-color: rgba(255,255,255,200); border-radius: 0px; }"
+)
+
+# Etykiety na ciemnym tle (info o sesji, postęp importu)
+SESSION_INFO_STYLE   = "color: rgba(255,255,255,180); font-size: 14px; background: transparent;"
+SESSION_IMPORT_STYLE = "color: rgba(255,255,255,180); font-size: 13px; background: transparent;"
+
+# Rozmiary przycisków sesji
+SESSION_BTN_H      = 42
+SESSION_BTN_STOP_H = 48
+
+
+def set_panel_bg(widget, color: str = SESSION_PANEL_BG) -> None:
+    """Ustawia kolor tła przez paletę — nie wchodzi w stylesheet mode, nie psuje dzieci."""
+    from PyQt6.QtGui import QColor, QPalette
+    pal = widget.palette()
+    pal.setColor(QPalette.ColorRole.Window, QColor(color))
+    widget.setPalette(pal)
+    widget.setAutoFillBackground(True)
 
 
 def center_on_parent(dialog) -> None:

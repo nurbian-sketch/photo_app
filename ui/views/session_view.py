@@ -651,11 +651,13 @@ class SessionView(QWidget):
                 summary.context.session_path,
             )
 
-        # Przywróć lewy panel, uruchom polling USB
+        # Przywróć lewy panel — aparat był i jest podłączony przez USB (sesja BT, nie USB-disconnect).
+        # Re-probe zamiast ręcznego ustawiania False — main_window ustawi prawidłowy stan.
         self._left_panel.show()
         self._camera_on = False
         self._sd_on = False
-        self._start_usb_polling()
+        self._last_bad_state = "no_camera"   # blokuje NoCameraDialog zanim probe wróci
+        self.camera_detected.emit()          # wywołuje _probe_camera w main_window
 
         # Wyemituj session_finished (MainWindow auto-load w darkroom)
         self.session_finished.emit(summary)
