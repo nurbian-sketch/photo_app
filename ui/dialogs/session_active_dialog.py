@@ -249,11 +249,15 @@ class SessionActiveDialog(QDialog):
         self.btn_stop.hide()
 
         if self._ctx.mode == SessionMode.PRIVATE:
-            # Prywatna — niezależnie od powodu: zdjęcia na karcie, brak akcji
-            bg = BG_FINISHED if summary.end_reason == EndReason.TIMEOUT else BG_INTERRUPTED
-            self._bg.set_background(bg)
-            self.countdown_label.setText(self.tr("Session ended"))
-            self.info_label.setText(self.tr("Take your SD card."))
+            if summary.end_reason == EndReason.TIMEOUT:
+                self._bg.set_background(BG_FINISHED)
+                self.countdown_label.setText(self.tr("Session finished"))
+            else:
+                self._bg.set_background(BG_INTERRUPTED)
+                self.countdown_label.setText(self.tr("Session interrupted"))
+            self.info_label.setText(
+                self.tr("Your photos are on the SD card. Don't forget to take it out of the camera.")
+            )
             self.btn_continue.show()
             self.btn_continue.setDefault(True)
             QTimer.singleShot(50, self.btn_continue.setFocus)

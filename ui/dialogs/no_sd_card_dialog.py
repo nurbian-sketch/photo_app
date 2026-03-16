@@ -44,8 +44,10 @@ class NoSdCardDialog(QDialog):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(DIALOG_SPACING)
+        layout.setSpacing(0)
         layout.setContentsMargins(*DIALOG_MARGINS)
+
+        layout.addSpacing(DIALOG_SPACING)          # nad zdjęciem = tyle samo co pod
 
         img_label = QLabel()
         if os.path.exists(_IMG):
@@ -59,11 +61,15 @@ class NoSdCardDialog(QDialog):
         img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(img_label)
 
+        layout.addSpacing(DIALOG_SPACING)          # pod zdjęciem
+
         msg = QLabel(self.tr("Insert SD card into camera."))
         msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
         msg.setStyleSheet(DIALOG_TEXT_STYLE)
         msg.setWordWrap(True)
         layout.addWidget(msg)
+
+        layout.addSpacing(DIALOG_SPACING // 2)     # tekst → przyciski: 50% mniej
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()

@@ -6,8 +6,9 @@ Wspólne style przycisków — używane we wszystkich widokach.
 # Zastosować: app.setStyleSheet(APP_STYLE) w main.py
 APP_STYLE = (
     "QToolTip { color: #bbbbbb; background-color: #2b2b2b; border: 1px solid #555555; }"
+    " QPushButton { background-color: palette(button); padding: 0 12px; }"
     " QPushButton:focus, QPushButton:default {"
-    " border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; }"
+    " background-color: palette(button); border: 1px solid rgba(180, 180, 180, 0.9); border-radius: 3px; padding: 0 12px; }"
 )
 
 # Czerwony przycisk destruktywny / stop (STOP SESSION, Format Card, Close All)

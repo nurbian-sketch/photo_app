@@ -50,8 +50,10 @@ class NoCameraDialog(QDialog):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(DIALOG_SPACING)
+        layout.setSpacing(0)
         layout.setContentsMargins(*DIALOG_MARGINS)
+
+        layout.addSpacing(DIALOG_SPACING)          # nad zdjęciem = tyle samo co pod
 
         img_label = QLabel()
         if os.path.exists(_IMG):
@@ -65,6 +67,8 @@ class NoCameraDialog(QDialog):
         img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(img_label)
 
+        layout.addSpacing(DIALOG_SPACING)          # pod zdjęciem
+
         msg = QLabel(
             self.tr("Camera not detected.\n"
                     "Connect camera via USB.\n"
@@ -74,6 +78,8 @@ class NoCameraDialog(QDialog):
         msg.setStyleSheet(DIALOG_TEXT_STYLE)
         msg.setWordWrap(True)
         layout.addWidget(msg)
+
+        layout.addSpacing(DIALOG_SPACING // 2)     # tekst → przycisk: 50% mniej
 
         btn_row = QHBoxLayout()
         btn_row.addStretch()
