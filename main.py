@@ -24,6 +24,7 @@ def _qt_message_handler(mode, context, message):
 qInstallMessageHandler(_qt_message_handler)
 
 
+
 def _load_translator(app: QApplication) -> QTranslator | None:
     """Wczytuje tłumaczenie na podstawie ustawień lub lokalizacji systemu."""
     settings = QSettings("Grzeza", "SessionsAssistant")

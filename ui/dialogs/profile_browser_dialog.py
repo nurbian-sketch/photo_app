@@ -6,12 +6,12 @@ import os
 import json
 
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout,
-    QListWidget, QLabel, QPushButton, QMessageBox
+    QDialog, QVBoxLayout,
+    QListWidget, QLabel, QPushButton, QMessageBox, QDialogButtonBox
 )
 from PyQt6.QtCore import Qt, QSettings, QTimer, pyqtSignal
 
-from ui.styles import DIALOG_HINT_STYLE, DIALOG_HINT_STYLE_PADDED
+from ui.styles import DIALOG_HINT_STYLE, DIALOG_HINT_STYLE_PADDED, LISTWIDGET_FOCUS_STYLE, DIALOG_BTN_H_SMALL
 
 _SETTINGS_KEY = "profiles/last_selected"
 
@@ -31,9 +31,7 @@ class ProfileBrowserDialog(QDialog):
             | Qt.WindowType.WindowCloseButtonHint
             & ~Qt.WindowType.WindowContextHelpButtonHint
         )
-        self.setStyleSheet(
-            "QListWidget:focus { border: 1px solid rgba(180, 180, 180, 0.6); }"
-        )
+        self.setStyleSheet(LISTWIDGET_FOCUS_STYLE)
         self._init_ui()
         self._refresh()
         # setTabOrder musi być po _init_ui gdy wszystkie widgety istnieją
@@ -54,27 +52,25 @@ class ProfileBrowserDialog(QDialog):
 
         # Podgląd zawartości profilu
         self._detail = QLabel("")
-        self._detail.setStyleSheet(
-            DIALOG_HINT_STYLE_PADDED
-        )
+        self._detail.setStyleSheet(DIALOG_HINT_STYLE_PADDED)
         self._detail.setWordWrap(True)
         layout.addWidget(self._detail)
 
-        row = QHBoxLayout()
+        # Load i Delete po lewej jako custom buttons, Cancel po prawej
+        btn_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
         self.btn_load = QPushButton(self.tr("Load"))
         self.btn_load.setEnabled(False)
         self.btn_delete = QPushButton(self.tr("Delete"))
         self.btn_delete.setEnabled(False)
-        self._btn_cancel = QPushButton(self.tr("Cancel"))
-        self._btn_cancel.setDefault(True)
+        btn_box.addButton(self.btn_load, QDialogButtonBox.ButtonRole.ActionRole)
+        btn_box.addButton(self.btn_delete, QDialogButtonBox.ButtonRole.ActionRole)
+        for btn in btn_box.buttons():
+            btn.setFixedHeight(DIALOG_BTN_H_SMALL)
+        self._btn_cancel = btn_box.button(QDialogButtonBox.StandardButton.Cancel)
         self.btn_load.clicked.connect(self._on_load)
         self.btn_delete.clicked.connect(self._on_delete)
-        self._btn_cancel.clicked.connect(self.reject)
-        row.addWidget(self.btn_load)
-        row.addWidget(self.btn_delete)
-        row.addStretch()
-        row.addWidget(self._btn_cancel)
-        layout.addLayout(row)
+        btn_box.rejected.connect(self.reject)
+        layout.addWidget(btn_box)
 
 
     def _refresh(self):

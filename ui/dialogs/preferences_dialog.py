@@ -10,13 +10,15 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QSettings, Qt
 
-from ui.styles import DIALOG_HINT_STYLE
+from ui.styles import DIALOG_HINT_STYLE, DIALOG_BTN_H_SMALL
 
 class PreferencesDialog(QDialog):
     """Dialog ustawień aplikacji."""
 
     # Klucz QSettings — taki sam jak w CameraView
-    KEY_SESSION_DIR = "session/directory"
+    KEY_SESSION_DIR   = "session/directory"
+    KEY_RCLONE_REMOTE = "rclone/remote"
+    KEY_RCLONE_DEST   = "rclone/destination"
 
     # Domyślna ścieżka
     DEFAULT_SESSION_DIR = os.path.expanduser("~/Obrazy/sessions")
@@ -55,7 +57,7 @@ class PreferencesDialog(QDialog):
         row.addWidget(self.dir_edit, 1)
 
         self.btn_browse = QPushButton(self.tr("Browse..."))
-        self.btn_browse.setMinimumHeight(28)
+        self.btn_browse.setFixedHeight(DIALOG_BTN_H_SMALL)
         self.btn_browse.clicked.connect(self._browse_directory)
         row.addWidget(self.btn_browse)
 
@@ -100,7 +102,7 @@ class PreferencesDialog(QDialog):
         self.tg_token_edit.setEchoMode(QLineEdit.EchoMode.Password)
         token_row.addWidget(self.tg_token_edit, 1)
         btn_show = QPushButton(self.tr("Show"))
-        btn_show.setMinimumHeight(28)
+        btn_show.setFixedHeight(DIALOG_BTN_H_SMALL)
         btn_show.setCheckable(True)
         btn_show.toggled.connect(lambda checked: self.tg_token_edit.setEchoMode(
             QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password
@@ -133,6 +135,35 @@ class PreferencesDialog(QDialog):
         sharing_layout.addLayout(expiry_row)
         layout.addWidget(sharing_group)
 
+        # === Cloud Sync Group ===
+        sync_group = QGroupBox(self.tr("Cloud Sync (rclone)"))
+        sync_group.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        sync_layout = QVBoxLayout(sync_group)
+
+        sync_hint = QLabel(self.tr(
+            "Sync client sessions to remote storage after import.\n"
+            "Remote name must match a configured rclone remote (e.g. gdrive)."
+        ))
+        sync_hint.setStyleSheet(DIALOG_HINT_STYLE)
+        sync_hint.setWordWrap(True)
+        sync_layout.addWidget(sync_hint)
+
+        remote_row = QHBoxLayout()
+        remote_row.addWidget(QLabel(self.tr("Remote name:")))
+        self.rclone_remote_edit = QLineEdit()
+        self.rclone_remote_edit.setPlaceholderText("gdrive")
+        remote_row.addWidget(self.rclone_remote_edit, 1)
+        sync_layout.addLayout(remote_row)
+
+        dest_row = QHBoxLayout()
+        dest_row.addWidget(QLabel(self.tr("Destination path:")))
+        self.rclone_dest_edit = QLineEdit()
+        self.rclone_dest_edit.setPlaceholderText("Sessions")
+        dest_row.addWidget(self.rclone_dest_edit, 1)
+        sync_layout.addLayout(dest_row)
+
+        layout.addWidget(sync_group)
+
         layout.addStretch()
 
         # === Dialog Buttons ===
@@ -147,6 +178,8 @@ class PreferencesDialog(QDialog):
         button_box.button(
             QDialogButtonBox.StandardButton.RestoreDefaults
         ).clicked.connect(self._restore_defaults)
+        for btn in button_box.buttons():
+            btn.setFixedHeight(DIALOG_BTN_H_SMALL)
         layout.addWidget(button_box)
 
     def _load_settings(self):
@@ -165,6 +198,13 @@ class PreferencesDialog(QDialog):
 
         expiry = self.settings.value("sharing/code_expiry_days", 14, type=int)
         self.expiry_spin.setValue(expiry)
+
+        self.rclone_remote_edit.setText(
+            self.settings.value(self.KEY_RCLONE_REMOTE, "")
+        )
+        self.rclone_dest_edit.setText(
+            self.settings.value(self.KEY_RCLONE_DEST, "Sessions")
+        )
 
     def _save_and_accept(self):
         directory = self.dir_edit.text().strip() or self.DEFAULT_SESSION_DIR
@@ -191,12 +231,21 @@ class PreferencesDialog(QDialog):
 
         self.settings.setValue("sharing/code_expiry_days", self.expiry_spin.value())
 
+        self.settings.setValue(
+            self.KEY_RCLONE_REMOTE, self.rclone_remote_edit.text().strip()
+        )
+        self.settings.setValue(
+            self.KEY_RCLONE_DEST, self.rclone_dest_edit.text().strip() or "Sessions"
+        )
+
         self.accept()
 
     def _restore_defaults(self):
         self.dir_edit.setText(self.DEFAULT_SESSION_DIR)
         self.tg_token_edit.clear()
         self.tg_chat_edit.clear()
+        self.rclone_remote_edit.clear()
+        self.rclone_dest_edit.setText("Sessions")
 
     def _browse_directory(self):
         current = self.dir_edit.text() or self.DEFAULT_SESSION_DIR

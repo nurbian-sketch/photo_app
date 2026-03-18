@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QSettings, Qt
 
-from ui.styles import DIALOG_HINT_STYLE
+from ui.styles import DIALOG_HINT_STYLE, DIALOG_BTN_H_SMALL
 
 
 class TelegramConfigDialog(QDialog):
@@ -55,7 +55,7 @@ class TelegramConfigDialog(QDialog):
         show_row = QHBoxLayout()
         show_row.addWidget(self.edit_token)
         btn_show = QPushButton(self.tr("Show"))
-        btn_show.setMinimumHeight(28)
+        btn_show.setFixedHeight(DIALOG_BTN_H_SMALL)
         btn_show.setCheckable(True)
         btn_show.toggled.connect(lambda checked: self.edit_token.setEchoMode(
             QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password
@@ -88,6 +88,8 @@ class TelegramConfigDialog(QDialog):
         )
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
+        for btn in buttons.buttons():
+            btn.setFixedHeight(DIALOG_BTN_H_SMALL)
         layout.addWidget(buttons)
 
     def _load(self):

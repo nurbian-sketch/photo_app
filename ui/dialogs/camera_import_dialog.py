@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QProgressBar, QComboBox, QMessageBox, QWidget
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from ui.styles import DIALOG_HINT_STYLE, DIALOG_HINT_STYLE_PADDED
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +176,7 @@ class CameraImportDialog(QDialog):
         # Liczba wybranych plików
         count = len(self._selected)
         lbl_count = QLabel(self.tr(f"Selected files: {count}"))
-        lbl_count.setStyleSheet("color: #aaa; font-size: 11px;")
+        lbl_count.setStyleSheet(DIALOG_HINT_STYLE)
         layout.addWidget(lbl_count)
 
         # Filtr formatu
@@ -203,9 +204,7 @@ class CameraImportDialog(QDialog):
 
         # Podgląd ścieżki docelowej
         self._lbl_dest = QLabel()
-        self._lbl_dest.setStyleSheet(
-            "color: #888; font-size: 11px; padding: 4px 0;"
-        )
+        self._lbl_dest.setStyleSheet(DIALOG_HINT_STYLE_PADDED)
         self._lbl_dest.setWordWrap(True)
         layout.addWidget(self._lbl_dest)
 
@@ -216,7 +215,7 @@ class CameraImportDialog(QDialog):
         layout.addWidget(self._progress)
 
         self._lbl_status = QLabel("")
-        self._lbl_status.setStyleSheet("color: #aaa; font-size: 11px;")
+        self._lbl_status.setStyleSheet(DIALOG_HINT_STYLE)
         self._lbl_status.setVisible(False)
         layout.addWidget(self._lbl_status)
 

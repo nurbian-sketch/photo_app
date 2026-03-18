@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+import sys
 import time
 from datetime import datetime, timedelta
 from typing import Optional
@@ -310,22 +311,62 @@ class SessionRunner(QThread):
         self.store.save(self.context)
 
         # Krok 6: rclone asynchronicznie (tylko CLIENT)
-        if (
-            self.context.mode == SessionMode.CLIENT
-            and self.rclone_remote
-            and self.rclone_dest
-        ):
-            self.warning.emit("Sync scheduled")
-            source = os.path.join(self.store.base_dir, "cloud")
-            dest   = f"{self.rclone_remote}:{self.rclone_dest}"
+        self._run_sync()
+
+    def _run_sync(self):
+        """
+        Uruchamia rclone_sync_worker jako odłączony subprocess.
+        Worker przeżywa zamknięcie aplikacji (start_new_session=True).
+        Synkuje tylko sesje CLIENT z niepustą ścieżką.
+        """
+        if self.context.mode != SessionMode.CLIENT:
+            self.context.sync_status = "skipped"
+            self.store.save(self.context)
+            return
+
+        if not self.rclone_remote or not self.rclone_dest:
+            logger.warning("SessionRunner: rclone nie skonfigurowany — pomijam sync")
+            self.context.sync_status = "skipped"
+            self.store.save(self.context)
+            return
+
+        if not self.context.session_path:
+            logger.warning("SessionRunner: brak session_path — pomijam sync")
+            self.context.sync_status = "skipped"
+            self.store.save(self.context)
+            return
+
+        worker_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "rclone_sync_worker.py",
+        )
+
+        cmd = [
+            sys.executable,
+            worker_path,
+            self.context.session_path,
+            self.rclone_remote,
+            self.rclone_dest,
+        ]
+
+        try:
             subprocess.Popen(
-                ["rclone", "sync", source, dest, "--progress"],
+                cmd,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                start_new_session=True,   # odłączony — przeżywa zamknięcie app
             )
             self.context.sync_status = "pending"
-        else:
-            self.context.sync_status = "skipped"
+            logger.info(
+                f"SessionRunner: sync worker uruchomiony dla {self.context.session_path}"
+            )
+            self.sync_progress.emit("Sync started in background")
+        except Exception as e:
+            self.context.sync_status = "failed"
+            logger.exception("SessionRunner: błąd uruchamiania sync worker")
+            self._warnings.append(str(e))
+
+        self.store.save(self.context)
 
     # Maksymalna liczba prób połączenia podczas importu (15 × 2s = 30s)
     _CONNECT_MAX_ATTEMPTS = 15

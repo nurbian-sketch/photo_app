@@ -216,6 +216,7 @@ class DarkroomView(QWidget):
         # Dropdown filtru — klik = cykliczne, strzałka = menu z checkmarkami
         self.btn_filter = QToolButton()
         self.btn_filter.setMinimumHeight(BTN_H)
+        self.btn_filter.setMinimumWidth(90)
         self.btn_filter.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         self.btn_filter.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         filter_menu = QMenu(self)

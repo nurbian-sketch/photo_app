@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
 from core.session_context import (
     EndReason, SessionMode, SessionSummary,
 )
-from ui.styles import center_on_parent
+from ui.styles import center_on_parent, DIALOG_DETAILS_STYLE, DIALOG_WARNING_STYLE
 
 
 # ─── stałe dialogu
@@ -151,7 +151,7 @@ class SessionSummaryDialog(QDialog):
         # Blok info — 4 linie, spójny dla wszystkich trybów
         self.details = QLabel("")
         self.details.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.details.setStyleSheet("color: #aaa; font-size: 13px;")
+        self.details.setStyleSheet(DIALOG_DETAILS_STYLE)
         self.details.setWordWrap(True)
         layout.addWidget(self.details)
 
@@ -159,7 +159,7 @@ class SessionSummaryDialog(QDialog):
 
         self.warnings_label = QLabel("")
         self.warnings_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.warnings_label.setStyleSheet("color: #e65100; font-size: 12px;")
+        self.warnings_label.setStyleSheet(DIALOG_WARNING_STYLE)
         self.warnings_label.setWordWrap(True)
         layout.addWidget(self.warnings_label)
 

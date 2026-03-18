@@ -47,6 +47,30 @@ class AppInitializer(QObject):
         )
         return "Share bot: uruchomiony"
 
+    def _ensure_tray_monitor(self) -> str:
+        """Uruchamia tray monitor jeśli nie działa. Zwraca komunikat do splash."""
+        # Sprawdź czy monitor już działa (lock file lub pgrep)
+        result = subprocess.run(
+            ["pgrep", "-f", "tray_monitor"],
+            capture_output=True,
+        )
+        if result.returncode == 0:
+            return "Sync monitor: already running"
+
+        # Katalog projektu = rodzic katalogu core/
+        project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        env = os.environ.copy()
+
+        subprocess.Popen(
+            [sys.executable, "-m", "tray_monitor"],
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            cwd=project_dir,
+            env=env,
+        )
+        return "Sync monitor: started"
+
     def run_all_checks(self, splash) -> dict:
         def msg(text):
             splash.showMessage(
@@ -68,6 +92,9 @@ class AppInitializer(QObject):
 
         # Share bot
         msg(self._ensure_share_bot())
+
+        # Tray monitor
+        msg(self._ensure_tray_monitor())
 
         # Probe aparatu
         probe = CameraProbe()

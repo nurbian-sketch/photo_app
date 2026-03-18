@@ -30,7 +30,14 @@ from core.session_context import (
 from core.session_runner import SessionRunner, COUNTDOWN_SEC
 from core.session_store import SessionStore
 from ui.widgets.camera_settings_panel import CameraSettingsPanel
-from ui.styles import BTN_STYLE_RED
+from ui.styles import (
+    BTN_STYLE_RED,
+    CONFIG_MODE_INFO_STYLE,
+    OVERLAY_LABEL_STYLE,
+    SESSION_WIRELESS_FRAME_STYLE,
+    SESSION_WIRELESS_MSG_STYLE,
+    SESSION_PANEL_BG,
+)
 from ui.dialogs.profile_browser_dialog import ProfileBrowserDialog
 from ui.dialogs.usb_disconnect_dialog import UsbDisconnectDialog, _lsusb_has_canon
 from ui.widgets.slider_with_scale import SliderWithScale
@@ -146,7 +153,7 @@ class ConfigPanel(QWidget):
 
         # Info trybu
         self.mode_info = QLabel("")
-        self.mode_info.setStyleSheet("color: #aaa; font-style: italic;")
+        self.mode_info.setStyleSheet(CONFIG_MODE_INFO_STYLE)
         self.mode_info.setWordWrap(True)
         inner.addWidget(self.mode_info)
 
@@ -347,9 +354,7 @@ class SessionView(QWidget):
         # Ramka z komunikatem o trybie bezprzewodowym — widoczna tylko podczas sesji
         self._session_msg = QFrame()
         self._session_msg.setFrameShape(QFrame.Shape.StyledPanel)
-        self._session_msg.setStyleSheet(
-            "QFrame { border: 2px solid #888; border-radius: 6px; margin: 12px; }"
-        )
+        self._session_msg.setStyleSheet(SESSION_WIRELESS_FRAME_STYLE)
         msg_layout = QVBoxLayout(self._session_msg)
         msg_layout.setContentsMargins(16, 16, 16, 16)
         self._session_msg_label = QLabel(
@@ -359,7 +364,7 @@ class SessionView(QWidget):
                     "Use remote shutter to take photos.")
         )
         self._session_msg_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._session_msg_label.setStyleSheet("color: #c0c0c0; font-size: 15px; border: none;")
+        self._session_msg_label.setStyleSheet(SESSION_WIRELESS_MSG_STYLE)
         self._session_msg_label.setWordWrap(True)
         msg_layout.addWidget(self._session_msg_label)
         self._session_msg.hide()
@@ -367,7 +372,7 @@ class SessionView(QWidget):
 
         # ── Strona 1: overlay (brak aparatu) ─────────────────────────────
         no_camera_widget = QWidget()
-        no_camera_widget.setStyleSheet("background: #3d3d3d;")
+        no_camera_widget.setStyleSheet(f"background: {SESSION_PANEL_BG};")
         no_cam_layout = QVBoxLayout(no_camera_widget)
         no_cam_layout.setContentsMargins(0, 0, 0, 0)
         no_cam_layout.setSpacing(0)
@@ -397,9 +402,7 @@ class SessionView(QWidget):
                     "Make sure the camera is turned on.")
         )
         self._overlay_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._overlay_label.setStyleSheet(
-            "color: #aaa; font-size: 13px; background: #3d3d3d; padding: 10px 0;"
-        )
+        self._overlay_label.setStyleSheet(OVERLAY_LABEL_STYLE)
         self._overlay_label.setWordWrap(True)
         no_cam_layout.addWidget(self._overlay_label, 0)
 

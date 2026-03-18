@@ -85,7 +85,6 @@ class SessionActiveDialog(QDialog):
     def showEvent(self, event):
         super().showEvent(event)
         center_on_parent(self)
-        self.btn_stop.setFocus()
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -138,6 +137,7 @@ class SessionActiveDialog(QDialog):
         self.info_label = QLabel("")
         self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.info_label.setStyleSheet(SESSION_INFO_STYLE)
+        self.info_label.setWordWrap(True)
         bot_layout.addWidget(self.info_label)
 
         self.import_label = QLabel("")
@@ -173,7 +173,7 @@ class SessionActiveDialog(QDialog):
         self.btn_stop = QPushButton(self.tr("■  STOP SESSION"))
         self.btn_stop.setFixedHeight(SESSION_BTN_STOP_H)
         self.btn_stop.setStyleSheet(BTN_STYLE_RED)
-        self.btn_stop.setDefault(True)
+        self.btn_stop.setAutoDefault(False)
         btn_row.addWidget(self.btn_stop)
 
         self.btn_continue = QPushButton(self.tr("Continue →"))
@@ -256,7 +256,7 @@ class SessionActiveDialog(QDialog):
                 self._bg.set_background(BG_INTERRUPTED)
                 self.countdown_label.setText(self.tr("Session interrupted"))
             self.info_label.setText(
-                self.tr("Your photos are on the SD card. Don't forget to take it out of the camera.")
+                self.tr("Your photos are on the SD card.\nDon't forget to take it out of the camera.")
             )
             self.btn_continue.show()
             self.btn_continue.setDefault(True)
