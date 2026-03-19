@@ -5,7 +5,10 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QAction, QIcon, QKeySequence, QShortcut, QKeyEvent, QPixmap, QImage, QPainter
 from PyQt6.QtCore import Qt, QTimer, QTranslator, QSettings, QSize
+import json
 import os
+import subprocess
+import sys
 import logging
 
 # --- Widoki ---
@@ -78,14 +81,23 @@ class MainWindow(QMainWindow):
         icons_layout.setContentsMargins(5, 0, 10, 4)
         icons_layout.setSpacing(12) 
         
-        self.icon_camera = QLabel() 
+        self.icon_camera  = QLabel()
         self.icon_sd_card = QLabel()
+        self.icon_sync    = QLabel()
         self.icon_camera.setStyleSheet("background: transparent;")
         self.icon_sd_card.setStyleSheet("background: transparent;")
-        
+        self.icon_sync.setStyleSheet("background: transparent;")
+        self.icon_sync.setVisible(False)   # ukryta gdy rclone nie skonfigurowany
+
         icons_layout.addWidget(self.icon_camera)
         icons_layout.addWidget(self.icon_sd_card)
+        icons_layout.addWidget(self.icon_sync)
         self.status_bar.addPermanentWidget(self.status_icons_widget)
+
+        # Timer pollingu ikony sync (co 4s)
+        self._sync_poll_timer = QTimer(self)
+        self._sync_poll_timer.timeout.connect(self._update_sync_icon)
+        self._sync_poll_timer.start(4000)
         
         # 3. INICJALIZACJA WIDOKÃ“W
         self.session_view = SessionView()
@@ -163,6 +175,55 @@ class MainWindow(QMainWindow):
         """Aktualizuje ikony graficzne w pasku stanu"""
         self.icon_camera.setPixmap(self._make_status_pixmap("camera.svg", active=camera))
         self.icon_sd_card.setPixmap(self._make_status_pixmap("sdcard.png", active=sd))
+
+    def _update_sync_icon(self):
+        """Odczytuje sync_status.json i aktualizuje ikonę sync w pasku stanu."""
+        remote = self.settings.value("rclone/remote", "").strip()
+        if not remote:
+            self.icon_sync.setVisible(False)
+            return
+
+        base_dir    = self.settings.value(
+            "session/directory", os.path.expanduser("~/Obrazy/sessions")
+        )
+        status_path = os.path.join(base_dir, "cloud", "sync_status.json")
+
+        status = "ok"
+        if os.path.exists(status_path):
+            try:
+                with open(status_path, encoding="utf-8") as f:
+                    data = json.load(f)
+                s = data.get("status", "ok")
+                if s == "running":
+                    status = "running"
+                elif s == "warning":
+                    status = "warning"
+            except Exception:
+                pass
+
+        if status == "running":
+            pix = self._make_status_pixmap("sync.png", active=True)
+        elif status == "ok":
+            pix = self._make_status_pixmap("gdrive.png", active=True)
+        else:
+            pix = self._make_status_pixmap("gdrive.png", active=False)
+
+        self.icon_sync.setPixmap(pix)
+        self.icon_sync.setVisible(True)
+
+    def _launch_tray_monitor(self):
+        """Uruchamia tray monitor jako odłączony subprocess po zamknięciu aplikacji."""
+        project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        try:
+            subprocess.Popen(
+                [sys.executable, "-m", "tray_monitor"],
+                start_new_session=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                cwd=project_dir,
+            )
+        except Exception as e:
+            logging.getLogger(__name__).warning(f"Tray monitor launch failed: {e}")
 
     def setup_menu(self):
         menu_bar = QMenuBar()
@@ -379,6 +440,7 @@ class MainWindow(QMainWindow):
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("windowState", self.saveState())
         self.settings.setValue("darkroom_splitter", self.darkroom_view.splitter.saveState())
+        self._launch_tray_monitor()
         super().closeEvent(event)
 
     def keyPressEvent(self, event):
@@ -403,6 +465,7 @@ class MainWindow(QMainWindow):
         dialog = PreferencesDialog(self)
         if dialog.exec() == PreferencesDialog.DialogCode.Accepted:
             self.camera_view.update_capture_directory()
+            self._update_sync_icon()
             self.status_bar.showMessage(self.tr("Preferences saved"), 2000)
 
     def show_about(self):

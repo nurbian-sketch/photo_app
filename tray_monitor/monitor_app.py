@@ -9,8 +9,8 @@ from __future__ import annotations
 import os
 import subprocess
 
-from PyQt6.QtCore import QTimer, QSize, Qt, QPointF
-from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont, QBrush, QPen, QPainterPath
+from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtGui import QIcon, QPixmap, QPainter
 from PyQt6.QtWidgets import (
     QApplication, QMenu, QSystemTrayIcon,
     QDialog, QVBoxLayout, QLabel, QDialogButtonBox,
@@ -26,63 +26,51 @@ POLL_INTERVAL_MS = 4000
 # Sync co 5 minut
 SYNC_INTERVAL_MS = 5 * 60 * 1000
 
-# Kolory i symbole ikon tray
-_COLORS = {
-    "ok":      "#2e7d32",   # ciemna zieleń
-    "warning": "#f9a825",   # bursztynowy
-    "running": "#1565c0",   # niebieski
-}
-
-_SYMBOLS = {
-    "ok":      "✓",
-    "warning": "!",
-    "running": "↻",
-}
-
 _STATUS_LABELS: dict[str, str] = {
     "ok":      "All synced",
     "warning": "Sync problem — retrying",
     "running": "Syncing…",
 }
 
+_ASSETS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "assets", "icons",
+)
+
 
 def _make_tray_icon(status: str) -> QIcon:
-    """Rysuje kółko z symbolem w odpowiednim kolorze (22×22 px)."""
-    size = 22
-    pm   = QPixmap(size, size)
-    pm.fill(Qt.GlobalColor.transparent)
-
-    p = QPainter(pm)
-    p.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-    # Wypełnienie kółka — 3px margines (2px więcej niż poprzednio)
-    p.setBrush(QBrush(QColor(_COLORS.get(status, "#555555"))))
-    p.setPen(QPen(Qt.PenStyle.NoPen))
-    p.drawEllipse(3, 3, size - 6, size - 6)
-
-    # Symbol
-    if status == "ok":
-        # Check rysowany ręcznie — linia 2.0, okrągłe końcówki
-        pen = QPen(QColor("white"))
-        pen.setWidthF(2.0)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-        p.setPen(pen)
-        path = QPainterPath()
-        path.moveTo(5, 11)    # lewa górna część
-        path.lineTo(9, 15)    # wierzchołek (dół)
-        path.lineTo(17, 8)    # prawa górna część
-        p.drawPath(path)
+    """
+    Ładuje ikonę tray z pliku PNG:
+      running  → sync.png   (pełny kolor)
+      ok       → gdrive.png (pełny kolor)
+      warning  → gdrive.png (opacity 0.35)
+    """
+    if status == "running":
+        fname, active = "sync.png", True
+    elif status == "ok":
+        fname, active = "gdrive.png", True
     else:
-        p.setPen(QPen(QColor("white")))
-        font = QFont()
-        font.setPixelSize(12)
-        font.setBold(True)
-        p.setFont(font)
-        p.drawText(pm.rect(), Qt.AlignmentFlag.AlignCenter, _SYMBOLS.get(status, "?"))
+        fname, active = "gdrive.png", False
 
-    p.end()
-    return QIcon(pm)
+    pm = QPixmap(os.path.join(_ASSETS_DIR, fname)).scaled(
+        22, 22,
+        Qt.AspectRatioMode.KeepAspectRatio,
+        Qt.TransformationMode.SmoothTransformation,
+    )
+    if pm.isNull():
+        pm = QPixmap(22, 22)
+        pm.fill(Qt.GlobalColor.transparent)
+
+    if active:
+        return QIcon(pm)
+
+    out = QPixmap(pm.size())
+    out.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(out)
+    painter.setOpacity(0.35)
+    painter.drawPixmap(0, 0, pm)
+    painter.end()
+    return QIcon(out)
 
 
 def _worker_alive(pid) -> bool:
@@ -209,9 +197,10 @@ class SyncMonitorApp:
         layout.setSpacing(8)
 
         # Globalny status
-        color  = _COLORS.get(self._status or "ok", "#555")
-        symbol = _SYMBOLS.get(self._status or "ok", "?")
-        label  = _STATUS_LABELS.get(self._status or "ok", "Unknown")
+        st = self._status or "ok"
+        color  = {"ok": "#2e7d32", "warning": "#f9a825", "running": "#1565c0"}.get(st, "#555")
+        symbol = {"ok": "✓", "warning": "!", "running": "↻"}.get(st, "?")
+        label  = _STATUS_LABELS.get(st, "Unknown")
         date_str = sync.updated_at.strftime("%Y-%m-%d %H:%M") if sync.updated_at else ""
 
         status_lbl = QLabel(

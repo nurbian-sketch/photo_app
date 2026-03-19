@@ -93,9 +93,6 @@ class AppInitializer(QObject):
         # Share bot
         msg(self._ensure_share_bot())
 
-        # Tray monitor
-        msg(self._ensure_tray_monitor())
-
         # Probe aparatu
         probe = CameraProbe()
         connected = probe.connect()
