@@ -29,6 +29,7 @@ def _write_status(cloud_dir: str, status: str, error: str = "") -> None:
     data = {
         "status":     status,   # running | done | warning
         "updated_at": datetime.now().isoformat(),
+        "pid":        os.getpid(),
         "error":      error,
     }
     path = os.path.join(cloud_dir, STATUS_FILE)
@@ -37,6 +38,23 @@ def _write_status(cloud_dir: str, status: str, error: str = "") -> None:
             json.dump(data, f, indent=2)
     except OSError as e:
         print(f"[sync_worker] Błąd zapisu {STATUS_FILE}: {e}", file=sys.stderr)
+
+
+def _mark_sessions_synced(cloud_dir: str) -> None:
+    """Zapisuje sync_status.json w każdym podfolderze sesji po udanym sync."""
+    now = datetime.now().isoformat()
+    try:
+        for entry in os.scandir(cloud_dir):
+            if not entry.is_dir():
+                continue
+            path = os.path.join(entry.path, STATUS_FILE)
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump({"status": "done", "synced_at": now}, f)
+            except OSError:
+                pass
+    except OSError:
+        pass
 
 
 def _run_sync(cloud_dir: str, remote: str, dest: str) -> tuple[bool, str]:
@@ -76,6 +94,7 @@ def main():
 
         if ok:
             _write_status(cloud_dir, "done")
+            _mark_sessions_synced(cloud_dir)
             print(f"[sync_worker] sync done: {cloud_dir} → {remote}:{dest}", flush=True)
             break
 

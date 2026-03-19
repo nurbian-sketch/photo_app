@@ -39,6 +39,19 @@ IMPORT_FILE_TIMEOUT = 60
 SIZE_TOLERANCE = 0
 
 
+def _worker_alive(pid) -> bool:
+    """Zwraca True jeśli proces o danym PID nadal działa."""
+    if not pid:
+        return False
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except (ProcessLookupError, ValueError):
+        return False
+    except PermissionError:
+        return True  # istnieje, ale inny użytkownik
+
+
 class SessionRunner(QThread):
     """
     Silnik sesji fotograficznej.
@@ -334,14 +347,14 @@ class SessionRunner(QThread):
         cloud_dir = os.path.join(self.store.base_dir, "cloud")
         os.makedirs(cloud_dir, exist_ok=True)
 
-        # Nie odpalam drugiego workera jeśli poprzedni już działa
+        # Nie odpalam drugiego workera jeśli poprzedni żyje (sprawdzamy PID)
         status_path = os.path.join(cloud_dir, "sync_status.json")
         if os.path.exists(status_path):
             try:
                 import json as _json
                 with open(status_path) as f:
                     st = _json.load(f)
-                if st.get("status") == "running":
+                if st.get("status") == "running" and _worker_alive(st.get("pid")):
                     logger.info("[DIAG] _run_sync: return — worker już działa")
                     self.context.sync_status = "pending"
                     self.store.save(self.context)

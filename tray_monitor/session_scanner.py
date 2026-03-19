@@ -65,17 +65,50 @@ def read_sync_status() -> SyncStatus:
         return SyncStatus(status="unknown", updated_at=None, error="")
 
 
-def scan_session_folders() -> list[str]:
-    """Zwraca listę nazw folderów sesji w cloud_dir (posortowane od najnowszego)."""
+@dataclass
+class SessionInfo:
+    """Stan synchronizacji pojedynczego folderu sesji."""
+    name:      str
+    status:    str              # done | unknown
+    date_str:  str              # sformatowana data sync lub ""
+
+
+def scan_session_folders() -> list[SessionInfo]:
+    """Zwraca listę folderów sesji z ich statusem sync (posortowane od najnowszego)."""
     cloud_dir = get_cloud_dir()
     if not os.path.isdir(cloud_dir):
         return []
-    folders = [
-        e.name for e in os.scandir(cloud_dir)
-        if e.is_dir()
-    ]
-    folders.sort(reverse=True)
-    return folders[:15]
+    result = []
+    for e in os.scandir(cloud_dir):
+        if not e.is_dir():
+            continue
+        result.append(_read_session_info(e.name, e.path))
+    result.sort(key=lambda x: x.name, reverse=True)
+    return result[:15]
+
+
+def _read_session_info(name: str, path: str) -> SessionInfo:
+    """Czyta sync_status.json z folderu sesji."""
+    status_path = os.path.join(path, STATUS_FILE)
+    if not os.path.exists(status_path):
+        return SessionInfo(name=name, status="unknown", date_str="")
+    try:
+        with open(status_path, encoding="utf-8") as f:
+            data = json.load(f)
+        raw_date = data.get("synced_at") or data.get("updated_at") or ""
+        date_str = ""
+        if raw_date:
+            try:
+                date_str = datetime.fromisoformat(raw_date).strftime("%Y-%m-%d %H:%M")
+            except ValueError:
+                pass
+        return SessionInfo(
+            name=name,
+            status=data.get("status", "unknown"),
+            date_str=date_str,
+        )
+    except Exception:
+        return SessionInfo(name=name, status="unknown", date_str="")
 
 
 def overall_status() -> str:

@@ -34,6 +34,7 @@ _COLORS = {
 }
 
 _SYMBOLS = {
+    "ok":      "✓",
     "warning": "!",
     "running": "↻",
 }
@@ -84,6 +85,19 @@ def _make_tray_icon(status: str) -> QIcon:
     return QIcon(pm)
 
 
+def _worker_alive(pid) -> bool:
+    """Zwraca True jeśli proces o danym PID nadal działa."""
+    if not pid:
+        return False
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except (ProcessLookupError, ValueError):
+        return False
+    except PermissionError:
+        return True  # istnieje, ale inny użytkownik
+
+
 class SyncMonitorApp:
     """Główna klasa tray monitora."""
 
@@ -129,13 +143,13 @@ class SyncMonitorApp:
         if not os.path.isdir(cloud_dir):
             return   # brak katalogu cloud/
 
-        # Nie odpalam jeśli worker już działa
+        # Nie odpalam jeśli worker nadal żyje (sprawdzamy PID)
         status_path = os.path.join(cloud_dir, "sync_status.json")
         if os.path.exists(status_path):
             try:
                 with open(status_path) as f:
                     st = json.load(f)
-                if st.get("status") == "running":
+                if st.get("status") == "running" and _worker_alive(st.get("pid")):
                     return
             except Exception:
                 pass
@@ -217,8 +231,15 @@ class SyncMonitorApp:
 
         if folders:
             layout.addWidget(QLabel("─" * 40))
-            for name in folders:
-                layout.addWidget(QLabel(f"  {name}"))
+            for s in folders:
+                icon = "✓" if s.status == "done" else "?"
+                color = "#2e7d32" if s.status == "done" else "#f9a825"
+                date = f"&nbsp;&nbsp;<span style='color:#888;font-size:11px'>{s.date_str}</span>" if s.date_str else ""
+                row = QLabel(
+                    f"<span style='color:{color}'>{icon}</span>&nbsp;&nbsp;{s.name}{date}"
+                )
+                row.setTextFormat(Qt.TextFormat.RichText)
+                layout.addWidget(row)
         else:
             layout.addWidget(QLabel("No client sessions found."))
 
