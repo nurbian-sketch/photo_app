@@ -317,7 +317,8 @@ class SessionRunner(QThread):
         """
         Uruchamia rclone_sync_worker jako odłączony subprocess.
         Worker przeżywa zamknięcie aplikacji (start_new_session=True).
-        Synkuje tylko sesje CLIENT z niepustą ścieżką.
+        Synkuje cały katalog cloud/ — local jest źródłem prawdy.
+        Nie odpala drugiego workera jeśli poprzedni jeszcze działa.
         """
         if self.context.mode != SessionMode.CLIENT:
             self.context.sync_status = "skipped"
@@ -330,11 +331,23 @@ class SessionRunner(QThread):
             self.store.save(self.context)
             return
 
-        if not self.context.session_path:
-            logger.warning("SessionRunner: brak session_path — pomijam sync")
-            self.context.sync_status = "skipped"
-            self.store.save(self.context)
-            return
+        cloud_dir = os.path.join(self.store.base_dir, "cloud")
+        os.makedirs(cloud_dir, exist_ok=True)
+
+        # Nie odpalam drugiego workera jeśli poprzedni już działa
+        status_path = os.path.join(cloud_dir, "sync_status.json")
+        if os.path.exists(status_path):
+            try:
+                import json as _json
+                with open(status_path) as f:
+                    st = _json.load(f)
+                if st.get("status") == "running":
+                    logger.info("[DIAG] _run_sync: return — worker już działa")
+                    self.context.sync_status = "pending"
+                    self.store.save(self.context)
+                    return
+            except Exception:
+                pass
 
         worker_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
@@ -344,7 +357,7 @@ class SessionRunner(QThread):
         cmd = [
             sys.executable,
             worker_path,
-            self.context.session_path,
+            cloud_dir,
             self.rclone_remote,
             self.rclone_dest,
         ]

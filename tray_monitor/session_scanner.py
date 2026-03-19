@@ -1,8 +1,8 @@
 """
 tray_monitor/session_scanner.py
 
-Skanuje base_dir w poszukiwaniu sesji CLIENT i ich statusu sync.
-Czyta sync_status.json z każdego folderu cloud/.
+Czyta globalny sync_status.json z katalogu cloud/.
+Skanuje foldery sesji do wyświetlenia w popup.
 """
 from __future__ import annotations
 
@@ -19,13 +19,11 @@ CLOUD_DIR   = "cloud"
 
 
 @dataclass
-class SessionSyncInfo:
-    """Stan synchronizacji pojedynczej sesji."""
-    folder_name:  str
-    session_path: str
-    status:       str        # running | done | failed | unknown
-    updated_at:   Optional[datetime]
-    error:        str
+class SyncStatus:
+    """Globalny stan synchronizacji cloud/."""
+    status:     str              # running | done | warning | unknown
+    updated_at: Optional[datetime]
+    error:      str
 
 
 def get_base_dir() -> str:
@@ -37,61 +35,18 @@ def get_base_dir() -> str:
     )
 
 
-def scan_sessions(limit: int = 20) -> list[SessionSyncInfo]:
-    """
-    Skanuje base_dir/cloud/ i zwraca listę sesji z ich stanem sync.
-    Sortuje od najnowszej. Limit = max liczba wyników.
-    """
-    base_dir   = get_base_dir()
-    cloud_dir  = os.path.join(base_dir, CLOUD_DIR)
-    results: list[SessionSyncInfo] = []
-
-    if not os.path.isdir(cloud_dir):
-        return results
-
-    for entry in os.scandir(cloud_dir):
-        if not entry.is_dir():
-            continue
-        status_path = os.path.join(entry.path, STATUS_FILE)
-        info = _read_status(entry.path, entry.name, status_path)
-        results.append(info)
-
-    results.sort(key=lambda x: x.updated_at or datetime.min, reverse=True)
-    return results[:limit]
+def get_cloud_dir() -> str:
+    return os.path.join(get_base_dir(), CLOUD_DIR)
 
 
-def overall_status(sessions: list[SessionSyncInfo]) -> str:
-    """
-    Zwraca zagregowany status dla ikony tray:
-      running → 'running'
-      any failed (bez running) → 'failed'
-      all done / empty → 'done'
-      brak sesji → 'idle'
-    """
-    if not sessions:
-        return "idle"
-    statuses = {s.status for s in sessions}
-    if "running" in statuses:
-        return "running"
-    if "failed" in statuses:
-        return "failed"
-    if all(s.status == "done" for s in sessions):
-        return "done"
-    return "idle"
+def read_sync_status() -> SyncStatus:
+    """Czyta sync_status.json z cloud_dir. Zwraca unknown jeśli brak pliku."""
+    cloud_dir   = get_cloud_dir()
+    status_path = os.path.join(cloud_dir, STATUS_FILE)
 
-
-def _read_status(
-    session_path: str, folder_name: str, status_path: str
-) -> SessionSyncInfo:
-    """Wczytuje sync_status.json lub zwraca unknown."""
     if not os.path.exists(status_path):
-        return SessionSyncInfo(
-            folder_name=folder_name,
-            session_path=session_path,
-            status="unknown",
-            updated_at=None,
-            error="",
-        )
+        return SyncStatus(status="unknown", updated_at=None, error="")
+
     try:
         with open(status_path, encoding="utf-8") as f:
             data = json.load(f)
@@ -101,18 +56,38 @@ def _read_status(
                 updated = datetime.fromisoformat(data["updated_at"])
             except ValueError:
                 pass
-        return SessionSyncInfo(
-            folder_name=folder_name,
-            session_path=session_path,
+        return SyncStatus(
             status=data.get("status", "unknown"),
             updated_at=updated,
             error=data.get("error", ""),
         )
     except Exception:
-        return SessionSyncInfo(
-            folder_name=folder_name,
-            session_path=session_path,
-            status="unknown",
-            updated_at=None,
-            error="",
-        )
+        return SyncStatus(status="unknown", updated_at=None, error="")
+
+
+def scan_session_folders() -> list[str]:
+    """Zwraca listę nazw folderów sesji w cloud_dir (posortowane od najnowszego)."""
+    cloud_dir = get_cloud_dir()
+    if not os.path.isdir(cloud_dir):
+        return []
+    folders = [
+        e.name for e in os.scandir(cloud_dir)
+        if e.is_dir()
+    ]
+    folders.sort(reverse=True)
+    return folders[:15]
+
+
+def overall_status() -> str:
+    """
+    Zwraca zagregowany status dla ikony tray:
+      running → 'running'
+      warning → 'warning'
+      done / unknown (brak pliku) → 'ok'
+    """
+    s = read_sync_status()
+    if s.status == "running":
+        return "running"
+    if s.status == "warning":
+        return "warning"
+    return "ok"
