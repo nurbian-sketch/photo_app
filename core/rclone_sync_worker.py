@@ -21,7 +21,8 @@ import sys
 import time
 from datetime import datetime
 
-STATUS_FILE  = "sync_status.json"
+STATUS_FILE  = "sync_status.json"   # lokalny — NIE wysyłany na remote
+MARKER_FILE  = "sync_complete"       # wysyłany na remote — sygnał dla skryptów
 RETRY_DELAYS = [30, 60, 120, 300, 600]
 
 
@@ -40,17 +41,22 @@ def _write_status(cloud_dir: str, status: str, error: str = "") -> None:
         print(f"[sync_worker] Błąd zapisu {STATUS_FILE}: {e}", file=sys.stderr)
 
 
-def _mark_sessions_synced(cloud_dir: str) -> None:
-    """Zapisuje sync_status.json w każdym podfolderze sesji po udanym sync."""
+def _write_markers(cloud_dir: str) -> None:
+    """
+    Po udanym sync zapisuje w każdym podfolderze sesji:
+      - sync_status.json  (lokalny, dla tray monitora)
+      - sync_complete     (zostanie wgrany na remote w drugim przebiegu rclone)
+    """
     now = datetime.now().isoformat()
     try:
         for entry in os.scandir(cloud_dir):
             if not entry.is_dir():
                 continue
-            path = os.path.join(entry.path, STATUS_FILE)
             try:
-                with open(path, "w", encoding="utf-8") as f:
+                with open(os.path.join(entry.path, STATUS_FILE), "w", encoding="utf-8") as f:
                     json.dump({"status": "done", "synced_at": now}, f)
+                with open(os.path.join(entry.path, MARKER_FILE), "w", encoding="utf-8") as f:
+                    f.write(now)
             except OSError:
                 pass
     except OSError:
@@ -63,7 +69,7 @@ def _run_sync(cloud_dir: str, remote: str, dest: str) -> tuple[bool, str]:
         "rclone", "sync",
         cloud_dir + "/",
         f"{remote}:{dest}/",
-        "--exclude", STATUS_FILE,
+        "--exclude", STATUS_FILE,   # sync_status.json zostaje lokalnie
     ]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -90,11 +96,15 @@ def main():
     while True:
         _write_status(cloud_dir, "running")
 
+        # Krok 1: synchronizuj zdjęcia
         ok, err = _run_sync(cloud_dir, remote, dest)
 
         if ok:
+            # Krok 2: zapisz markery lokalnie (sync_status.json + sync_complete)
+            _write_markers(cloud_dir)
+            # Krok 3: drugi sync — wgrywa sync_complete na remote
+            _run_sync(cloud_dir, remote, dest)
             _write_status(cloud_dir, "done")
-            _mark_sessions_synced(cloud_dir)
             print(f"[sync_worker] sync done: {cloud_dir} → {remote}:{dest}", flush=True)
             break
 

@@ -87,28 +87,28 @@ def scan_session_folders() -> list[SessionInfo]:
     return result[:15]
 
 
+MARKER_FILE = "sync_complete"
+
+
 def _read_session_info(name: str, path: str) -> SessionInfo:
-    """Czyta sync_status.json z folderu sesji."""
-    status_path = os.path.join(path, STATUS_FILE)
-    if not os.path.exists(status_path):
+    """
+    Sprawdza czy sesja dotarła na remote (plik sync_complete).
+    Datę bierze z zawartości sync_complete lub mtime pliku.
+    """
+    marker_path = os.path.join(path, MARKER_FILE)
+    if not os.path.exists(marker_path):
         return SessionInfo(name=name, status="unknown", date_str="")
     try:
-        with open(status_path, encoding="utf-8") as f:
-            data = json.load(f)
-        raw_date = data.get("synced_at") or data.get("updated_at") or ""
+        raw = open(marker_path, encoding="utf-8").read().strip()
         date_str = ""
-        if raw_date:
-            try:
-                date_str = datetime.fromisoformat(raw_date).strftime("%Y-%m-%d %H:%M")
-            except ValueError:
-                pass
-        return SessionInfo(
-            name=name,
-            status=data.get("status", "unknown"),
-            date_str=date_str,
-        )
+        try:
+            date_str = datetime.fromisoformat(raw).strftime("%Y-%m-%d %H:%M")
+        except ValueError:
+            mtime = os.path.getmtime(marker_path)
+            date_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+        return SessionInfo(name=name, status="done", date_str=date_str)
     except Exception:
-        return SessionInfo(name=name, status="unknown", date_str="")
+        return SessionInfo(name=name, status="done", date_str="")
 
 
 def overall_status() -> str:
