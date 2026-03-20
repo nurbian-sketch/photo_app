@@ -188,7 +188,10 @@ class MainWindow(QMainWindow):
         )
         status_path = os.path.join(base_dir, "cloud", "sync_status.json")
 
-        status = "ok"
+        status  = "ok"
+        free_mb = -1
+        warn_mb = self.settings.value("rclone/warn_free_mb", 500, type=int)
+
         if os.path.exists(status_path):
             try:
                 with open(status_path, encoding="utf-8") as f:
@@ -198,15 +201,26 @@ class MainWindow(QMainWindow):
                     status = "running"
                 elif s == "warning":
                     status = "warning"
+                free_mb = data.get("free_mb", -1)
             except Exception:
                 pass
 
+        space_warn = (free_mb >= 0 and free_mb < warn_mb)
+
         if status == "running":
             pix = self._make_status_pixmap("sync.png", active=True)
-        elif status == "ok":
+        elif status == "ok" and not space_warn:
             pix = self._make_status_pixmap("gdrive.png", active=True)
         else:
             pix = self._make_status_pixmap("gdrive.png", active=False)
+
+        if free_mb >= 0:
+            tooltip = self.tr(f"Google Drive — {free_mb} MB free")
+            if space_warn:
+                tooltip += self.tr(" ⚠ Low space")
+            self.icon_sync.setToolTip(tooltip)
+        else:
+            self.icon_sync.setToolTip(self.tr("Google Drive sync"))
 
         self.icon_sync.setPixmap(pix)
         self.icon_sync.setVisible(True)
@@ -440,8 +454,44 @@ class MainWindow(QMainWindow):
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("windowState", self.saveState())
         self.settings.setValue("darkroom_splitter", self.darkroom_view.splitter.saveState())
-        self._launch_tray_monitor()
+
+        # Tray monitor — tylko gdy sync aktualnie w toku
+        if self._is_sync_running():
+            self._show_sync_close_info()
+            self._launch_tray_monitor()
+
         super().closeEvent(event)
+
+    def _is_sync_running(self) -> bool:
+        """Sprawdza czy rclone_sync_worker aktualnie pracuje."""
+        remote = self.settings.value("rclone/remote", "").strip()
+        if not remote:
+            return False
+        base_dir    = self.settings.value(
+            "session/directory", os.path.expanduser("~/Obrazy/sessions")
+        )
+        status_path = os.path.join(base_dir, "cloud", "sync_status.json")
+        if not os.path.exists(status_path):
+            return False
+        try:
+            with open(status_path, encoding="utf-8") as f:
+                data = json.load(f)
+            return data.get("status") == "running"
+        except Exception:
+            return False
+
+    def _show_sync_close_info(self):
+        """Informuje użytkownika że sync trwa i będzie dokończony przez tray."""
+        msg = QMessageBox(self)
+        msg.setWindowTitle(self.tr("Sync in progress"))
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setText(self.tr(
+            "Google Drive sync is still in progress.\n\n"
+            "The application will close now. Sync will complete in the background\n"
+            "and the tray icon will disappear when finished."
+        ))
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
+        msg.exec()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_F11:

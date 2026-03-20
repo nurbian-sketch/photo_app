@@ -47,6 +47,58 @@ class AppInitializer(QObject):
         )
         return "Share bot: uruchomiony"
 
+    def _run_archive(self) -> str:
+        """Przenosi stare sesje CLIENT do katalogu archiwum. Zwraca komunikat do splash."""
+        import shutil
+        from datetime import datetime, timedelta
+        from core.session_store import SessionStore
+        from core.session_context import SessionMode
+
+        settings  = QSettings("Grzeza", "SessionsAssistant")
+        arch_path = settings.value("archive/path", "").strip()
+        arch_days = settings.value("archive/days", 30, type=int)
+
+        if not arch_path:
+            return "Archive: disabled (no path set)"
+
+        if not os.path.isdir(arch_path):
+            try:
+                os.makedirs(arch_path, exist_ok=True)
+            except OSError as e:
+                return f"Archive: cannot create directory — {e}"
+
+        base_dir = settings.value(
+            "session/directory", os.path.expanduser("~/Obrazy/sessions")
+        )
+        store  = SessionStore(base_dir)
+        cutoff = datetime.now() - timedelta(days=arch_days)
+        moved  = 0
+        errors = 0
+
+        for ctx in store.list_sessions(include_private=False):
+            if ctx.mode != SessionMode.CLIENT:
+                continue
+            if ctx.started_at >= cutoff:
+                continue
+            if not ctx.session_path or not os.path.isdir(ctx.session_path):
+                continue
+            dest = os.path.join(arch_path, os.path.basename(ctx.session_path))
+            try:
+                shutil.move(ctx.session_path, dest)
+                moved += 1
+            except Exception as e:
+                import logging as _log
+                _log.getLogger(__name__).warning(
+                    f"Archive: błąd przenoszenia {ctx.session_path}: {e}"
+                )
+                errors += 1
+
+        if moved == 0 and errors == 0:
+            return f"Archive: nothing to archive (threshold: {arch_days} days)"
+        if errors:
+            return f"Archive: moved {moved}, errors {errors}"
+        return f"Archive: moved {moved} session(s) to archive"
+
     def _ensure_tray_monitor(self) -> str:
         """Uruchamia tray monitor jeśli nie działa. Zwraca komunikat do splash."""
         # Sprawdź czy monitor już działa (lock file lub pgrep)
@@ -92,6 +144,9 @@ class AppInitializer(QObject):
 
         # Share bot
         msg(self._ensure_share_bot())
+
+        # Archiwizacja starych sesji
+        msg(self._run_archive())
 
         # Probe aparatu
         probe = CameraProbe()

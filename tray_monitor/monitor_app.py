@@ -23,9 +23,6 @@ from tray_monitor.session_scanner import (
 # Polling ikony co 4 sekundy
 POLL_INTERVAL_MS = 4000
 
-# Sync co 5 minut
-SYNC_INTERVAL_MS = 5 * 60 * 1000
-
 _STATUS_LABELS: dict[str, str] = {
     "ok":      "All synced",
     "warning": "Sync problem — retrying",
@@ -94,6 +91,9 @@ class SyncMonitorApp:
         self._tray   = QSystemTrayIcon()
         self._status = None   # None → pierwsze poll zawsze ustawia ikonę
 
+        # Flaga: tray uruchomiony przy zamknięciu app gdy sync był running → auto-quit po "ok"
+        self._started_for_sync = True
+
         self._build_menu()
         self._tray.activated.connect(self._on_activated)
 
@@ -102,58 +102,9 @@ class SyncMonitorApp:
         self._timer.timeout.connect(self._poll)
         self._timer.start(POLL_INTERVAL_MS)
 
-        # Periodyczny sync — tray sam pilnuje że local = remote
-        self._sync_timer = QTimer()
-        self._sync_timer.timeout.connect(self._trigger_sync)
-        self._sync_timer.start(SYNC_INTERVAL_MS)
-
-        # Pierwsze odświeżenie przed show() — ikona ustawiona zanim pojawi się w trayu
+        # Pierwsze odświeżenie przed show()
         self._poll()
-        self._trigger_sync()   # sync od razu przy starcie
         self._tray.show()
-
-    # ─────────────────────────── SYNC
-
-    def _trigger_sync(self):
-        """Odpala sync workera jeśli nie działa. Wywołuje co SYNC_INTERVAL_MS."""
-        from PyQt6.QtCore import QSettings
-        import json
-
-        # Odczytaj konfigurację rclone
-        settings = QSettings("Grzeza", "SessionsAssistant")
-        remote = settings.value("rclone/remote", "").strip()
-        dest   = settings.value("rclone/destination", "Sessions").strip()
-
-        if not remote:
-            return   # rclone nie skonfigurowany
-
-        cloud_dir = get_cloud_dir()
-        if not os.path.isdir(cloud_dir):
-            return   # brak katalogu cloud/
-
-        # Nie odpalam jeśli worker nadal żyje (sprawdzamy PID)
-        status_path = os.path.join(cloud_dir, "sync_status.json")
-        if os.path.exists(status_path):
-            try:
-                with open(status_path) as f:
-                    st = json.load(f)
-                if st.get("status") == "running" and _worker_alive(st.get("pid")):
-                    return
-            except Exception:
-                pass
-
-        # Uruchom workera jako odłączony subprocess
-        worker_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "core", "rclone_sync_worker.py",
-        )
-        import sys as _sys
-        subprocess.Popen(
-            [_sys.executable, worker_path, cloud_dir, remote, dest],
-            start_new_session=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
 
     # ─────────────────────────── POLLING
 
@@ -166,6 +117,10 @@ class SyncMonitorApp:
             self._tray.setIcon(_make_tray_icon(new_status))
             label = _STATUS_LABELS.get(new_status, "Unknown")
             self._tray.setToolTip(f"Sessions Sync — {label}")
+
+            # Auto-quit: sync się skończył — tray nie jest już potrzebny
+            if new_status == "ok" and self._started_for_sync:
+                QTimer.singleShot(3000, self._app.quit)
 
     # ─────────────────────────── MENU PPM
 

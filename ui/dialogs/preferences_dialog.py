@@ -16,9 +16,12 @@ class PreferencesDialog(QDialog):
     """Dialog ustawień aplikacji."""
 
     # Klucz QSettings — taki sam jak w CameraView
-    KEY_SESSION_DIR   = "session/directory"
-    KEY_RCLONE_REMOTE = "rclone/remote"
-    KEY_RCLONE_DEST   = "rclone/destination"
+    KEY_SESSION_DIR    = "session/directory"
+    KEY_RCLONE_REMOTE  = "rclone/remote"
+    KEY_RCLONE_DEST    = "rclone/destination"
+    KEY_ARCHIVE_PATH   = "archive/path"
+    KEY_ARCHIVE_DAYS   = "archive/days"
+    KEY_GDRIVE_WARN_MB = "rclone/warn_free_mb"
 
     # Domyślna ścieżka
     DEFAULT_SESSION_DIR = os.path.expanduser("~/Obrazy/sessions")
@@ -162,7 +165,52 @@ class PreferencesDialog(QDialog):
         dest_row.addWidget(self.rclone_dest_edit, 1)
         sync_layout.addLayout(dest_row)
 
+        space_row = QHBoxLayout()
+        space_row.addWidget(QLabel(self.tr("Warn when free space below (MB):")))
+        self.gdrive_warn_spin = QSpinBox()
+        self.gdrive_warn_spin.setRange(100, 10000)
+        self.gdrive_warn_spin.setSingleStep(100)
+        self.gdrive_warn_spin.setValue(500)
+        space_row.addWidget(self.gdrive_warn_spin)
+        space_row.addStretch()
+        sync_layout.addLayout(space_row)
+
         layout.addWidget(sync_group)
+
+        # === Archive Group ===
+        arch_group = QGroupBox(self.tr("Session Archive"))
+        arch_group.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        arch_layout = QVBoxLayout(arch_group)
+
+        arch_hint = QLabel(self.tr(
+            "CLIENT sessions older than the specified number of days will be moved\n"
+            "to the archive path on startup. Folder is removed from Google Drive automatically."
+        ))
+        arch_hint.setStyleSheet(DIALOG_HINT_STYLE)
+        arch_hint.setWordWrap(True)
+        arch_layout.addWidget(arch_hint)
+
+        arch_path_row = QHBoxLayout()
+        arch_path_row.addWidget(QLabel(self.tr("Archive path:")))
+        self.archive_path_edit = QLineEdit()
+        self.archive_path_edit.setPlaceholderText(self.tr("(disabled — leave empty)"))
+        arch_path_row.addWidget(self.archive_path_edit, 1)
+        btn_arch_browse = QPushButton(self.tr("Browse..."))
+        btn_arch_browse.setFixedHeight(DIALOG_BTN_H_SMALL)
+        btn_arch_browse.clicked.connect(self._browse_archive_path)
+        arch_path_row.addWidget(btn_arch_browse)
+        arch_layout.addLayout(arch_path_row)
+
+        arch_days_row = QHBoxLayout()
+        arch_days_row.addWidget(QLabel(self.tr("Archive after (days):")))
+        self.archive_days_spin = QSpinBox()
+        self.archive_days_spin.setRange(1, 3650)
+        self.archive_days_spin.setValue(30)
+        arch_days_row.addWidget(self.archive_days_spin)
+        arch_days_row.addStretch()
+        arch_layout.addLayout(arch_days_row)
+
+        layout.addWidget(arch_group)
 
         layout.addStretch()
 
@@ -205,6 +253,15 @@ class PreferencesDialog(QDialog):
         self.rclone_dest_edit.setText(
             self.settings.value(self.KEY_RCLONE_DEST, "Sessions")
         )
+        self.gdrive_warn_spin.setValue(
+            self.settings.value(self.KEY_GDRIVE_WARN_MB, 500, type=int)
+        )
+        self.archive_path_edit.setText(
+            self.settings.value(self.KEY_ARCHIVE_PATH, "")
+        )
+        self.archive_days_spin.setValue(
+            self.settings.value(self.KEY_ARCHIVE_DAYS, 30, type=int)
+        )
 
     def _save_and_accept(self):
         directory = self.dir_edit.text().strip() or self.DEFAULT_SESSION_DIR
@@ -237,6 +294,9 @@ class PreferencesDialog(QDialog):
         self.settings.setValue(
             self.KEY_RCLONE_DEST, self.rclone_dest_edit.text().strip() or "Sessions"
         )
+        self.settings.setValue(self.KEY_GDRIVE_WARN_MB, self.gdrive_warn_spin.value())
+        self.settings.setValue(self.KEY_ARCHIVE_PATH, self.archive_path_edit.text().strip())
+        self.settings.setValue(self.KEY_ARCHIVE_DAYS, self.archive_days_spin.value())
 
         self.accept()
 
@@ -246,6 +306,20 @@ class PreferencesDialog(QDialog):
         self.tg_chat_edit.clear()
         self.rclone_remote_edit.clear()
         self.rclone_dest_edit.setText("Sessions")
+        self.gdrive_warn_spin.setValue(500)
+        self.archive_path_edit.clear()
+        self.archive_days_spin.setValue(30)
+
+    def _browse_archive_path(self):
+        current = self.archive_path_edit.text() or os.path.expanduser("~")
+        directory = QFileDialog.getExistingDirectory(
+            self,
+            self.tr("Select Archive Directory"),
+            current,
+            QFileDialog.Option.ShowDirsOnly,
+        )
+        if directory:
+            self.archive_path_edit.setText(directory)
 
     def _browse_directory(self):
         current = self.dir_edit.text() or self.DEFAULT_SESSION_DIR

@@ -26,11 +26,35 @@ MARKER_FILE  = "sync_complete"       # wysyłany na remote — sygnał dla skryp
 RETRY_DELAYS = [30, 60, 120, 300, 600]
 
 
-def _write_status(cloud_dir: str, status: str, error: str = "") -> None:
+def _check_space(remote: str, dest: str, warn_mb: int) -> tuple[bool, int]:
+    """
+    Sprawdza wolne miejsce na remote przez `rclone about`.
+    Zwraca (warning, free_mb). free_mb=-1 gdy nie można sprawdzić.
+    """
+    try:
+        result = subprocess.run(
+            ["rclone", "about", f"{remote}:", "--json"],
+            capture_output=True, text=True, timeout=20,
+        )
+        if result.returncode != 0:
+            return False, -1
+        data    = json.loads(result.stdout)
+        free_b  = data.get("free", -1)
+        if free_b < 0:
+            return False, -1
+        free_mb = free_b // (1024 * 1024)
+        return free_mb < warn_mb, free_mb
+    except Exception:
+        return False, -1
+
+
+def _write_status(cloud_dir: str, status: str, error: str = "",
+                  free_mb: int = -1) -> None:
     data = {
         "status":     status,   # running | done | warning
         "updated_at": datetime.now().isoformat(),
         "pid":        os.getpid(),
+        "free_mb":    free_mb,
         "error":      error,
     }
     path = os.path.join(cloud_dir, STATUS_FILE)
@@ -91,10 +115,23 @@ def main():
     remote    = sys.argv[2]
     dest      = sys.argv[3]
 
+    settings = __import__('PyQt6.QtCore', fromlist=['QSettings']).QSettings(
+        "Grzeza", "SessionsAssistant"
+    )
+    warn_mb = settings.value("rclone/warn_free_mb", 500, type=int)
+
+    # Space check przed pierwszą próbą
+    space_warn, free_mb = _check_space(remote, dest, warn_mb)
+    if space_warn:
+        print(
+            f"[sync_worker] OSTRZEŻENIE: mało miejsca na GDrive — {free_mb} MB wolne",
+            file=sys.stderr, flush=True,
+        )
+
     attempt = 0
 
     while True:
-        _write_status(cloud_dir, "running")
+        _write_status(cloud_dir, "running", free_mb=free_mb)
 
         # Krok 1: synchronizuj zdjęcia
         ok, err = _run_sync(cloud_dir, remote, dest)
@@ -104,12 +141,12 @@ def main():
             _write_markers(cloud_dir)
             # Krok 3: drugi sync — wgrywa sync_complete na remote
             _run_sync(cloud_dir, remote, dest)
-            _write_status(cloud_dir, "done")
+            _write_status(cloud_dir, "done", free_mb=free_mb)
             print(f"[sync_worker] sync done: {cloud_dir} → {remote}:{dest}", flush=True)
             break
 
         delay = RETRY_DELAYS[min(attempt, len(RETRY_DELAYS) - 1)]
-        _write_status(cloud_dir, "warning", err)
+        _write_status(cloud_dir, "warning", err, free_mb=free_mb)
         print(
             f"[sync_worker] próba {attempt + 1} nieudana: {err} — retry za {delay}s",
             file=sys.stderr, flush=True,
