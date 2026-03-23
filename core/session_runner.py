@@ -85,6 +85,9 @@ class SessionRunner(QThread):
     # Błąd krytyczny (sesja przerwana)
     error = pyqtSignal(str)
 
+    # Żądanie wywołania RAW — emitowane gdy wykryto pliki RAW w sesji
+    developer_requested = pyqtSignal(str)   # session_path
+
     # ─────────────────────────── INIT
 
     def __init__(
@@ -323,8 +326,32 @@ class SessionRunner(QThread):
         self.warning.emit("Saving session summary...")
         self.store.save(self.context)
 
-        # Krok 6: rclone asynchronicznie (tylko CLIENT)
+        # Krok 6: wywołanie RAW jeśli sesja zawiera pliki RAW
+        self._trigger_developer()
+
+        # Krok 7: rclone asynchronicznie (tylko CLIENT)
         self._run_sync()
+
+    def _trigger_developer(self):
+        """
+        Sprawdza czy w katalogu sesji są pliki RAW.
+        Jeśli tak — emituje developer_requested(session_path) do MainWindow.
+        """
+        RAW_EXT = {".cr2", ".cr3", ".nef", ".arw", ".dng"}
+        session_path = getattr(self.context, "session_path", None)
+        if not session_path:
+            return
+        import os
+        try:
+            has_raw = any(
+                os.path.splitext(f)[1].lower() in RAW_EXT
+                for f in os.listdir(session_path)
+            )
+        except OSError:
+            return
+        if has_raw:
+            logger.info(f"Wykryto pliki RAW w sesji — emituję developer_requested")
+            self.developer_requested.emit(session_path)
 
     def _run_sync(self):
         """

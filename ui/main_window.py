@@ -10,6 +10,7 @@ import os
 import subprocess
 import sys
 import logging
+from pathlib import Path
 
 # --- Widoki ---
 from PyQt6.QtCore import QThread, pyqtSignal as _pyqtSignal
@@ -81,23 +82,35 @@ class MainWindow(QMainWindow):
         icons_layout.setContentsMargins(5, 0, 10, 4)
         icons_layout.setSpacing(12) 
         
-        self.icon_camera  = QLabel()
-        self.icon_sd_card = QLabel()
-        self.icon_sync    = QLabel()
+        self.icon_camera    = QLabel()
+        self.icon_sd_card   = QLabel()
+        self.icon_sync      = QLabel()
+        self.icon_developer = QLabel()
         self.icon_camera.setStyleSheet("background: transparent;")
         self.icon_sd_card.setStyleSheet("background: transparent;")
         self.icon_sync.setStyleSheet("background: transparent;")
-        self.icon_sync.setVisible(False)   # ukryta gdy rclone nie skonfigurowany
+        self.icon_developer.setStyleSheet("background: transparent;")
+        self.icon_sync.setVisible(False)       # ukryta gdy rclone nie skonfigurowany
+        self.icon_developer.setVisible(False)  # ukryta gdy developer nieaktywny
 
         icons_layout.addWidget(self.icon_camera)
         icons_layout.addWidget(self.icon_sd_card)
         icons_layout.addWidget(self.icon_sync)
+        icons_layout.addWidget(self.icon_developer)
         self.status_bar.addPermanentWidget(self.status_icons_widget)
 
         # Timer pollingu ikony sync (co 4s)
         self._sync_poll_timer = QTimer(self)
         self._sync_poll_timer.timeout.connect(self._update_sync_icon)
         self._sync_poll_timer.start(4000)
+
+        # Timer pollingu ikony developer (co 3s)
+        from core.developer.developer_manager import DeveloperManager
+        self._developer_manager   = DeveloperManager()
+        self._pending_develop_path: str | None = None
+        self._dev_poll_timer = QTimer(self)
+        self._dev_poll_timer.timeout.connect(self._update_developer_icon)
+        self._dev_poll_timer.start(3000)
         
         # 3. INICJALIZACJA WIDOKÃ“W
         self.session_view = SessionView()
@@ -150,6 +163,7 @@ class MainWindow(QMainWindow):
         )
         self.session_view.session_finished.connect(self._on_session_finished)
         self.session_view.camera_detected.connect(self._probe_camera)
+        self.session_view.developer_requested.connect(self._on_developer_requested)
 
     def _make_status_pixmap(self, file_name, active=True):
         """Tworzy pixmapę 24px: kolorową lub przyciemnioną (nieaktywna)."""
@@ -390,15 +404,66 @@ class MainWindow(QMainWindow):
         else:
             self.status_bar.showMessage(self.tr("Camera not detected"), 4000)
 
+    def _on_developer_requested(self, session_path: str):
+        """
+        Odebrano żądanie wywołania RAW z SessionRunner.
+        Odkładamy ścieżkę — dialog otworzymy po zamknięciu active_dlg w _on_session_finished.
+        """
+        self._pending_develop_path = session_path
+
     def _on_session_finished(self, summary):
         """
         Callback po zakończeniu sesji.
         Dla trybu CLIENT i HOME: auto-load folderu sesji w Darkroom.
+        Jeśli sesja zawierała RAW — otwiera DevelopDialog.
         """
         from core.session_context import SessionMode
         ctx = summary.context
         if ctx.mode != SessionMode.PRIVATE and ctx.session_path:
             self.darkroom_view.load_images(ctx.session_path)
+
+        # Otwórz dialog wywołania RAW jeśli runner zgłosił pliki RAW
+        if self._pending_develop_path:
+            session_path = self._pending_develop_path
+            self._pending_develop_path = None
+            self._show_develop_dialog(session_path)
+
+    def _show_develop_dialog(self, session_path: str):
+        """Otwiera DevelopDialog i po akceptacji dodaje sesję do kolejki developer."""
+        from ui.dialogs.develop_dialog import DevelopDialog
+        presets_dir = Path(__file__).parent.parent / "presets"
+        dlg = DevelopDialog(session_path, presets_dir, parent=self)
+        if dlg.exec():
+            self._developer_manager.start(
+                session_path  = session_path,
+                preset        = dlg.selected_preset,
+                kelvin        = dlg.selected_kelvin,
+            )
+            self._update_developer_icon()
+
+    def _update_developer_icon(self):
+        """Odczytuje status developer_manager i aktualizuje ikonę w pasku stanu."""
+        state, processed, total = self._developer_manager.get_status()
+
+        if state == "inactive":
+            self.icon_developer.setVisible(False)
+            return
+
+        if state == "active":
+            pix = self._make_status_pixmap("developer.svg", active=True)
+            remaining = total - processed
+            self.icon_developer.setToolTip(
+                self.tr(f"Developer: {remaining} remaining of {total}")
+            )
+        else:  # error
+            pix = self._make_status_pixmap("developer.svg", active=False)
+            msg = self._developer_manager.get_last_error()
+            self.icon_developer.setToolTip(
+                self.tr(f"Developer: error — {msg}") if msg else self.tr("Developer: error")
+            )
+
+        self.icon_developer.setPixmap(pix)
+        self.icon_developer.setVisible(True)
 
     def _on_darkroom_wb_apply(self, kelvin: int):
         """WB picker z DarkroomView: aplikuje temperaturę WB na aparacie."""
@@ -455,8 +520,8 @@ class MainWindow(QMainWindow):
         self.settings.setValue("windowState", self.saveState())
         self.settings.setValue("darkroom_splitter", self.darkroom_view.splitter.saveState())
 
-        # Tray monitor — tylko gdy sync aktualnie w toku
-        if self._is_sync_running():
+        # Tray monitor — gdy sync lub developer aktualnie w toku
+        if self._is_sync_running() or self._developer_manager.get_pending_count() > 0:
             self._show_sync_close_info()
             self._launch_tray_monitor()
 

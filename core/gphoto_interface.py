@@ -4,8 +4,12 @@ os.environ['LANGUAGE'] = 'C'
 import gphoto2 as gp
 from PyQt6.QtCore import QThread, pyqtSignal, QMutex
 from collections import deque
+from pathlib import Path
 import time
 import logging
+
+# Plik blokady LiveView — informuje developer_worker o aktywnym podglądzie
+_LV_LOCK = Path("~/.config/SessionsAssistant/liveview.lock").expanduser()
 
 
 def _setup_logger() -> logging.Logger:
@@ -147,6 +151,10 @@ class GPhotoInterface(QThread):
             self.keep_running = True
             consecutive_errors = 0
 
+            # Sygnał dla developer_worker — LiveView aktywny
+            _LV_LOCK.parent.mkdir(parents=True, exist_ok=True)
+            _LV_LOCK.touch()
+
             while self.keep_running:
                 fps_sleep = 0.05
 
@@ -249,6 +257,8 @@ class GPhotoInterface(QThread):
             # Release USB FIRST, then notify UI.
             # Reversed order -> probe starts while camera.exit() still runs -> Err70.
             self._safe_camera_exit()
+            # Usuń blokadę LiveView — developer_worker może wznowić pracę
+            _LV_LOCK.unlink(missing_ok=True)
             if self._pending_error:
                 self.error_occurred.emit(self._pending_error)
 

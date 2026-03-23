@@ -76,6 +76,9 @@ def _write_markers(cloud_dir: str) -> None:
         for entry in os.scandir(cloud_dir):
             if not entry.is_dir():
                 continue
+            # Pomiń katalog sesji gdy developer jeszcze pracuje
+            if os.path.exists(os.path.join(entry.path, ".developing")):
+                continue
             try:
                 with open(os.path.join(entry.path, STATUS_FILE), "w", encoding="utf-8") as f:
                     json.dump({"status": "done", "synced_at": now}, f)

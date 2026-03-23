@@ -281,9 +281,10 @@ class SessionView(QWidget):
       status_message(str)       — do paska stanu
     """
 
-    session_finished = pyqtSignal(object)   # SessionSummary
-    status_message   = pyqtSignal(str)
-    camera_detected  = pyqtSignal()         # aparat wykryty przez polling — zleca probe
+    session_finished    = pyqtSignal(object)   # SessionSummary
+    status_message      = pyqtSignal(str)
+    camera_detected     = pyqtSignal()         # aparat wykryty przez polling — zleca probe
+    developer_requested = pyqtSignal(str)      # session_path — przekazuje żądanie do MainWindow
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -618,6 +619,7 @@ class SessionView(QWidget):
         self._runner.error.connect(lambda m: self.status_message.emit(f"✖ {m}"))
         self._runner.state_changed.connect(self._on_state_changed)
         self._runner.sync_progress.connect(self._on_sync_progress)
+        self._runner.developer_requested.connect(self.developer_requested)
 
         self._runner.start()
         self._save_state(duration_min)
