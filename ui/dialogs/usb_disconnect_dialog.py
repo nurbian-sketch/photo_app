@@ -121,8 +121,9 @@ class UsbDisconnectDialog(QDialog):
 
         btn_cancel = QPushButton(self.tr("Cancel"))
         btn_cancel.setFixedHeight(DIALOG_BTN_H)
-        btn_cancel.setMinimumWidth(DIALOG_BTN_W)
-        btn_cancel.setDefault(True)
+        btn_cancel.setFixedWidth(DIALOG_BTN_W)
+        btn_cancel.setDefault(False)
+        btn_cancel.setAutoDefault(False)
         btn_cancel.clicked.connect(self.reject)
         btn_row.addWidget(btn_cancel)
         self._btn_cancel_ref = btn_cancel
@@ -131,7 +132,7 @@ class UsbDisconnectDialog(QDialog):
 
         self._btn_start = QPushButton(self.tr("Start Session"))
         self._btn_start.setFixedHeight(DIALOG_BTN_H)
-        self._btn_start.setMinimumWidth(DIALOG_BTN_W)
+        self._btn_start.setFixedWidth(DIALOG_BTN_W)
         self._btn_start.setEnabled(False)
         self._btn_start.clicked.connect(self.accept)
         btn_row.addWidget(self._btn_start)
@@ -161,6 +162,7 @@ class UsbDisconnectDialog(QDialog):
                 self._step2.setStyleSheet(DIALOG_TEXT_STYLE + " color: #27ae60;")
                 self._btn_start.setEnabled(True)
                 self._btn_start.setDefault(True)
+                self._btn_start.setAutoDefault(True)
                 self._btn_start.setFocus()
                 self._timer.stop()
                 self.status_changed.emit(self.tr("Camera ready — wireless mode active"))

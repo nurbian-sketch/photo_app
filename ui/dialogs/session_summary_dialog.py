@@ -173,7 +173,9 @@ class SessionSummaryDialog(QDialog):
 
         self.btn_darkroom = QPushButton(self.tr("→ Darkroom"))
         self.btn_darkroom.setFixedHeight(42)
-        self.btn_darkroom.setMinimumWidth(DIALOG_BTN_W)
+        self.btn_darkroom.setFixedWidth(DIALOG_BTN_W)
+        self.btn_darkroom.setDefault(False)
+        self.btn_darkroom.setAutoDefault(False)
         self.btn_darkroom.clicked.connect(lambda: self.done(ACTION_DARKROOM))
         nav_row.addWidget(self.btn_darkroom)
 
@@ -181,8 +183,9 @@ class SessionSummaryDialog(QDialog):
 
         self.btn_new = QPushButton(self.tr("New Session"))
         self.btn_new.setFixedHeight(42)
-        self.btn_new.setMinimumWidth(DIALOG_BTN_W)
+        self.btn_new.setFixedWidth(DIALOG_BTN_W)
         self.btn_new.setDefault(True)
+        self.btn_new.setAutoDefault(True)
         self._focus_btn = self.btn_new
         self.btn_new.clicked.connect(lambda: self.done(ACTION_NEW_SESSION))
         nav_row.addWidget(self.btn_new)

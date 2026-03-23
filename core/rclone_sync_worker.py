@@ -96,7 +96,10 @@ def _run_sync(cloud_dir: str, remote: str, dest: str) -> tuple[bool, str]:
         "rclone", "sync",
         cloud_dir + "/",
         f"{remote}:{dest}/",
-        "--exclude", STATUS_FILE,   # sync_status.json zostaje lokalnie
+        "--include", "*.jpg",
+        "--include", "*.JPG",
+        "--include", MARKER_FILE,
+        "--filter", "- *",
     ]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True)

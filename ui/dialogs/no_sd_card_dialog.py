@@ -86,6 +86,7 @@ class NoSdCardDialog(QDialog):
         btn_ok.setFixedHeight(DIALOG_BTN_H)
         btn_ok.setFixedWidth(DIALOG_BTN_W)
         btn_ok.setDefault(True)
+        btn_ok.setAutoDefault(True)
         btn_ok.clicked.connect(self.accept)
         btn_row.addWidget(btn_ok)
 

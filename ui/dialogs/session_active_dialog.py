@@ -153,15 +153,20 @@ class SessionActiveDialog(QDialog):
         int_layout.setSpacing(12)
         int_layout.addStretch(1)
 
-        btn_import = QPushButton(self.tr("⬇  Import photos"))
-        btn_import.setFixedHeight(SESSION_BTN_H)
-        btn_import.clicked.connect(self._on_interrupted_import)
-        int_layout.addWidget(btn_import)
+        self.btn_import_int = QPushButton(self.tr("⬇  Import photos"))
+        self.btn_import_int.setFixedHeight(SESSION_BTN_H)
+        self.btn_import_int.setFixedWidth(DIALOG_BTN_W)
+        self.btn_import_int.setAutoDefault(True)
+        self.btn_import_int.clicked.connect(self._on_interrupted_import)
+        int_layout.addWidget(self.btn_import_int)
 
-        btn_del_int = QPushButton(self.tr("🗑  Delete photos"))
-        btn_del_int.setFixedHeight(SESSION_BTN_H)
-        btn_del_int.clicked.connect(self._on_interrupted_delete)
-        int_layout.addWidget(btn_del_int)
+        self.btn_del_int = QPushButton(self.tr("🗑  Delete photos"))
+        self.btn_del_int.setFixedHeight(SESSION_BTN_H)
+        self.btn_del_int.setFixedWidth(DIALOG_BTN_W)
+        self.btn_del_int.setDefault(False)
+        self.btn_del_int.setAutoDefault(False)
+        self.btn_del_int.clicked.connect(self._on_interrupted_delete)
+        int_layout.addWidget(self.btn_del_int)
 
         int_layout.addStretch(1)
         self._interrupted_widget.hide()
@@ -178,14 +183,14 @@ class SessionActiveDialog(QDialog):
 
         self.btn_continue = QPushButton(self.tr("Continue →"))
         self.btn_continue.setFixedHeight(SESSION_BTN_H)
-        self.btn_continue.setMinimumWidth(DIALOG_BTN_W)
+        self.btn_continue.setFixedWidth(DIALOG_BTN_W)
         self.btn_continue.clicked.connect(self.accept)
         self.btn_continue.hide()
         btn_row.addWidget(self.btn_continue)
 
         self.btn_new_session = QPushButton(self.tr("New Session"))
         self.btn_new_session.setFixedHeight(SESSION_BTN_H)
-        self.btn_new_session.setMinimumWidth(DIALOG_BTN_W)
+        self.btn_new_session.setFixedWidth(DIALOG_BTN_W)
         self.btn_new_session.clicked.connect(lambda: self.done(ACTION_NEW_SESSION))
         self.btn_new_session.hide()
         btn_row.addWidget(self.btn_new_session)
@@ -262,12 +267,14 @@ class SessionActiveDialog(QDialog):
             )
             self.btn_continue.show()
             self.btn_continue.setDefault(True)
+            self.btn_continue.setAutoDefault(True)
             QTimer.singleShot(50, self.btn_continue.setFocus)
         elif summary.end_reason == EndReason.TIMEOUT:
             self._bg.set_background(BG_FINISHED)
             self.countdown_label.setText(self.tr("Session finished"))
             self.btn_continue.show()
             self.btn_continue.setDefault(True)
+            self.btn_continue.setAutoDefault(True)
             QTimer.singleShot(50, self.btn_continue.setFocus)
         else:
             self._bg.set_background(BG_INTERRUPTED)
@@ -280,11 +287,15 @@ class SessionActiveDialog(QDialog):
                 ).replace("%1", str(elapsed_min))
             )
             self._interrupted_widget.show()
+            self.btn_import_int.setDefault(True)
+            self.btn_import_int.setAutoDefault(True)
+            QTimer.singleShot(50, self.btn_import_int.setFocus)
 
     # ─── Handlery przerwanej sesji
 
     def _on_interrupted_import(self):
         """Import zdjęć po przerwaniu sesji (CLIENT/HOME)."""
+        self.btn_import_int.setDefault(False)
         self._interrupted_widget.hide()
         self.import_label.show()
         self.import_label.setText(self.tr("Starting import..."))
@@ -312,6 +323,7 @@ class SessionActiveDialog(QDialog):
         self.info_label.setText(self.tr("Your photos have been deleted."))
         self.btn_new_session.show()
         self.btn_new_session.setDefault(True)
+        self.btn_new_session.setAutoDefault(True)
         QTimer.singleShot(50, self.btn_new_session.setFocus)
 
     # ─── Publiczne API
