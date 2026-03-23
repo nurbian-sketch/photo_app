@@ -53,6 +53,7 @@ class CameraSettingsWorker(QThread):
         self.keep_running      = True   # False ustawiane przez stop() przed/w trakcie run()
         self.camera: Optional[gp.Camera] = None
         self.context           = gp.Context()
+        self._detected_model   = ""     # model aparatu z wykrycia — dołączany do config dict
         self.mutex             = QMutex()
         self.command_queue     = deque(maxlen=32)
         self.session_mode_init = session_mode_init
@@ -116,6 +117,7 @@ class CameraSettingsWorker(QThread):
                     continue
 
                 model, port = cams[0]
+                self._detected_model = model
                 self.camera = gp.Camera()
                 self.camera.set_abilities(al[al.lookup_model(model)])
                 self.camera.set_port_info(pil[pil.lookup_path(port)])
@@ -157,6 +159,17 @@ class CameraSettingsWorker(QThread):
                     results[name] = {"current": curr, "choices": choices}
                 except Exception:
                     continue
+
+            # Model aparatu — z wykrycia, nie z drzewa config
+            if self._detected_model:
+                results["model"] = self._detected_model
+
+            # Obiektyw — odczyt z config (może być niedostępny na starszych firmware)
+            try:
+                w = config.get_child_by_name("lensname")
+                results["lensname"] = str(w.get_value())
+            except Exception:
+                pass
 
             # Parametry image + AF
             for name in [

@@ -236,8 +236,17 @@ class SessionSummaryDialog(QDialog):
                 .replace("%1", summary.duration_str)
                 .replace("%2", shots_str)
             )
-            line4 = ctx.session_path or ""
-            self.details.setText("\n".join([line1, line2, line3, line4]))
+            # Sprzęt: model aparatu · obiektyw · format M
+            cs = ctx.camera_settings
+            equipment_parts = []
+            if cs.model:
+                equipment_parts.append(cs.model)
+            if cs.lensname:
+                equipment_parts.append(cs.lensname)
+            equipment_parts.append("M")
+            line4 = "  ·  ".join(equipment_parts)
+            line5 = ctx.session_path or ""
+            self.details.setText("\n".join([line1, line2, line3, line4, line5]))
             if ctx.share_code:
                 self._show_qr(ctx.share_code)
             self.btn_darkroom.hide()
