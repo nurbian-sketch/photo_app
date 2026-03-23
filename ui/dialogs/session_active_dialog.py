@@ -21,7 +21,7 @@ from ui.styles import (
     BTN_STYLE_RED, center_on_parent, set_panel_bg,
     SESSION_COUNTDOWN_STYLE, SESSION_PROGRESS_STYLE,
     SESSION_INFO_STYLE, SESSION_IMPORT_STYLE,
-    SESSION_BTN_H, SESSION_BTN_STOP_H,
+    SESSION_BTN_H, SESSION_BTN_STOP_H, DIALOG_BTN_W,
 )
 
 BG_ACTIVE      = os.path.join("assets", "pictures", "session-active.jpg")
@@ -178,12 +178,14 @@ class SessionActiveDialog(QDialog):
 
         self.btn_continue = QPushButton(self.tr("Continue →"))
         self.btn_continue.setFixedHeight(SESSION_BTN_H)
+        self.btn_continue.setMinimumWidth(DIALOG_BTN_W)
         self.btn_continue.clicked.connect(self.accept)
         self.btn_continue.hide()
         btn_row.addWidget(self.btn_continue)
 
         self.btn_new_session = QPushButton(self.tr("New Session"))
         self.btn_new_session.setFixedHeight(SESSION_BTN_H)
+        self.btn_new_session.setMinimumWidth(DIALOG_BTN_W)
         self.btn_new_session.clicked.connect(lambda: self.done(ACTION_NEW_SESSION))
         self.btn_new_session.hide()
         btn_row.addWidget(self.btn_new_session)

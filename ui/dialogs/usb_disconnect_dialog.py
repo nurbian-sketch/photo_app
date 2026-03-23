@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButt
 
 from ui.styles import (
     DIALOG_SPACING, DIALOG_MARGINS, DIALOG_MIN_WIDTH, DIALOG_MIN_HEIGHT,
-    DIALOG_IMG_SIZE, DIALOG_BTN_H, DIALOG_TEXT_STYLE,
+    DIALOG_IMG_SIZE, DIALOG_BTN_H, DIALOG_BTN_W, DIALOG_TEXT_STYLE,
     center_on_parent,
 )
 
@@ -121,8 +121,8 @@ class UsbDisconnectDialog(QDialog):
 
         btn_cancel = QPushButton(self.tr("Cancel"))
         btn_cancel.setFixedHeight(DIALOG_BTN_H)
-        btn_cancel.setAutoDefault(False)
-        btn_cancel.setDefault(False)
+        btn_cancel.setMinimumWidth(DIALOG_BTN_W)
+        btn_cancel.setDefault(True)
         btn_cancel.clicked.connect(self.reject)
         btn_row.addWidget(btn_cancel)
         self._btn_cancel_ref = btn_cancel
@@ -131,12 +131,14 @@ class UsbDisconnectDialog(QDialog):
 
         self._btn_start = QPushButton(self.tr("Start Session"))
         self._btn_start.setFixedHeight(DIALOG_BTN_H)
+        self._btn_start.setMinimumWidth(DIALOG_BTN_W)
         self._btn_start.setEnabled(False)
         self._btn_start.clicked.connect(self.accept)
         btn_row.addWidget(self._btn_start)
 
         btn_row.addStretch(1)
         layout.addLayout(btn_row)
+        QTimer.singleShot(0, btn_cancel.setFocus)
 
     def _poll(self):
         """Polling USB co ~1.2s — lsusb, bez gphoto2."""

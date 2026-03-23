@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
 from core.session_context import (
     EndReason, SessionMode, SessionSummary,
 )
-from ui.styles import center_on_parent, DIALOG_DETAILS_STYLE, DIALOG_WARNING_STYLE
+from ui.styles import center_on_parent, DIALOG_DETAILS_STYLE, DIALOG_WARNING_STYLE, DIALOG_BTN_W
 
 
 # ─── stałe dialogu
@@ -173,6 +173,7 @@ class SessionSummaryDialog(QDialog):
 
         self.btn_darkroom = QPushButton(self.tr("→ Darkroom"))
         self.btn_darkroom.setFixedHeight(42)
+        self.btn_darkroom.setMinimumWidth(DIALOG_BTN_W)
         self.btn_darkroom.clicked.connect(lambda: self.done(ACTION_DARKROOM))
         nav_row.addWidget(self.btn_darkroom)
 
@@ -180,6 +181,9 @@ class SessionSummaryDialog(QDialog):
 
         self.btn_new = QPushButton(self.tr("New Session"))
         self.btn_new.setFixedHeight(42)
+        self.btn_new.setMinimumWidth(DIALOG_BTN_W)
+        self.btn_new.setDefault(True)
+        self._focus_btn = self.btn_new
         self.btn_new.clicked.connect(lambda: self.done(ACTION_NEW_SESSION))
         nav_row.addWidget(self.btn_new)
 
@@ -223,7 +227,7 @@ class SessionSummaryDialog(QDialog):
                 else self.tr("Home session")
             )
             line2 = (
-                self.tr("Photos uploaded to remote server.")
+                self.tr("Your photos will be uploaded to the remote server.")
                 if ctx.mode == SessionMode.CLIENT
                 else self.tr("Photos saved locally.")
             )
@@ -236,8 +240,10 @@ class SessionSummaryDialog(QDialog):
             self.details.setText("\n".join([line1, line2, line3, line4]))
             if ctx.share_code:
                 self._show_qr(ctx.share_code)
-            self.btn_darkroom.setDefault(True)
-            self._focus_btn = self.btn_darkroom
+            self.btn_darkroom.hide()
+            self.btn_new.setText(self.tr("OK"))
+            self.btn_new.setDefault(True)
+            self._focus_btn = self.btn_new
 
         if summary.warnings:
             self.warnings_label.setText(

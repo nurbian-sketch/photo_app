@@ -322,11 +322,7 @@ class PreviewPanel(QWidget):
 
     def _on_wb_pick(self, label_pos):
         """Próbkuje piksel w miejscu kliknięcia i uruchamia worker WB."""
-        pix = (
-            self._wb_pixmap
-            if (self._wb_pixmap and not self._wb_pixmap.isNull())
-            else self._pixmap
-        )
+        pix = self._pixmap
         if pix.isNull():
             return
         if self._wb_worker and self._wb_worker.isRunning():
