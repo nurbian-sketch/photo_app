@@ -65,6 +65,23 @@ def _write_status(cloud_dir: str, status: str, error: str = "",
         print(f"[sync_worker] Błąd zapisu {STATUS_FILE}: {e}", file=sys.stderr)
 
 
+def _has_jpeg_files(session_path: str) -> bool:
+    """Sprawdza czy w katalogu sesji lub podkatalogu jpg/ są pliki JPEG."""
+    jpg_extensions = (".jpg", ".jpeg")
+    try:
+        for f in os.scandir(session_path):
+            if f.is_file() and f.name.lower().endswith(jpg_extensions):
+                return True
+        jpg_subdir = os.path.join(session_path, "jpg")
+        if os.path.isdir(jpg_subdir):
+            for f in os.scandir(jpg_subdir):
+                if f.is_file() and f.name.lower().endswith(jpg_extensions):
+                    return True
+    except OSError:
+        pass
+    return False
+
+
 def _write_markers(cloud_dir: str) -> None:
     """
     Po udanym sync zapisuje w każdym podfolderze sesji:
@@ -79,6 +96,15 @@ def _write_markers(cloud_dir: str) -> None:
             # Pomiń katalog sesji gdy developer jeszcze pracuje
             if os.path.exists(os.path.join(entry.path, ".developing")):
                 continue
+
+            # Sprawdź czy w sesji są pliki JPG — bez nich nie ma co wysyłać
+            if not _has_jpeg_files(entry.path):
+                print(
+                    f"[sync_worker] Brak JPG w {entry.name} — pomijam sync_complete",
+                    flush=True,
+                )
+                continue
+
             try:
                 with open(os.path.join(entry.path, STATUS_FILE), "w", encoding="utf-8") as f:
                     json.dump({"status": "done", "synced_at": now}, f)

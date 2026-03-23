@@ -116,3 +116,18 @@ class DeveloperQueue:
         """Zwraca wszystkie wpisy (po odświeżeniu z dysku)."""
         self.load()
         return list(self._entries)
+
+    def retry_errors(self) -> int:
+        """Resetuje wszystkie wpisy error → pending. Zwraca liczbę zresetowanych."""
+        self.load()
+        count = 0
+        for entry in self._entries:
+            if entry["status"] == STATUS_ERROR:
+                entry["status"]     = STATUS_PENDING
+                entry["error_msg"]  = ""
+                entry["processed"]  = 0
+                entry["worker_pid"] = None
+                count += 1
+        if count:
+            self.save()
+        return count

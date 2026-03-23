@@ -107,6 +107,13 @@ class DeveloperManager:
                 return e["error_msg"]
         return ""
 
+    def retry_errors(self) -> int:
+        """Resetuje błędne sesje do pending i uruchamia workera. Zwraca liczbę zresetowanych."""
+        count = self._queue.retry_errors()
+        if count > 0 and not self.is_worker_alive():
+            self._launch_worker()
+        return count
+
     def _launch_worker(self) -> None:
         """Uruchamia developer_worker jako odłączony subprocess."""
         try:

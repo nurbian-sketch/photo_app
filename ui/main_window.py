@@ -92,6 +92,7 @@ class MainWindow(QMainWindow):
         self.icon_developer.setStyleSheet("background: transparent;")
         self.icon_sync.setVisible(False)       # ukryta gdy rclone nie skonfigurowany
         self.icon_developer.setVisible(False)  # ukryta gdy developer nieaktywny
+        self.icon_developer.mousePressEvent = lambda e: self._on_developer_icon_clicked()
 
         icons_layout.addWidget(self.icon_camera)
         icons_layout.addWidget(self.icon_sd_card)
@@ -441,12 +442,24 @@ class MainWindow(QMainWindow):
             )
             self._update_developer_icon()
 
+    def _on_developer_icon_clicked(self):
+        """Klik na ikonę developera — retry gdy błąd."""
+        state, _, _ = self._developer_manager.get_status()
+        if state == "error":
+            count = self._developer_manager.retry_errors()
+            if count:
+                self.status_bar.showMessage(
+                    self.tr(f"Developer: retrying {count} session(s)..."), 4000
+                )
+            self._update_developer_icon()
+
     def _update_developer_icon(self):
         """Odczytuje status developer_manager i aktualizuje ikonę w pasku stanu."""
         state, processed, total = self._developer_manager.get_status()
 
         if state == "inactive":
             self.icon_developer.setVisible(False)
+            self.icon_developer.setCursor(Qt.CursorShape.ArrowCursor)
             return
 
         if state == "active":
@@ -455,12 +468,15 @@ class MainWindow(QMainWindow):
             self.icon_developer.setToolTip(
                 self.tr(f"Developer: {remaining} remaining of {total}")
             )
+            self.icon_developer.setCursor(Qt.CursorShape.ArrowCursor)
         else:  # error
             pix = self._make_status_pixmap("developer.svg", active=False)
             msg = self._developer_manager.get_last_error()
             self.icon_developer.setToolTip(
-                self.tr(f"Developer: error — {msg}") if msg else self.tr("Developer: error")
+                self.tr(f"Developer error — click to retry\n{msg}") if msg
+                else self.tr("Developer error — click to retry")
             )
+            self.icon_developer.setCursor(Qt.CursorShape.PointingHandCursor)
 
         self.icon_developer.setPixmap(pix)
         self.icon_developer.setVisible(True)

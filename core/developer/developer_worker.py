@@ -28,6 +28,9 @@ LV_LOCK_PATH = CONFIG_DIR / "liveview.lock"
 # Rozszerzenia RAW
 RAW_EXT = {".cr2", ".cr3", ".nef", ".arw", ".dng"}
 
+# Preset automatyczny — darktable bez XMP
+_AUTO_PRESET = "__auto__"
+
 # Pauza gdy LiveView aktywny (sekundy)
 LV_POLL_INTERVAL = 5
 
@@ -93,19 +96,31 @@ def _reorganize_session(session_dir: Path) -> list[Path]:
         f for f in session_dir.iterdir()
         if f.is_file() and f.suffix.lower() in RAW_EXT
     ]
-    if not raw_files:
-        return []
 
     raw_dir = session_dir / "raw"
     jpg_dir = session_dir / "jpg"
+
+    if not raw_files:
+        # RAW-y mogły zostać przeniesione przez poprzednią (nieudaną) próbę
+        if raw_dir.is_dir():
+            already_moved = sorted(
+                f for f in raw_dir.iterdir()
+                if f.is_file() and f.suffix.lower() in RAW_EXT
+            )
+            if already_moved:
+                print(f"[dev_worker] Retry: znaleziono {len(already_moved)} RAW w raw/", flush=True)
+                return already_moved
+        return []
+
     raw_dir.mkdir(exist_ok=True)
-    jpg_dir.mkdir(exist_ok=True)
+    # jpg_dir tworzymy tylko gdy faktycznie są sparowane JPEG
 
     moved_raws = []
     for raw in sorted(raw_files):
         # Szukaj sparowanego JPEG (ta sama bazowa nazwa)
         paired_jpg = session_dir / (raw.stem + ".jpg")
         if paired_jpg.exists():
+            jpg_dir.mkdir(exist_ok=True)          # lazy create
             dest_jpg = jpg_dir / paired_jpg.name
             paired_jpg.rename(dest_jpg)
             print(f"[dev_worker] JPEG → jpg/{paired_jpg.name}", flush=True)
@@ -116,6 +131,13 @@ def _reorganize_session(session_dir: Path) -> list[Path]:
         print(f"[dev_worker] RAW → raw/{raw.name}", flush=True)
 
     return moved_raws
+
+
+def _develop_file_auto(raw: Path, out_jpeg: Path, kelvin: int | None) -> bool:
+    """Wywołanie bez presetu XMP — darktable auto (ignoruje kelvin)."""
+    _wait_if_liveview()
+    from core.developer.cli_developer import export_raw_fallback
+    return export_raw_fallback(raw, out_jpeg)
 
 
 def _develop_file(raw: Path, preset_xmp: Path, out_jpeg: Path,
@@ -163,13 +185,16 @@ def _process_session(entry: dict) -> None:
 
     print(f"[dev_worker] Sesja: {session_path}  preset={preset}  kelvin={kelvin}", flush=True)
 
-    # Znajdź preset XMP
-    preset_xmp = _find_preset_xmp(preset)
-    if preset_xmp is None:
-        print(f"[dev_worker] Nie znaleziono presetu: {preset}", file=sys.stderr, flush=True)
-        _update_entry(session_path, status="error",
-                      error_msg=f"Preset nie znaleziony: {preset}")
-        return
+    # Znajdź preset XMP (lub ustaw None dla trybu auto)
+    if preset == _AUTO_PRESET:
+        preset_xmp = None
+    else:
+        preset_xmp = _find_preset_xmp(preset)
+        if preset_xmp is None:
+            print(f"[dev_worker] Nie znaleziono presetu: {preset}", file=sys.stderr, flush=True)
+            _update_entry(session_path, status="error",
+                          error_msg=f"Preset nie znaleziony: {preset}")
+            return
 
     # Oznacz jako processing
     _update_entry(session_path, status="processing", worker_pid=os.getpid())
@@ -195,7 +220,10 @@ def _process_session(entry: dict) -> None:
         errors = []
         for raw in raw_files:
             out_jpeg = session_dir / (raw.stem + ".jpg")
-            ok = _develop_file(raw, preset_xmp, out_jpeg, kelvin)
+            if preset_xmp is None:
+                ok = _develop_file_auto(raw, out_jpeg, kelvin)
+            else:
+                ok = _develop_file(raw, preset_xmp, out_jpeg, kelvin)
             if ok:
                 processed += 1
                 print(f"[dev_worker] [{processed}/{total}] ✔ {raw.name}", flush=True)

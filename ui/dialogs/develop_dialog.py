@@ -17,24 +17,45 @@ from ui.styles import (
     center_on_parent,
 )
 
-# Rozszerzenia plików presetów
-_PRESET_EXT = ".xmp"
+# Stała kolejność presetów — niezależna od sortowania plików
+PRESET_ORDER = [
+    "black_bg_greyscale",
+    "black_bg_color_natural",
+    "black_bg_color_fashion",
+    "grey_bg_greyscale",
+    "grey_bg_color_natural",
+    "grey_bg_color_fashion",
+    "white_bg_greyscale",
+    "white_bg_color_natural",
+    "white_bg_color_fashion",
+]
+
+_AUTO_PRESET = "__auto__"
+
+# Etykiety wyświetlane w combo
+_PRESET_LABELS = {
+    "black_bg_greyscale":       "Black BG — Greyscale",
+    "black_bg_color_natural":   "Black BG — Color (natural)",
+    "black_bg_color_fashion":   "Black BG — Color (fashion)",
+    "grey_bg_greyscale":        "Grey BG — Greyscale",
+    "grey_bg_color_natural":    "Grey BG — Color (natural)",
+    "grey_bg_color_fashion":    "Grey BG — Color (fashion)",
+    "white_bg_greyscale":       "White BG — Greyscale",
+    "white_bg_color_natural":   "White BG — Color (natural)",
+    "white_bg_color_fashion":   "White BG — Color (fashion)",
+    _AUTO_PRESET:               "Auto (darktable defaults)",
+}
 
 
 def _collect_presets(presets_dir: Path) -> list[str]:
-    """
-    Zwraca listę nazw presetów (bez .xmp) z presets/ i presets/user/.
-    User presety pojawiają się na końcu.
-    """
-    names: list[str] = []
-    # Bazowe presety (read-only)
-    for p in sorted(presets_dir.glob(f"*{_PRESET_EXT}")):
-        names.append(p.stem)
-    # Presety użytkownika
+    """Zwraca presety w ustalonej kolejności + presety użytkownika + __auto__ na końcu."""
+    names = [n for n in PRESET_ORDER if (presets_dir / f"{n}.xmp").exists()]
+    # Presety użytkownika z podkatalogu
     user_dir = presets_dir / "user"
     if user_dir.is_dir():
-        for p in sorted(user_dir.glob(f"*{_PRESET_EXT}")):
+        for p in sorted(user_dir.glob("*.xmp")):
             names.append(p.stem)
+    names.append(_AUTO_PRESET)
     return names
 
 
@@ -43,8 +64,8 @@ class DevelopDialog(QDialog):
     Dialog wywołania RAW.
 
     Zwraca po accept():
-        preset  — nazwa presetu (str)
-        kelvin  — int (0=EXIF) lub None (z presetu)
+        selected_preset — nazwa presetu (str) lub "__auto__"
+        selected_kelvin — int (0=EXIF) lub None (z presetu)
     """
 
     def __init__(self, session_path: str, presets_dir: Path, parent=None):
@@ -57,7 +78,7 @@ class DevelopDialog(QDialog):
         self._settings    = QSettings("Grzeza", "SessionsAssistant")
 
         # Wyniki wyboru
-        self.selected_preset: str       = "white_bg"
+        self.selected_preset: str        = PRESET_ORDER[0]
         self.selected_kelvin: int | None = 0
 
         self._build_ui()
@@ -96,8 +117,9 @@ class DevelopDialog(QDialog):
         preset_row.addWidget(QLabel(self.tr("Preset:")))
 
         self._combo = QComboBox()
-        names = _collect_presets(self._presets_dir)
-        self._combo.addItems(names if names else ["white_bg"])
+        for name in _collect_presets(self._presets_dir):
+            label = _PRESET_LABELS.get(name, name)
+            self._combo.addItem(label, name)
         preset_row.addWidget(self._combo, stretch=1)
 
         layout.addLayout(preset_row)
@@ -110,8 +132,9 @@ class DevelopDialog(QDialog):
 
         btn_develop = QPushButton(self.tr("Develop"))
         btn_develop.setFixedHeight(DIALOG_BTN_H)
-        btn_develop.setMinimumWidth(DIALOG_BTN_W)
+        btn_develop.setFixedWidth(DIALOG_BTN_W)
         btn_develop.setDefault(True)
+        btn_develop.setAutoDefault(True)
         btn_develop.clicked.connect(self._on_develop)
         btn_row.addWidget(btn_develop)
 
@@ -119,7 +142,9 @@ class DevelopDialog(QDialog):
 
         btn_skip = QPushButton(self.tr("Skip"))
         btn_skip.setFixedHeight(DIALOG_BTN_H)
-        btn_skip.setMinimumWidth(DIALOG_BTN_W)
+        btn_skip.setFixedWidth(DIALOG_BTN_W)
+        btn_skip.setDefault(False)
+        btn_skip.setAutoDefault(False)
         btn_skip.clicked.connect(self.reject)
         btn_row.addWidget(btn_skip)
 
@@ -136,14 +161,14 @@ class DevelopDialog(QDialog):
 
         last_preset = self._settings.value("developer/last_preset", "")
         if last_preset:
-            idx = self._combo.findText(last_preset)
-            if idx >= 0:
-                self._combo.setCurrentIndex(idx)
+            for i in range(self._combo.count()):
+                if self._combo.itemData(i) == last_preset:
+                    self._combo.setCurrentIndex(i)
+                    break
 
     def _on_develop(self):
         """Zatwierdza wybór, zapisuje ustawienia."""
-        # Odczyt wartości
-        self.selected_preset = self._combo.currentText()
+        self.selected_preset = self._combo.currentData()
         if self._rb_exif.isChecked():
             self.selected_kelvin = 0
             wb_source = "exif"
