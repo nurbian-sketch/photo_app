@@ -122,12 +122,13 @@ def _run_sync(cloud_dir: str, remote: str, dest: str) -> tuple[bool, str]:
         "rclone", "sync",
         cloud_dir + "/",
         f"{remote}:{dest}/",
-        "--rmdirs",           # usuwa puste katalogi na remote
-        "--delete-excluded",  # kasuje pliki na remote które nie pasują do filtrów
-        "--include", "*.jpg",
-        "--include", "*.JPG",
-        "--include", MARKER_FILE,
-        "--filter", "- *",
+        "--rmdirs",
+        "--exclude", "sync_status.json",
+        "--exclude", "*.cr3", "--exclude", "*.CR3",
+        "--exclude", "*.cr2", "--exclude", "*.CR2",
+        "--exclude", "*.nef", "--exclude", "*.NEF",
+        "--exclude", "*.arw", "--exclude", "*.ARW",
+        "--exclude", "*.dng", "--exclude", "*.DNG",
     ]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True)
