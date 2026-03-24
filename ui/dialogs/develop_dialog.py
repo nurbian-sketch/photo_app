@@ -4,11 +4,14 @@ Wywoływany po zakończeniu sesji gdy w katalogu sesji są pliki RAW.
 """
 from pathlib import Path
 
+import shutil
+
 from PyQt6.QtCore import Qt, QSettings
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QRadioButton,
     QButtonGroup, QComboBox,
+    QLineEdit, QFileDialog, QTextEdit, QDialogButtonBox, QMessageBox,
 )
 
 from ui.styles import (
@@ -122,7 +125,46 @@ class DevelopDialog(QDialog):
             self._combo.addItem(label, name)
         preset_row.addWidget(self._combo, stretch=1)
 
+        # --- Przycisk Duplicate obok combo ---
+        btn_duplicate = QPushButton(self.tr("Duplicate…"))
+        btn_duplicate.setFixedHeight(DIALOG_BTN_H)
+        btn_duplicate.clicked.connect(self._on_duplicate_preset)
+        preset_row.addWidget(btn_duplicate)
+
         layout.addLayout(preset_row)
+
+        # --- Import własnego XMP ---
+        import_row = QHBoxLayout()
+        btn_import_xmp = QPushButton(self.tr("Import XMP…"))
+        btn_import_xmp.setFixedHeight(DIALOG_BTN_H)
+        btn_import_xmp.clicked.connect(self._on_import_xmp)
+        import_row.addStretch(1)
+        import_row.addWidget(btn_import_xmp)
+
+        btn_edit_xmp = QPushButton(self.tr("View / Edit"))
+        btn_edit_xmp.setFixedHeight(DIALOG_BTN_H)
+        btn_edit_xmp.clicked.connect(self._on_edit_xmp)
+        import_row.addWidget(btn_edit_xmp)
+        import_row.addStretch(1)
+        layout.addLayout(import_row)
+
+        # --- Edytor XMP (domyślnie ukryty) ---
+        self._xmp_editor = QTextEdit()
+        self._xmp_editor.setVisible(False)
+        self._xmp_editor.setMinimumHeight(160)
+        self._xmp_editor.setFontFamily("Monospace")
+        self._xmp_editor.setFontPointSize(9)
+        layout.addWidget(self._xmp_editor)
+
+        save_row = QHBoxLayout()
+        self._btn_save_xmp = QPushButton(self.tr("Save XMP"))
+        self._btn_save_xmp.setFixedHeight(DIALOG_BTN_H)
+        self._btn_save_xmp.setVisible(False)
+        self._btn_save_xmp.clicked.connect(self._on_save_xmp)
+        save_row.addStretch(1)
+        save_row.addWidget(self._btn_save_xmp)
+        save_row.addStretch(1)
+        layout.addLayout(save_row)
 
         layout.addSpacing(8)
 
@@ -181,3 +223,145 @@ class DevelopDialog(QDialog):
         self._settings.setValue("developer/last_preset", self.selected_preset)
 
         self.accept()
+
+    def _current_preset_path(self) -> Path | None:
+        """Zwraca ścieżkę XMP aktualnie wybranego presetu lub None dla __auto__."""
+        name = self._combo.currentData()
+        if name == _AUTO_PRESET:
+            return None
+        user = self._presets_dir / "user" / f"{name}.xmp"
+        if user.exists():
+            return user
+        base = self._presets_dir / f"{name}.xmp"
+        return base if base.exists() else None
+
+    def _on_edit_xmp(self):
+        """Pokazuje/ukrywa edytor inline z zawartością aktualnego XMP."""
+        path = self._current_preset_path()
+        if path is None:
+            QMessageBox.information(self, self.tr("View / Edit XMP"),
+                self.tr("Auto preset has no XMP file to edit."))
+            return
+        visible = self._xmp_editor.isVisible()
+        if not visible:
+            try:
+                self._xmp_editor.setPlainText(path.read_text(encoding="utf-8"))
+            except OSError as e:
+                QMessageBox.warning(self, self.tr("Read error"), str(e))
+                return
+            self._xmp_editor.setProperty("_editing_path", str(path))
+        self._xmp_editor.setVisible(not visible)
+        self._btn_save_xmp.setVisible(not visible)
+        self.adjustSize()
+
+    def _on_save_xmp(self):
+        """Zapisuje zawartość edytora do pliku XMP."""
+        path_str = self._xmp_editor.property("_editing_path")
+        if not path_str:
+            return
+        path = Path(path_str)
+        try:
+            path.write_text(self._xmp_editor.toPlainText(), encoding="utf-8")
+            QMessageBox.information(self, self.tr("Saved"),
+                self.tr(f"Saved: {path.name}"))
+        except OSError as e:
+            QMessageBox.warning(self, self.tr("Save error"), str(e))
+
+    def _on_import_xmp(self):
+        """Browse → wybierz XMP → dialog z nazwą → zapisz do presets/user/."""
+        src, _ = QFileDialog.getOpenFileName(
+            self, self.tr("Select XMP preset"), "",
+            self.tr("XMP files (*.xmp);;All files (*)")
+        )
+        if not src:
+            return
+        src_path = Path(src)
+
+        name_dlg = QDialog(self)
+        name_dlg.setWindowTitle(self.tr("Save preset as"))
+        name_dlg.setMinimumWidth(360)
+        vlay = QVBoxLayout(name_dlg)
+        vlay.addWidget(QLabel(self.tr("Preset name (without .xmp):")))
+        name_edit = QLineEdit(src_path.stem)
+        name_edit.selectAll()
+        vlay.addWidget(name_edit)
+        bb = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok |
+            QDialogButtonBox.StandardButton.Cancel
+        )
+        bb.accepted.connect(name_dlg.accept)
+        bb.rejected.connect(name_dlg.reject)
+        vlay.addWidget(bb)
+        name_edit.setFocus()
+        if name_dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        preset_name = name_edit.text().strip()
+        if not preset_name:
+            return
+
+        user_dir = self._presets_dir / "user"
+        user_dir.mkdir(parents=True, exist_ok=True)
+        dest = user_dir / f"{preset_name}.xmp"
+        try:
+            shutil.copy2(src, dest)
+        except OSError as e:
+            QMessageBox.warning(self, self.tr("Import error"), str(e))
+            return
+
+        for i in range(self._combo.count()):
+            if self._combo.itemData(i) == preset_name:
+                self._combo.setCurrentIndex(i)
+                return
+        insert_pos = self._combo.count() - 1
+        self._combo.insertItem(insert_pos, preset_name, preset_name)
+        self._combo.setCurrentIndex(insert_pos)
+
+    def _on_duplicate_preset(self):
+        """Tworzy kopię presetu w presets/user/. Domyślna nazwa = '<oryginał> copy'."""
+        src_path = self._current_preset_path()
+        if src_path is None:
+            QMessageBox.information(self, self.tr("Duplicate preset"),
+                self.tr("Auto preset cannot be duplicated."))
+            return
+
+        default_name = f"{src_path.stem} copy"
+        name_dlg = QDialog(self)
+        name_dlg.setWindowTitle(self.tr("Duplicate preset"))
+        name_dlg.setMinimumWidth(360)
+        vlay = QVBoxLayout(name_dlg)
+        vlay.addWidget(QLabel(self.tr("New preset name:")))
+        name_edit = QLineEdit(default_name)
+        name_edit.selectAll()
+        vlay.addWidget(name_edit)
+        bb = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok |
+            QDialogButtonBox.StandardButton.Cancel
+        )
+        bb.accepted.connect(name_dlg.accept)
+        bb.rejected.connect(name_dlg.reject)
+        vlay.addWidget(bb)
+        name_edit.setFocus()
+        if name_dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        new_name = name_edit.text().strip()
+        if not new_name:
+            return
+
+        user_dir = self._presets_dir / "user"
+        user_dir.mkdir(parents=True, exist_ok=True)
+        dest = user_dir / f"{new_name}.xmp"
+        try:
+            shutil.copy2(src_path, dest)
+        except OSError as e:
+            QMessageBox.warning(self, self.tr("Duplicate error"), str(e))
+            return
+
+        for i in range(self._combo.count()):
+            if self._combo.itemData(i) == new_name:
+                self._combo.setCurrentIndex(i)
+                return
+        insert_pos = self._combo.count() - 1
+        self._combo.insertItem(insert_pos, new_name, new_name)
+        self._combo.setCurrentIndex(insert_pos)

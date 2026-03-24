@@ -24,6 +24,8 @@ from core.telegram_sender import TelegramSender
 from ui.dialogs.telegram_config_dialog import TelegramConfigDialog
 
 
+# Rola ścieżki pliku (dla plików dyskowych = UserRole)
+_ITEM_PATH_ROLE      = Qt.ItemDataRole.UserRole
 # Rola typu elementu listy: 'file', 'folder', 'parent'
 _ITEM_TYPE_ROLE      = Qt.ItemDataRole.UserRole + 2
 # Rola przechowująca folder PTP (tylko w trybie SD card)
@@ -88,7 +90,9 @@ class CheckboxDelegate(QStyledItemDelegate):
 class DarkroomView(QWidget):
 
     # Emitowany po zaakceptowaniu WB picker
-    wb_apply_requested = pyqtSignal(int)  # kelvin
+    wb_apply_requested = pyqtSignal(int)   # kelvin
+    # Emitowany gdy użytkownik chce wywołać RAW developer
+    develop_requested  = pyqtSignal(str)   # session_path (katalog bieżący)
 
     JPEG_EXTENSIONS      = ('.jpg', '.jpeg')
     RAW_EXTENSIONS_TUPLE = ('.cr3', '.cr2', '.nef', '.arw', '.orf', '.rw2', '.dng')
@@ -167,7 +171,7 @@ class DarkroomView(QWidget):
         self.list_widget.itemDoubleClicked.connect(self._open_preview_dialog)
         self.list_widget.setItemDelegate(CheckboxDelegate(self.list_widget))
         self.list_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.list_widget.customContextMenuRequested.connect(self._show_sort_menu)
+        self.list_widget.customContextMenuRequested.connect(self._on_list_context_menu)
         left_layout.addWidget(self.list_widget, 1)
 
         # Panel prawy: podgląd + kontrolki
@@ -265,11 +269,6 @@ class DarkroomView(QWidget):
         self._action_select_all.triggered.connect(self._select_all)
         self._action_deselect_all.triggered.connect(self._deselect_all)
 
-        self.btn_open_darktable = QPushButton(self.tr("Edit…"))
-        self.btn_open_darktable.setMinimumHeight(BTN_H)
-        self.btn_open_darktable.setIcon(QIcon.fromTheme("darktable"))
-        self.btn_open_darktable.setEnabled(False)
-
         # Telegram — klik = wyślij, strzałka = konfiguracja
         self.btn_send = QToolButton()
         self.btn_send.setText(self.tr("Send…"))
@@ -301,8 +300,26 @@ class DarkroomView(QWidget):
         self.btn_format_card.setStyleSheet(BTN_STYLE_RED)
         self.btn_format_card.setVisible(False)
 
+        # Disk only — copy/move/develop zaznaczonych
+        self.btn_copy_folder = QPushButton(self.tr("Copy to…"))
+        self.btn_copy_folder.setMinimumHeight(BTN_H)
+        self.btn_copy_folder.setEnabled(False)
+        self.btn_copy_folder.clicked.connect(lambda: self._copy_or_move_selected(move=False))
+
+        self.btn_move_folder = QPushButton(self.tr("Move to…"))
+        self.btn_move_folder.setMinimumHeight(BTN_H)
+        self.btn_move_folder.setEnabled(False)
+        self.btn_move_folder.clicked.connect(lambda: self._copy_or_move_selected(move=True))
+
+        self.btn_develop = QPushButton(self.tr("Develop…"))
+        self.btn_develop.setMinimumHeight(BTN_H)
+        self.btn_develop.setIcon(QIcon.fromTheme("darktable"))
+        self.btn_develop.setEnabled(False)
+        self.btn_develop.clicked.connect(self._on_develop_requested)
+
         for w in [self.btn_select, self.btn_send, self.btn_delete,
-                  self.btn_copy_to_disk, self.btn_format_card, self.btn_open_darktable]:
+                  self.btn_copy_to_disk, self.btn_format_card,
+                  self.btn_copy_folder, self.btn_move_folder, self.btn_develop]:
             row_ops.addWidget(w)
 
         groups_row.addWidget(grp_ops)
@@ -324,7 +341,6 @@ class DarkroomView(QWidget):
         self.btn_sessions.clicked.connect(self._open_sessions_dir)
         self.btn_last_session.clicked.connect(self.open_last_session)
         self.btn_open_folder.clicked.connect(self.open_folder)
-        self.btn_open_darktable.clicked.connect(self._open_in_darktable)
         self.btn_sd_card.clicked.connect(self._open_sd_card)
 
         self.btn_filter.clicked.connect(self._cycle_filter)
@@ -606,8 +622,10 @@ class DarkroomView(QWidget):
 
         self.lbl_path.setText(self.tr("📷 Camera Card  —  scanning…"))
         self.btn_sd_card.setEnabled(False)
-        self.btn_open_darktable.setVisible(False)
-        self.btn_open_darktable.setEnabled(False)
+        # Ukryj przyciski disk-only
+        self.btn_copy_folder.setVisible(False)
+        self.btn_move_folder.setVisible(False)
+        self.btn_develop.setVisible(False)
         # Pokaż przyciski SD-only
         self.btn_copy_to_disk.setVisible(True)
         self.btn_format_card.setVisible(True)
@@ -691,8 +709,9 @@ class DarkroomView(QWidget):
         # Ukryj przyciski SD-only, przywróć disk-only
         self.btn_copy_to_disk.setVisible(False)
         self.btn_format_card.setVisible(False)
-        self.btn_open_darktable.setVisible(True)
-        self.btn_open_darktable.setEnabled(False)
+        self.btn_copy_folder.setVisible(True)
+        self.btn_move_folder.setVisible(True)
+        self.btn_develop.setVisible(True)
         CameraCardBrowserWorker.cleanup_temp()
 
     # ─────────────────────────── Selekcja
@@ -1012,22 +1031,67 @@ class DarkroomView(QWidget):
         if hasattr(main_window, 'status_bar'):
             main_window.status_bar.showMessage(msg, timeout)
 
-    def _show_sort_menu(self, pos):
-        """Menu kontekstowe Sort By na prawym kliku w liście miniatur."""
+    def _on_list_context_menu(self, pos):
+        """Menu kontekstowe listy miniatur: sort, XMP, copy/move, develop, select."""
+        item = self.list_widget.itemAt(pos)
         menu = QMenu(self)
-        labels = [
+
+        # Kliknięto na plik XMP
+        if item and item.data(_ITEM_TYPE_ROLE) == 'file':
+            path = item.data(_ITEM_PATH_ROLE) or ""
+            if path.lower().endswith(".xmp"):
+                action_dev_all = menu.addAction(
+                    self.tr("Develop all RAW files in this folder…")
+                )
+                action_dev_all.triggered.connect(self._on_develop_requested)
+                action_edit = menu.addAction(self.tr("Edit XMP…"))
+                action_edit.triggered.connect(lambda: self._on_edit_xmp_file(path))
+                menu.addSeparator()
+
+        # Zaznaczone RAW-y
+        raw_files = self._selected_raw_files()
+        if raw_files and not self._sd_mode:
+            menu.addAction(
+                self.tr(f"Develop {len(raw_files)} selected RAW file(s)…"),
+                self._on_develop_requested
+            )
+            menu.addSeparator()
+
+        # Copy/Move zaznaczonych
+        count = sum(
+            1 for i in range(self.list_widget.count())
+            if self.list_widget.item(i).data(_ITEM_TYPE_ROLE) == 'file'
+            and self.list_widget.item(i).data(Qt.ItemDataRole.UserRole + 1)
+        )
+        if count > 0 and not self._sd_mode:
+            menu.addAction(
+                self.tr(f"Copy {count} file(s) to…"),
+                lambda: self._copy_or_move_selected(move=False)
+            )
+            menu.addAction(
+                self.tr(f"Move {count} file(s) to…"),
+                lambda: self._copy_or_move_selected(move=True)
+            )
+            menu.addSeparator()
+
+        menu.addAction(self.tr("Select All"),   self._select_all)
+        menu.addAction(self.tr("Deselect All"), self._deselect_all)
+        menu.addSeparator()
+
+        # Sortowanie
+        sort_labels = [
             ('name', self.tr("Sort by Name")),
             ('date', self.tr("Sort by Date")),
             ('type', self.tr("Sort by Type")),
         ]
-        for key, label in labels:
+        for key, label in sort_labels:
             action = menu.addAction(label)
             action.setCheckable(True)
             action.setChecked(self._sort_key == key)
             action.setData(key)
-        chosen = menu.exec(self.list_widget.mapToGlobal(pos))
-        if chosen:
-            self.set_sort(chosen.data())
+            action.triggered.connect(lambda checked, k=key: self.set_sort(k))
+
+        menu.exec(self.list_widget.mapToGlobal(pos))
 
     def set_sort(self, key: str):
         """Ustawia klucz sortowania i przeładowuje widok."""
@@ -1222,9 +1286,11 @@ class DarkroomView(QWidget):
         # btn_copy_to_disk — aktywny w SD mode gdy coś zaznaczone
         if self._sd_mode:
             self.btn_copy_to_disk.setEnabled(count > 0)
-        # btn_open_darktable — aktywny w trybie dysk gdy coś zaznaczone
         if not self._sd_mode:
-            self.btn_open_darktable.setEnabled(count > 0)
+            self.btn_copy_folder.setEnabled(count > 0)
+            self.btn_move_folder.setEnabled(count > 0)
+            has_raw = bool(self._selected_raw_files())
+            self.btn_develop.setEnabled(has_raw)
         # btn_send — aktywny gdy coś zaznaczone (oba tryby)
         self.btn_send.setEnabled(count > 0)
 
@@ -1235,6 +1301,136 @@ class DarkroomView(QWidget):
         if self._loader and self._loader.isRunning():
             self._loader.wait()
         super().closeEvent(event)
+
+    # ─────────────────────────── Copy / Move / Develop
+
+    def _selected_raw_files(self) -> list[str]:
+        """Zwraca ścieżki zaznaczonych plików RAW."""
+        from core.image_io import RAW_EXTENSIONS
+        result = []
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            if item.data(_ITEM_TYPE_ROLE) != 'file':
+                continue
+            if not item.data(Qt.ItemDataRole.UserRole + 1):
+                continue
+            path = item.data(_ITEM_PATH_ROLE)
+            if path and os.path.splitext(path)[1].lower() in RAW_EXTENSIONS:
+                result.append(path)
+        return result
+
+    def _on_develop_requested(self):
+        """Emituje sygnał develop_requested z katalogiem bieżącym."""
+        if self.current_dir:
+            self.develop_requested.emit(self.current_dir)
+
+    def _copy_or_move_selected(self, move: bool = False):
+        """Kopiuje lub przenosi zaznaczone pliki do wybranego folderu."""
+        import shutil
+
+        selected_items = [
+            self.list_widget.item(i)
+            for i in range(self.list_widget.count())
+            if self.list_widget.item(i).data(_ITEM_TYPE_ROLE) == 'file'
+            and self.list_widget.item(i).data(Qt.ItemDataRole.UserRole + 1)
+        ]
+        if not selected_items:
+            return
+
+        dest_dir = QFileDialog.getExistingDirectory(
+            self,
+            self.tr("Move to folder") if move else self.tr("Copy to folder"),
+            self.current_dir or os.path.expanduser("~"),
+        )
+        if not dest_dir:
+            return
+
+        errors = []
+        moved_indices = []
+        for item in selected_items:
+            src = item.data(Qt.ItemDataRole.UserRole)
+            if not src or not os.path.isfile(src):
+                continue
+            dest = os.path.join(dest_dir, os.path.basename(src))
+            try:
+                if move:
+                    shutil.move(src, dest)
+                    moved_indices.append(self.list_widget.row(item))
+                    if src == self.current_image_path:
+                        self.preview.clear()
+                        self.current_image_path = None
+                else:
+                    shutil.copy2(src, dest)
+            except Exception as e:
+                errors.append(f"{os.path.basename(src)}: {e}")
+
+        for idx in sorted(moved_indices, reverse=True):
+            self.list_widget.takeItem(idx)
+
+        if errors:
+            QMessageBox.warning(
+                self,
+                self.tr("Move to folder") if move else self.tr("Copy to folder"),
+                "\n".join(errors[:5])
+            )
+        else:
+            n = len(selected_items) - len(errors)
+            verb = self.tr("Moved") if move else self.tr("Copied")
+            self._show_status(self.tr(f"{verb} {n} file(s) → {dest_dir}"), 4000)
+
+        self.update_selection_count()
+
+    def _on_edit_xmp_file(self, xmp_path: str):
+        """Dialog edycji inline wybranego pliku XMP."""
+        from PyQt6.QtWidgets import QTextEdit as _QTextEdit
+        from PyQt6.QtGui import QFont
+
+        try:
+            content = open(xmp_path, encoding="utf-8").read()
+        except OSError as e:
+            QMessageBox.warning(self, self.tr("Read error"), str(e))
+            return
+
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout as _QHBoxLayout
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"Edit XMP — {os.path.basename(xmp_path)}")
+        dlg.setMinimumSize(640, 480)
+        lay = QVBoxLayout(dlg)
+
+        lbl = QLabel(xmp_path)
+        lbl.setStyleSheet("color: #888; font-size: 11px;")
+        lay.addWidget(lbl)
+
+        editor = _QTextEdit()
+        font = QFont("Monospace")
+        font.setPointSize(9)
+        editor.setFont(font)
+        editor.setPlainText(content)
+        lay.addWidget(editor, 1)
+
+        btn_row = _QHBoxLayout()
+        btn_save   = QPushButton(self.tr("Save"))
+        btn_save.setFixedHeight(32)
+        btn_cancel = QPushButton(self.tr("Cancel"))
+        btn_cancel.setFixedHeight(32)
+        btn_row.addStretch(1)
+        btn_row.addWidget(btn_save)
+        btn_row.addWidget(btn_cancel)
+        lay.addLayout(btn_row)
+
+        btn_cancel.clicked.connect(dlg.reject)
+
+        def _save():
+            try:
+                open(xmp_path, "w", encoding="utf-8").write(editor.toPlainText())
+                dlg.accept()
+            except OSError as e:
+                QMessageBox.warning(dlg, self.tr("Save error"), str(e))
+
+        btn_save.clicked.connect(_save)
+        btn_save.setDefault(True)
+        dlg.exec()
 
     # ─────────────────────────── Tłumaczenia
 
