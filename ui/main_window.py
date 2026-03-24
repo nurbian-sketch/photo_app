@@ -14,6 +14,7 @@ from pathlib import Path
 
 # --- Widoki ---
 from PyQt6.QtCore import QThread, pyqtSignal as _pyqtSignal
+from core.rclone_about_worker import RcloneAboutWorker
 
 class _ProbeWorker(QThread):
     """Uruchamia CameraProbe w tle — nie blokuje UI."""
@@ -90,6 +91,8 @@ class MainWindow(QMainWindow):
         self.icon_sd_card.setStyleSheet("background: transparent;")
         self.icon_sync.setStyleSheet("background: transparent;")
         self.icon_developer.setStyleSheet("background: transparent;")
+        self.icon_sync.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.icon_sync.mousePressEvent = lambda e: self._sync_now()
         self.icon_sync.setVisible(False)       # ukryta gdy rclone nie skonfigurowany
         self.icon_developer.setVisible(False)  # ukryta gdy developer nieaktywny
         self.icon_developer.mousePressEvent = lambda e: self._on_developer_icon_clicked()
@@ -112,8 +115,19 @@ class MainWindow(QMainWindow):
         self._dev_poll_timer = QTimer(self)
         self._dev_poll_timer.timeout.connect(self._update_developer_icon)
         self._dev_poll_timer.start(3000)
-        
-        # 3. INICJALIZACJA WIDOKÃ“W
+
+        # Referencja do workera sprawdzającego miejsce na remote
+        self._about_worker: RcloneAboutWorker | None = None
+
+        # Sprawdź miejsce przy starcie (3s opóźnienie po splash)
+        QTimer.singleShot(3000, self._start_space_check)
+
+        # Cykliczne sprawdzanie co 15 minut
+        self._space_check_timer = QTimer(self)
+        self._space_check_timer.timeout.connect(self._start_space_check)
+        self._space_check_timer.start(15 * 60 * 1000)
+
+        # 3. INICJALIZACJA WIDOKÃ”W
         self.session_view = SessionView()
         self.darkroom_view = DarkroomView()
         self.camera_view = CameraView()
@@ -240,6 +254,73 @@ class MainWindow(QMainWindow):
         self.icon_sync.setPixmap(pix)
         self.icon_sync.setVisible(True)
 
+    def _start_space_check(self):
+        """Uruchamia RcloneAboutWorker w tle — odświeża free_mb w ikonie."""
+        remote = self.settings.value("rclone/remote", "").strip()
+        if not remote:
+            return
+        if self._about_worker and self._about_worker.isRunning():
+            return  # poprzednie sprawdzanie jeszcze trwa
+        base_dir  = self.settings.value(
+            "session/directory", os.path.expanduser("~/Obrazy/sessions")
+        )
+        cloud_dir = os.path.join(base_dir, "cloud")
+        warn_mb   = self.settings.value("rclone/warn_free_mb", 500, type=int)
+        self._about_worker = RcloneAboutWorker(remote, cloud_dir, warn_mb, parent=self)
+        self._about_worker.finished.connect(lambda _: self._update_sync_icon())
+        self._about_worker.start()
+
+    def _sync_now(self):
+        """Uruchamia rclone_sync_worker ręcznie (propaguje lokalne usunięcia na remote)."""
+        remote = self.settings.value("rclone/remote", "").strip()
+        dest   = self.settings.value("rclone/destination", "").strip()
+        if not remote or not dest:
+            self.status_bar.showMessage(self.tr("Sync: rclone not configured"), 4000)
+            return
+
+        base_dir  = self.settings.value(
+            "session/directory", os.path.expanduser("~/Obrazy/sessions")
+        )
+        cloud_dir = os.path.join(base_dir, "cloud")
+
+        # Sprawdź czy sync_worker już działa
+        status_path = os.path.join(cloud_dir, "sync_status.json")
+        if os.path.exists(status_path):
+            try:
+                with open(status_path, encoding="utf-8") as f:
+                    data = json.load(f)
+                if data.get("status") == "running":
+                    pid = data.get("pid")
+                    if pid:
+                        try:
+                            os.kill(int(pid), 0)
+                            self.status_bar.showMessage(
+                                self.tr("Sync already in progress"), 3000
+                            )
+                            return
+                        except (ProcessLookupError, ValueError):
+                            pass  # martwy PID — startuj nowy
+            except Exception:
+                pass
+
+        os.makedirs(cloud_dir, exist_ok=True)
+
+        worker_path = os.path.normpath(
+            os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         "..", "core", "rclone_sync_worker.py")
+        )
+        try:
+            subprocess.Popen(
+                [sys.executable, worker_path, cloud_dir, remote, dest],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            self.status_bar.showMessage(self.tr("Sync started"), 3000)
+            self._update_sync_icon()
+        except Exception as e:
+            self.status_bar.showMessage(self.tr(f"Sync error: {e}"), 5000)
+
     def _launch_tray_monitor(self):
         """Uruchamia tray monitor jako odłączony subprocess po zamknięciu aplikacji."""
         project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -287,6 +368,12 @@ class MainWindow(QMainWindow):
         self._action_mw_deselect_all.setEnabled(False)
         self._select_menu.addAction(self._action_mw_select_all)
         self._select_menu.addAction(self._action_mw_deselect_all)
+
+        # TOOLS MENU
+        tools_menu = menu_bar.addMenu(self.tr("Tools"))
+        self._action_sync_now = QAction(self.tr("Sync now"), self)
+        self._action_sync_now.triggered.connect(self._sync_now)
+        tools_menu.addAction(self._action_sync_now)
 
         # VIEW MENU
         self._view_menu = menu_bar.addMenu(self.tr("View"))
@@ -428,6 +515,9 @@ class MainWindow(QMainWindow):
             session_path = self._pending_develop_path
             self._pending_develop_path = None
             self._show_develop_dialog(session_path)
+
+        # Odśwież info o miejscu na remote po zakończeniu sesji
+        QTimer.singleShot(5000, self._start_space_check)
 
     def _show_develop_dialog(self, session_path: str):
         """Otwiera DevelopDialog i po akceptacji dodaje sesję do kolejki developer."""
@@ -597,6 +687,7 @@ class MainWindow(QMainWindow):
         if dialog.exec() == PreferencesDialog.DialogCode.Accepted:
             self.camera_view.update_capture_directory()
             self._update_sync_icon()
+            QTimer.singleShot(1000, self._start_space_check)
             self.status_bar.showMessage(self.tr("Preferences saved"), 2000)
 
     def show_about(self):
