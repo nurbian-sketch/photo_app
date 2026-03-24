@@ -122,6 +122,8 @@ def _run_sync(cloud_dir: str, remote: str, dest: str) -> tuple[bool, str]:
         "rclone", "sync",
         cloud_dir + "/",
         f"{remote}:{dest}/",
+        "--rmdirs",           # usuwa puste katalogi na remote
+        "--delete-excluded",  # kasuje pliki na remote które nie pasują do filtrów
         "--include", "*.jpg",
         "--include", "*.JPG",
         "--include", MARKER_FILE,
