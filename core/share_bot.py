@@ -404,6 +404,12 @@ _TEXTS: dict[str, dict[str, str]] = {
         "email_sent_info": (
             "📧 Link do pobrania został też wysłany na adres {email} w dniu {sent_at}."
         ),
+        "not_ready":        "📸 Twoje zdjęcia nie są jeszcze wywołane.",
+        "notify_ask":       "Chcesz, żebym dał Ci znać gdy będą gotowe?",
+        "notify_yes_btn":   "✅ Tak, powiadom mnie",
+        "notify_no_btn":    "❌ Nie, dziękuję",
+        "notify_confirmed": "Super! Powiadomię Cię gdy zdjęcia będą gotowe. 🙂",
+        "notify_declined":  "Ok! Jeśli zmienisz zdanie, napisz ponownie swój kod sesji.",
     },
     "ru": {
         "menu_greeting": "Привет! 👋 Добро пожаловать в бот Pryzmat Studio.\nЧем могу помочь?",
@@ -463,6 +469,12 @@ _TEXTS: dict[str, dict[str, str]] = {
         "email_sent_info": (
             "📧 Ссылка для скачивания также отправлена на адрес {email} ({sent_at})."
         ),
+        "not_ready":        "📸 Твои фотографии ещё не обработаны.",
+        "notify_ask":       "Хочешь, чтобы я сообщил, когда они будут готовы?",
+        "notify_yes_btn":   "✅ Да, уведоми меня",
+        "notify_no_btn":    "❌ Нет, спасибо",
+        "notify_confirmed": "Отлично! Сообщу, когда фото будут готовы. 🙂",
+        "notify_declined":  "Хорошо! Если передумаешь — напиши свой код снова.",
     },
     "uk": {
         "menu_greeting": "Привіт! 👋 Ласкаво просимо до бота Pryzmat Studio.\nЧим можу допомогти?",
@@ -522,6 +534,12 @@ _TEXTS: dict[str, dict[str, str]] = {
         "email_sent_info": (
             "📧 Посилання для завантаження також надіслано на адресу {email} ({sent_at})."
         ),
+        "not_ready":        "📸 Твої фотографії ще не опрацьовані.",
+        "notify_ask":       "Хочеш, щоб я повідомив, коли вони будуть готові?",
+        "notify_yes_btn":   "✅ Так, повідом мене",
+        "notify_no_btn":    "❌ Ні, дякую",
+        "notify_confirmed": "Чудово! Повідомлю, коли фото будуть готові. 🙂",
+        "notify_declined":  "Добре! Якщо зміниш думку — напиши свій код знову.",
     },
     "en": {
         "menu_greeting": "Hi! 👋 Welcome to the Pryzmat Studio bot.\nHow can I help you?",
@@ -582,6 +600,12 @@ _TEXTS: dict[str, dict[str, str]] = {
         "email_sent_info": (
             "📧 A download link was also sent to {email} on {sent_at}."
         ),
+        "not_ready":        "📸 Your photos haven't been developed yet.",
+        "notify_ask":       "Would you like me to notify you when they're ready?",
+        "notify_yes_btn":   "✅ Yes, notify me",
+        "notify_no_btn":    "❌ No, thanks",
+        "notify_confirmed": "Great! I'll let you know when your photos are ready. 🙂",
+        "notify_declined":  "No problem! If you change your mind, just send your code again.",
     },
 }
 
@@ -737,6 +761,20 @@ def _handle_callback(callback_id: str, chat_id: int, lang: str, data: str) -> No
         _send(chat_id, _t(lang, "private_text"))
     elif data == "rules":
         _send(chat_id, _t(lang, "rules_text"))
+    elif data == "notify_no":
+        _send(chat_id, _t(lang, "notify_declined"))
+    elif data.startswith("notify_yes:"):
+        # format: notify_yes:KOD:lang
+        parts = data.split(":")
+        if len(parts) >= 3:
+            cb_code   = parts[1]
+            cb_lang   = parts[2]
+            cb_folder = session_codes.resolve(cb_code, EXPIRY)
+            if cb_folder:
+                _add_pending(chat_id, cb_code, cb_lang, cb_folder)
+                _send(chat_id, _t(cb_lang, "notify_confirmed"))
+            else:
+                _send(chat_id, _t(lang, "not_found"))
     _api("answerCallbackQuery", callback_query_id=callback_id)
 
 
@@ -776,6 +814,27 @@ def _send_files_to_client(chat_id: int, lang: str, code: str, files: list[str]):
     _send(chat_id, _t(lang, "done"))
 
 
+def _send_notify_ask(chat_id: int, lang: str, code: str) -> None:
+    """Wysyła pytanie czy klient chce powiadomienie z przyciskami Tak/Nie."""
+    keyboard = {
+        "inline_keyboard": [[
+            {"text": _t(lang, "notify_yes_btn"),
+             "callback_data": f"notify_yes:{code}:{lang}"},
+            {"text": _t(lang, "notify_no_btn"),
+             "callback_data": f"notify_no"},
+        ]]
+    }
+    _post(
+        "sendMessage",
+        json.dumps({
+            "chat_id":      chat_id,
+            "text":         _t(lang, "not_ready") + "\n\n" + _t(lang, "notify_ask"),
+            "reply_markup": keyboard,
+        }).encode(),
+        "application/json",
+    )
+
+
 def _handle_code(chat_id: int, lang: str, code: str) -> None:
     """Obsługuje kod sesji — sprawdza, wysyła lub informuje o obróbce."""
     code = code.upper().strip()
@@ -794,9 +853,8 @@ def _handle_code(chat_id: int, lang: str, code: str) -> None:
     files = _collect_jpegs(folder)
 
     if not files:
-        # Brak JPG — sprawdź czy trwa obróbka
-        _send(chat_id, _t(lang, "developing"))
-        _add_pending(chat_id, code, lang, folder)
+        # Brak JPG — zapytaj czy klient chce powiadomienie
+        _send_notify_ask(chat_id, lang, code)
         return
 
     # Pliki gotowe — wyślij
