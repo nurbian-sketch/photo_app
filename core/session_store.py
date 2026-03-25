@@ -91,19 +91,29 @@ class SessionStore:
         if not os.path.isdir(self.base_dir):
             return results
 
-        for entry in os.scandir(self.base_dir):
-            if not entry.is_dir():
-                continue
-            if entry.name.startswith("."):
-                if not include_private:
+        # Sesje są w podkatalogach cloud/ i home/ — skanuj oba
+        scan_dirs = []
+        for subdir in ("cloud", "home"):
+            path = os.path.join(self.base_dir, subdir)
+            if os.path.isdir(path):
+                scan_dirs.append(path)
+        # Fallback: jeśli brak cloud/ i home/, skanuj base_dir bezpośrednio
+        if not scan_dirs:
+            scan_dirs = [self.base_dir]
+
+        for scan_dir in scan_dirs:
+            for entry in os.scandir(scan_dir):
+                if not entry.is_dir():
                     continue
-                # .private_log → wczytaj
-            ctx = self.load(entry.path)
-            if ctx is None:
-                continue
-            if ctx.mode == SessionMode.PRIVATE and not include_private:
-                continue
-            results.append(ctx)
+                if entry.name.startswith("."):
+                    if not include_private:
+                        continue
+                ctx = self.load(entry.path)
+                if ctx is None:
+                    continue
+                if ctx.mode == SessionMode.PRIVATE and not include_private:
+                    continue
+                results.append(ctx)
 
         results.sort(key=lambda c: c.started_at, reverse=True)
         return results

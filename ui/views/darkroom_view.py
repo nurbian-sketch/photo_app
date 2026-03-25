@@ -445,26 +445,37 @@ class DarkroomView(QWidget):
                 self.load_images(folder)
 
     def open_last_session(self):
-        """Otwiera najnowszy podfolder w katalogu sesji."""
+        """Otwiera najnowszy folder sesji w cloud/ lub home/."""
         from ui.dialogs.preferences_dialog import PreferencesDialog
-        base_path     = PreferencesDialog.get_session_directory()
-        captures_name = PreferencesDialog.get_captures_subdir()
+        base_path = PreferencesDialog.get_session_directory()
         if not base_path:
             return
         os.makedirs(base_path, exist_ok=True)
         try:
             all_ext = self.JPEG_EXTENSIONS + self.RAW_EXTENSIONS_TUPLE
-            subdirs = [
-                os.path.join(base_path, d)
-                for d in os.listdir(base_path)
-                if os.path.isdir(os.path.join(base_path, d))
-                and d != captures_name
-                and any(
-                    f.lower().endswith(all_ext)
-                    for f in os.listdir(os.path.join(base_path, d))
-                )
-            ]
-            target = max(subdirs, key=os.path.getmtime) if subdirs else base_path
+            candidates = []
+            # Szukaj w cloud/ i home/
+            for subdir in ("cloud", "home"):
+                scan = os.path.join(base_path, subdir)
+                if not os.path.isdir(scan):
+                    continue
+                for d in os.listdir(scan):
+                    full = os.path.join(scan, d)
+                    if not os.path.isdir(full) or d.startswith("."):
+                        continue
+                    if any(f.lower().endswith(all_ext) for f in os.listdir(full)):
+                        candidates.append(full)
+            # Fallback: bezpośrednie podfoldery base_dir
+            if not candidates:
+                for d in os.listdir(base_path):
+                    full = os.path.join(base_path, d)
+                    if not os.path.isdir(full) or d.startswith("."):
+                        continue
+                    if d in ("cloud", "home", "captures"):
+                        continue
+                    if any(f.lower().endswith(all_ext) for f in os.listdir(full)):
+                        candidates.append(full)
+            target = max(candidates, key=os.path.getmtime) if candidates else base_path
             self.load_images(target)
         except Exception as e:
             print(f"Error loading last session: {e}")

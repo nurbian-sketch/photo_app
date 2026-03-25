@@ -172,6 +172,10 @@ class MainWindow(QMainWindow):
         self.change_view(start_view)
         self.switcher.select_view(start_view) # Synchronizacja switchera
 
+        # Brak aparatu → otwórz ostatnią sesję w Darkroom
+        if not self.camera_ready:
+            QTimer.singleShot(100, self.darkroom_view.open_last_session)
+
         # camera_released: USB zwolnione po zatrzymaniu LV — odśwież stan we wszystkich widokach
         self.camera_view.camera_released.connect(self._probe_camera)
         # Dynamiczne menu podglądów
