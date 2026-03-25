@@ -17,6 +17,7 @@ import json
 import logging
 import mimetypes
 import os
+import subprocess
 import sys
 import time
 import urllib.parse
@@ -54,17 +55,21 @@ def _read_settings() -> dict:
             "token":    s.value("telegram/bot_token", "").strip(),
             "groq_key": s.value("groq/api_key", "").strip(),
             "expiry":   s.value("sharing/code_expiry_days", 14, type=int),
+            "remote":   s.value("rclone/remote", "gdrive").strip(),
+            "dest":     s.value("rclone/destination", "Sessions").strip(),
         }
     except Exception as e:
         logger.warning(f"Błąd odczytu QSettings: {e}")
-        return {"token": "", "groq_key": "", "expiry": 14}
+        return {"token": "", "groq_key": "", "expiry": 14, "remote": "gdrive", "dest": "Sessions"}
 
 
-_cfg     = _read_settings()
-TOKEN    = _cfg["token"]
-GROQ_KEY = _cfg["groq_key"]
-EXPIRY   = _cfg["expiry"]
-POLL_INT = 2   # sekundy między getUpdates
+_cfg           = _read_settings()
+TOKEN          = _cfg["token"]
+GROQ_KEY       = _cfg["groq_key"]
+EXPIRY         = _cfg["expiry"]
+POLL_INT       = 2   # sekundy między getUpdates
+_RCLONE_REMOTE = _cfg.get("remote", "gdrive")
+_RCLONE_DEST   = _cfg.get("dest", "Sessions")
 
 STUDIO_LAT   = 50.81350099271024
 STUDIO_LNG   = 19.112614510292705
@@ -202,6 +207,60 @@ def _check_pending():
         for key in to_remove:
             del pending[key]
         _save_pending(pending)
+
+
+# ─────────────────────────── Email log (GDrive _meta)
+
+_email_log_cache: list[dict] = []
+_email_log_fetched_at: datetime | None = None
+_EMAIL_LOG_TTL = 120   # sekundy — cache na 2 minuty
+
+
+def _get_email_log() -> list[dict]:
+    """
+    Pobiera email_log.json z gdrive:Sessions/_meta/ przez rclone cat.
+    Cache TTL = 2 minuty — nie odpytuje rclone przy każdej wiadomości.
+    Zwraca listę wpisów lub [] przy błędzie.
+    """
+    global _email_log_cache, _email_log_fetched_at
+
+    now = datetime.now()
+    if (
+        _email_log_fetched_at is not None
+        and (now - _email_log_fetched_at).total_seconds() < _EMAIL_LOG_TTL
+    ):
+        return _email_log_cache
+
+    remote_path = f"{_RCLONE_REMOTE}:{_RCLONE_DEST}/_meta/email_log.json"
+    try:
+        result = subprocess.run(
+            ["rclone", "cat", remote_path],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            _email_log_cache      = json.loads(result.stdout)
+            _email_log_fetched_at = now
+            logger.debug(f"email_log: załadowano {len(_email_log_cache)} wpisów")
+        else:
+            _email_log_cache      = []
+            _email_log_fetched_at = now
+    except Exception as e:
+        logger.warning(f"email_log: błąd rclone cat: {e}")
+        _email_log_cache      = []
+        _email_log_fetched_at = now
+
+    return _email_log_cache
+
+
+def _get_email_sent_info(code: str) -> dict | None:
+    """
+    Zwraca wpis email_log dla danego kodu lub None.
+    { code, email, sent_at }
+    """
+    for entry in _get_email_log():
+        if entry.get("code", "").upper() == code.upper():
+            return entry
+    return None
 
 
 # ─────────────────────────── Groq AI
@@ -342,6 +401,9 @@ _TEXTS: dict[str, dict[str, str]] = {
             "na pewno znajdziemy rozwiązanie. 🙏\n"
             "📞 +48 603 666 111"
         ),
+        "email_sent_info": (
+            "📧 Link do pobrania został też wysłany na adres {email} w dniu {sent_at}."
+        ),
     },
     "ru": {
         "menu_greeting": "Привет! 👋 Добро пожаловать в бот Pryzmat Studio.\nЧем могу помочь?",
@@ -397,6 +459,9 @@ _TEXTS: dict[str, dict[str, str]] = {
         "pending_timeout": (
             "Извини за задержку. Свяжись со студией — найдём решение. 🙏\n"
             "📞 +48 603 666 111"
+        ),
+        "email_sent_info": (
+            "📧 Ссылка для скачивания также отправлена на адрес {email} ({sent_at})."
         ),
     },
     "uk": {
@@ -454,6 +519,9 @@ _TEXTS: dict[str, dict[str, str]] = {
             "Вибач за затримку. Зв'яжись зі студією — знайдемо рішення. 🙏\n"
             "📞 +48 603 666 111"
         ),
+        "email_sent_info": (
+            "📧 Посилання для завантаження також надіслано на адресу {email} ({sent_at})."
+        ),
     },
     "en": {
         "menu_greeting": "Hi! 👋 Welcome to the Pryzmat Studio bot.\nHow can I help you?",
@@ -510,6 +578,9 @@ _TEXTS: dict[str, dict[str, str]] = {
         "pending_timeout": (
             "Sorry for the delay. Please contact the studio — we'll sort it out. 🙏\n"
             "📞 +48 603 666 111"
+        ),
+        "email_sent_info": (
+            "📧 A download link was also sent to {email} on {sent_at}."
         ),
     },
 }
@@ -732,6 +803,19 @@ def _handle_code(chat_id: int, lang: str, code: str) -> None:
     _write_status("sending", len(_load_pending()))
     _send(chat_id, _t(lang, "greeting"))
     _send(chat_id, _t(lang, "privacy"))
+
+    # Poinformuj o mailu jeśli był wysłany
+    email_info = _get_email_sent_info(code)
+    if email_info:
+        try:
+            sent_dt  = datetime.fromisoformat(email_info["sent_at"].replace("Z", "+00:00"))
+            sent_str = sent_dt.strftime("%d.%m.%Y %H:%M")
+        except Exception:
+            sent_str = email_info.get("sent_at", "")
+        _send(chat_id, _t(lang, "email_sent_info",
+                          email=email_info.get("email", ""),
+                          sent_at=sent_str))
+
     _send_files_to_client(chat_id, lang, code, files)
 
 
