@@ -558,20 +558,53 @@ def _send(chat_id: int, text: str) -> bool:
     return result.get("ok", False)
 
 
+def _make_thumbnail(file_path: str) -> bytes | None:
+    """Generuje miniaturę JPEG max 320x320 przez Pillow. Zwraca None przy błędzie."""
+    try:
+        from PIL import Image
+        import io
+        with Image.open(file_path) as img:
+            img = img.convert("RGB")
+            img.thumbnail((320, 320))
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=70)
+            return buf.getvalue()
+    except Exception as e:
+        logger.debug(f"Thumbnail generation failed for {os.path.basename(file_path)}: {e}")
+        return None
+
+
 def _build_multipart(chat_id: int, file_path: str) -> tuple[bytes, str]:
-    boundary = uuid.uuid4().hex
+    boundary  = uuid.uuid4().hex
     filename  = os.path.basename(file_path)
     mime      = mimetypes.guess_type(filename)[0] or "application/octet-stream"
     with open(file_path, "rb") as f:
         file_data = f.read()
+
+    thumb_data = _make_thumbnail(file_path)
+
+    def _field(name: str, value: str) -> bytes:
+        return (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+            f"{value}\r\n"
+        ).encode()
+
+    def _file_field(name: str, fname: str, data: bytes, ctype: str) -> bytes:
+        return (
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="{name}"; filename="{fname}"\r\n'
+            f"Content-Type: {ctype}\r\n\r\n"
+        ).encode() + data + b"\r\n"
+
     body = (
-        f"--{boundary}\r\n"
-        f'Content-Disposition: form-data; name="chat_id"\r\n\r\n'
-        f"{chat_id}\r\n"
-        f"--{boundary}\r\n"
-        f'Content-Disposition: form-data; name="document"; filename="{filename}"\r\n'
-        f"Content-Type: {mime}\r\n\r\n"
-    ).encode() + file_data + f"\r\n--{boundary}--\r\n".encode()
+        _field("chat_id", str(chat_id))
+        + _file_field("document", filename, file_data, mime)
+    )
+    if thumb_data:
+        body += _file_field("thumbnail", "thumb.jpg", thumb_data, "image/jpeg")
+    body += f"--{boundary}--\r\n".encode()
+
     return body, boundary
 
 
