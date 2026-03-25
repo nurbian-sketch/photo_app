@@ -246,7 +246,8 @@ class SessionSummaryDialog(QDialog):
                 equipment_parts.append(cs.model)
             if cs.lensname:
                 equipment_parts.append(cs.lensname)
-            equipment_parts.append("M")
+            if cs.imageformat:
+                equipment_parts.append(cs.imageformat)
             line4 = "  ·  ".join(equipment_parts)
             line5 = ctx.session_path or ""
             self.details.setText("\n".join([line1, line2, line3, line4, line5]))

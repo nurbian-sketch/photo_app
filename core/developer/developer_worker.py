@@ -69,8 +69,13 @@ def _update_entry(session_path: str, **kwargs) -> None:
 def _find_preset_xmp(preset_name: str) -> Path | None:
     """
     Szuka pliku presetu: najpierw presets/user/, potem presets/.
+    Jeśli podana ścieżka absolutna — używa bezpośrednio.
     Zwraca Path lub None.
     """
+    # Ścieżka absolutna (np. z "Load preset…" w dialogu)
+    if Path(preset_name).is_absolute():
+        p = Path(preset_name)
+        return p if p.exists() else None
     user_xmp = PRESETS_DIR / "user" / f"{preset_name}.xmp"
     if user_xmp.exists():
         return user_xmp
