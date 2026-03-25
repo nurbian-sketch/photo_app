@@ -214,10 +214,11 @@ def _groq_detect_intent(text: str) -> dict:
     """
     import re as _re
 
-    # Najpierw spróbuj wyciągnąć kod regexem (szybko, bez AI)
-    match = _re.search(r'\b([A-Z0-9]{6})\b', text.upper())
-    if match:
-        return {"intent": "code", "code": match.group(1)}
+    # Regex tylko gdy tekst jest krótki i wygląda jak sam kod
+    # (bez spacji lub max jedno słowo) — unikamy fałszywych trafień
+    stripped = text.strip()
+    if _re.fullmatch(r'[A-Z0-9]{6}', stripped.upper()):
+        return {"intent": "code", "code": stripped.upper()}
 
     # Bez Groq — prosta heurystyka
     if not GROQ_KEY:
