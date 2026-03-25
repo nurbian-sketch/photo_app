@@ -22,6 +22,7 @@ class PreferencesDialog(QDialog):
     KEY_ARCHIVE_PATH   = "archive/path"
     KEY_ARCHIVE_DAYS   = "archive/days"
     KEY_GDRIVE_WARN_MB = "rclone/warn_free_mb"
+    KEY_GROQ_API_KEY   = "groq/api_key"
 
     # Domyślna ścieżka
     DEFAULT_SESSION_DIR = os.path.expanduser("~/Obrazy/sessions")
@@ -120,6 +121,23 @@ class PreferencesDialog(QDialog):
         self.tg_chat_edit.setPlaceholderText("123456789")
         tg_layout.addWidget(chat_label)
         tg_layout.addWidget(self.tg_chat_edit)
+
+        # Groq API Key
+        groq_label = QLabel(self.tr("Groq API Key (AI features):"))
+        groq_row = QHBoxLayout()
+        self.groq_key_edit = QLineEdit()
+        self.groq_key_edit.setPlaceholderText("gsk_...")
+        self.groq_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        groq_row.addWidget(self.groq_key_edit, 1)
+        btn_show_groq = QPushButton(self.tr("Show"))
+        btn_show_groq.setFixedHeight(DIALOG_BTN_H_SMALL)
+        btn_show_groq.setCheckable(True)
+        btn_show_groq.toggled.connect(lambda c: self.groq_key_edit.setEchoMode(
+            QLineEdit.EchoMode.Normal if c else QLineEdit.EchoMode.Password
+        ))
+        groq_row.addWidget(btn_show_groq)
+        tg_layout.addWidget(groq_label)
+        tg_layout.addLayout(groq_row)
 
         layout.addWidget(tg_group)
 
@@ -243,6 +261,7 @@ class PreferencesDialog(QDialog):
 
         self.tg_token_edit.setText(self.settings.value("telegram/bot_token", ""))
         self.tg_chat_edit.setText(self.settings.value("telegram/chat_id", ""))
+        self.groq_key_edit.setText(self.settings.value(self.KEY_GROQ_API_KEY, ""))
 
         expiry = self.settings.value("sharing/code_expiry_days", 14, type=int)
         self.expiry_spin.setValue(expiry)
@@ -285,6 +304,7 @@ class PreferencesDialog(QDialog):
 
         self.settings.setValue("telegram/bot_token", self.tg_token_edit.text().strip())
         self.settings.setValue("telegram/chat_id", self.tg_chat_edit.text().strip())
+        self.settings.setValue(self.KEY_GROQ_API_KEY, self.groq_key_edit.text().strip())
 
         self.settings.setValue("sharing/code_expiry_days", self.expiry_spin.value())
 

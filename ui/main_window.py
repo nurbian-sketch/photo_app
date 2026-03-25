@@ -97,10 +97,17 @@ class MainWindow(QMainWindow):
         self.icon_developer.setVisible(False)  # ukryta gdy developer nieaktywny
         self.icon_developer.mousePressEvent = lambda e: self._on_developer_icon_clicked()
 
+        self.icon_bot = QLabel()
+        self.icon_bot.setStyleSheet("background: transparent;")
+        self.icon_bot.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.icon_bot.setVisible(False)
+        self.icon_bot.mousePressEvent = lambda e: self._show_preferences()
+
         icons_layout.addWidget(self.icon_camera)
         icons_layout.addWidget(self.icon_sd_card)
         icons_layout.addWidget(self.icon_sync)
         icons_layout.addWidget(self.icon_developer)
+        icons_layout.addWidget(self.icon_bot)
         self.status_bar.addPermanentWidget(self.status_icons_widget)
 
         # Timer pollingu ikony sync (co 4s)
@@ -115,6 +122,12 @@ class MainWindow(QMainWindow):
         self._dev_poll_timer = QTimer(self)
         self._dev_poll_timer.timeout.connect(self._update_developer_icon)
         self._dev_poll_timer.start(3000)
+
+        # Timer pollingu ikony share bot (co 4s)
+        self._bot_poll_timer = QTimer(self)
+        self._bot_poll_timer.timeout.connect(self._update_bot_icon)
+        self._bot_poll_timer.start(4000)
+        QTimer.singleShot(1500, self._update_bot_icon)
 
         # Referencja do workera sprawdzającego miejsce na remote
         self._about_worker: RcloneAboutWorker | None = None
@@ -570,6 +583,57 @@ class MainWindow(QMainWindow):
 
         self.icon_developer.setPixmap(pix)
         self.icon_developer.setVisible(True)
+
+    def _update_bot_icon(self):
+        """Odczytuje share_bot_status.json i aktualizuje ikonę bota w pasku stanu."""
+        token = self.settings.value("telegram/bot_token", "").strip()
+        if not token:
+            self.icon_bot.setVisible(False)
+            return
+
+        import json as _json
+        status_file = os.path.expanduser(
+            "~/.local/share/photo_app/share_bot_status.json"
+        )
+        active = False
+        status = "idle"
+        try:
+            if os.path.exists(status_file):
+                with open(status_file, encoding="utf-8") as f:
+                    data = _json.load(f)
+                pid = data.get("pid")
+                if pid:
+                    try:
+                        os.kill(int(pid), 0)
+                        active = True
+                        status = data.get("status", "idle")
+                    except (ProcessLookupError, ValueError):
+                        pass
+        except Exception:
+            pass
+
+        tg_icon = QIcon.fromTheme("telegram")
+        size = 24
+        pix = tg_icon.pixmap(size, size) if not tg_icon.isNull() else QPixmap()
+        if not active and not pix.isNull():
+            out = QPixmap(pix.size())
+            out.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(out)
+            painter.setOpacity(0.35)
+            painter.drawPixmap(0, 0, pix)
+            painter.end()
+            pix = out
+        self.icon_bot.setPixmap(pix)
+
+        labels = {"idle": "waiting", "active": "active", "sending": "sending photos…"}
+        if active:
+            self.icon_bot.setToolTip(
+                self.tr(f"Share bot — {labels.get(status, status)}")
+            )
+        else:
+            self.icon_bot.setToolTip(self.tr("Share bot — not running"))
+
+        self.icon_bot.setVisible(True)
 
     def _on_darkroom_wb_apply(self, kelvin: int):
         """WB picker z DarkroomView: aplikuje temperaturę WB na aparacie."""
