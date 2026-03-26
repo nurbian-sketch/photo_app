@@ -67,8 +67,8 @@ class DevelopDialog(QDialog):
     Dialog wywołania RAW.
 
     Zwraca po accept():
-        selected_preset — nazwa presetu (str) lub "__auto__"
-        selected_kelvin — int (0=EXIF) lub None (z presetu)
+        selected_preset — nazwa presetu (str), ścieżka absolutna XMP lub "__auto__"
+        selected_kelvin — 0 (EXIF) | int>0 (Kelvin) | None (z presetu XMP)
     """
 
     def __init__(self, session_path: str, presets_dir: Path, parent=None):
@@ -81,10 +81,9 @@ class DevelopDialog(QDialog):
         self._session_path = session_path
         self._settings     = QSettings("Grzeza", "SessionsAssistant")
 
-        # Wyniki wyboru
-        self.selected_preset:   str        = PRESET_ORDER[0]
+        # Wyniki wyboru (odczytywane przez caller po accept())
+        self.selected_preset:   str        = _AUTO_PRESET
         self.selected_kelvin:   int | None = 0
-        self.selected_xmp_path: Path | None = None
 
         # Stan wewnętrzny
         self._loaded_xmp_path: Path | None = None
@@ -101,90 +100,82 @@ class DevelopDialog(QDialog):
         layout.setSpacing(DIALOG_SPACING)
         layout.setContentsMargins(*DIALOG_MARGINS)
 
-        # --- Nagłówek WB ---
-        layout.addWidget(QLabel(self.tr("White balance:")))
+        # ── Sekcja 1: Preset ─────────────────────────────────────────────────
+        layout.addWidget(QLabel(self.tr("Preset:")))
 
-        # Trzy opcje WB — wzajemnie wykluczające się
-        self._rb_exif = QRadioButton(self.tr("From camera (EXIF)"))
-        self._rb_exif.setChecked(True)
-        layout.addWidget(self._rb_exif)
+        self._rb_no_preset = QRadioButton(self.tr("No preset"))
+        self._rb_no_preset.setChecked(True)
+        layout.addWidget(self._rb_no_preset)
 
-        self._rb_preset = QRadioButton(self.tr("Use preset"))
-        layout.addWidget(self._rb_preset)
-
-        self._rb_load = QRadioButton(self.tr("Load preset…"))
-        layout.addWidget(self._rb_load)
-
-        self._wb_group = QButtonGroup(self)
-        self._wb_group.addButton(self._rb_exif,   0)
-        self._wb_group.addButton(self._rb_preset, 1)
-        self._wb_group.addButton(self._rb_load,   2)
-        self._wb_group.idToggled.connect(self._update_wb_widgets)
-
-        layout.addSpacing(4)
-
-        # --- Widget dla trybu "Use preset" ---
-        self._preset_widget = QWidget()
-        pw = QVBoxLayout(self._preset_widget)
-        pw.setContentsMargins(0, 0, 0, 0)
-        pw.setSpacing(4)
-
-        preset_row = QHBoxLayout()
-        preset_row.addWidget(QLabel(self.tr("Preset:")))
+        # "Use preset" + combo w jednym wierszu
+        use_row = QHBoxLayout()
+        self._rb_use_preset = QRadioButton(self.tr("Use preset:"))
+        use_row.addWidget(self._rb_use_preset)
         self._combo = QComboBox()
         for name in _collect_presets(self._presets_dir):
             label = _PRESET_LABELS.get(name, name)
             self._combo.addItem(label, name)
-        preset_row.addWidget(self._combo, stretch=1)
-        pw.addLayout(preset_row)
+        self._combo.setEnabled(False)
+        use_row.addWidget(self._combo, stretch=1)
+        layout.addLayout(use_row)
 
-        edit_row = QHBoxLayout()
-        edit_row.addStretch(1)
-        self._btn_edit_xmp = QPushButton(self.tr("View / Edit"))
-        self._btn_edit_xmp.setFixedHeight(DIALOG_BTN_H)
-        self._btn_edit_xmp.setEnabled(False)   # TODO: włączyć gdy gotowe
-        self._btn_edit_xmp.clicked.connect(self._on_edit_xmp)
-        edit_row.addWidget(self._btn_edit_xmp)
-        edit_row.addStretch(1)
-        pw.addLayout(edit_row)
-
-        layout.addWidget(self._preset_widget)
-
-        # --- Widget dla trybu "Load preset" ---
-        self._load_widget = QWidget()
-        lw = QHBoxLayout(self._load_widget)
-        lw.setContentsMargins(0, 0, 0, 0)
-        lw.setSpacing(6)
-        btn_browse = QPushButton(self.tr("Browse…"))
-        btn_browse.setFixedHeight(DIALOG_BTN_H)
-        btn_browse.clicked.connect(self._on_load_preset)
-        lw.addWidget(btn_browse)
+        # "Load preset" + etykieta pliku w jednym wierszu
+        load_row = QHBoxLayout()
+        self._rb_load_preset = QRadioButton(self.tr("Load preset…"))
+        load_row.addWidget(self._rb_load_preset)
+        self._btn_browse = QPushButton(self.tr("Browse…"))
+        self._btn_browse.setFixedHeight(DIALOG_BTN_H)
+        self._btn_browse.setEnabled(False)
+        self._btn_browse.clicked.connect(self._on_load_preset)
+        load_row.addWidget(self._btn_browse)
         self._load_path_label = QLabel(self.tr("No file selected"))
         self._load_path_label.setStyleSheet("color: #888; font-size: 11px;")
-        lw.addWidget(self._load_path_label, stretch=1)
-        layout.addWidget(self._load_widget)
+        load_row.addWidget(self._load_path_label, stretch=1)
+        layout.addLayout(load_row)
 
-        # --- Edytor XMP (ukryty — używany przez View/Edit gdy zostanie włączone) ---
-        self._xmp_editor = QTextEdit()
-        self._xmp_editor.setVisible(False)
-        self._xmp_editor.setMinimumHeight(160)
-        self._xmp_editor.setFontFamily("Monospace")
-        self._xmp_editor.setFontPointSize(9)
-        layout.addWidget(self._xmp_editor)
-
-        save_row = QHBoxLayout()
-        self._btn_save_xmp = QPushButton(self.tr("Save XMP"))
-        self._btn_save_xmp.setFixedHeight(DIALOG_BTN_H)
-        self._btn_save_xmp.setVisible(False)
-        self._btn_save_xmp.clicked.connect(self._on_save_xmp)
-        save_row.addStretch(1)
-        save_row.addWidget(self._btn_save_xmp)
-        save_row.addStretch(1)
-        layout.addLayout(save_row)
+        # Grupa preset — wzajemne wykluczenie
+        self._preset_group = QButtonGroup(self)
+        self._preset_group.addButton(self._rb_no_preset,   0)
+        self._preset_group.addButton(self._rb_use_preset,  1)
+        self._preset_group.addButton(self._rb_load_preset, 2)
+        self._preset_group.idToggled.connect(self._on_preset_toggled)
 
         layout.addSpacing(8)
 
-        # --- Przyciski ---
+        # ── Sekcja 2: White balance ───────────────────────────────────────────
+        layout.addWidget(QLabel(self.tr("White balance:")))
+
+        self._rb_wb_exif = QRadioButton(self.tr("From camera (EXIF)"))
+        self._rb_wb_exif.setChecked(True)
+        layout.addWidget(self._rb_wb_exif)
+
+        # Manual K — wiersz z polem
+        manual_row = QHBoxLayout()
+        self._rb_wb_manual = QRadioButton(self.tr("Manual:"))
+        manual_row.addWidget(self._rb_wb_manual)
+        self._kelvin_edit = QLineEdit()
+        self._kelvin_edit.setPlaceholderText("5500")
+        self._kelvin_edit.setFixedWidth(70)
+        self._kelvin_edit.setEnabled(False)
+        manual_row.addWidget(self._kelvin_edit)
+        manual_row.addWidget(QLabel("K"))
+        manual_row.addStretch(1)
+        layout.addLayout(manual_row)
+
+        self._rb_wb_preset = QRadioButton(self.tr("From preset XMP"))
+        self._rb_wb_preset.setEnabled(False)   # aktywny tylko gdy preset wybrany
+        layout.addWidget(self._rb_wb_preset)
+
+        # Grupa WB — wzajemne wykluczenie
+        self._wb_group = QButtonGroup(self)
+        self._wb_group.addButton(self._rb_wb_exif,   0)
+        self._wb_group.addButton(self._rb_wb_manual, 1)
+        self._wb_group.addButton(self._rb_wb_preset, 2)
+        self._wb_group.idToggled.connect(self._on_wb_toggled)
+
+        layout.addSpacing(8)
+
+        # ── Przyciski ─────────────────────────────────────────────────────────
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
 
@@ -209,71 +200,98 @@ class DevelopDialog(QDialog):
         btn_row.addStretch(1)
         layout.addLayout(btn_row)
 
-        # Ustaw początkową widoczność
-        self._update_wb_widgets(0, True)
-
     def _restore_settings(self):
-        """Przywraca ostatni wybór z QSettings."""
-        wb_source = self._settings.value("developer/last_wb_source", "exif")
-        if wb_source == "preset":
-            self._rb_preset.setChecked(True)
+        """Przywraca ostatni wybór presetu z QSettings."""
+        last_preset_src = self._settings.value("developer/last_preset_src", "no_preset")
+        if last_preset_src == "use_preset":
+            self._rb_use_preset.setChecked(True)
+            last_preset = self._settings.value("developer/last_preset", "")
+            if last_preset:
+                for i in range(self._combo.count()):
+                    if self._combo.itemData(i) == last_preset:
+                        self._combo.setCurrentIndex(i)
+                        break
         else:
-            # "load" też przywracamy jako exif — to wybór per-sesja
-            self._rb_exif.setChecked(True)
+            self._rb_no_preset.setChecked(True)
 
-        last_preset = self._settings.value("developer/last_preset", "")
-        if last_preset:
-            for i in range(self._combo.count()):
-                if self._combo.itemData(i) == last_preset:
-                    self._combo.setCurrentIndex(i)
-                    break
+        last_wb = self._settings.value("developer/last_wb", "exif")
+        if last_wb == "manual":
+            self._rb_wb_manual.setChecked(True)
+            k = self._settings.value("developer/last_kelvin", "5500")
+            self._kelvin_edit.setText(str(k))
+        else:
+            self._rb_wb_exif.setChecked(True)
 
     def _on_develop(self):
-        """Zatwierdza wybór, zapisuje ustawienia."""
-        if self._rb_exif.isChecked():
-            # EXIF = brak presetu, darktable domyślne
-            self.selected_preset   = _AUTO_PRESET
-            self.selected_kelvin   = 0
-            self.selected_xmp_path = None
-            wb_source = "exif"
-        elif self._rb_preset.isChecked():
-            self.selected_preset   = self._combo.currentData()
-            self.selected_kelvin   = None
-            self.selected_xmp_path = None
-            wb_source = "preset"
+        """Zbiera wybory i wywołuje accept()."""
+        # Preset
+        pid = self._preset_group.checkedId()
+        if pid == 0:
+            self.selected_preset = _AUTO_PRESET
+        elif pid == 1:
+            self.selected_preset = self._combo.currentData()
         else:
-            # Load preset — ścieżka absolutna przekazana jako selected_preset
             if self._loaded_xmp_path is None:
                 QMessageBox.warning(self, self.tr("No file"),
                     self.tr("Please select an XMP file first."))
                 return
-            self.selected_preset   = str(self._loaded_xmp_path)
-            self.selected_kelvin   = None
-            self.selected_xmp_path = self._loaded_xmp_path
-            wb_source = "load"
+            self.selected_preset = str(self._loaded_xmp_path)
 
-        self._settings.setValue("developer/last_wb_source", wb_source)
-        if wb_source == "preset":
+        # WB
+        wid = self._wb_group.checkedId()
+        if wid == 0:
+            self.selected_kelvin = 0       # EXIF
+        elif wid == 1:
+            try:
+                self.selected_kelvin = int(self._kelvin_edit.text())
+            except ValueError:
+                QMessageBox.warning(self, self.tr("Invalid value"),
+                    self.tr("Enter a valid Kelvin value (e.g. 5500)."))
+                return
+        else:
+            self.selected_kelvin = None    # z presetu XMP
+
+        # Zapamiętaj
+        src_map = {0: "no_preset", 1: "use_preset", 2: "load_preset"}
+        self._settings.setValue("developer/last_preset_src", src_map[pid])
+        if pid == 1:
             self._settings.setValue("developer/last_preset", self.selected_preset)
+        wb_map = {0: "exif", 1: "manual", 2: "from_preset"}
+        self._settings.setValue("developer/last_wb", wb_map[wid])
+        if wid == 1:
+            self._settings.setValue("developer/last_kelvin", self.selected_kelvin)
 
         self.accept()
 
-    def _update_wb_widgets(self, btn_id: int = -1, checked: bool = True):
-        """Pokazuje/ukrywa widgety zależnie od wybranego radio."""
+    def _on_preset_toggled(self, btn_id: int, checked: bool):
+        """Reaguje na zmianę sekcji Preset — włącza/wyłącza widgety."""
         if not checked:
             return
-        active = self._wb_group.checkedId()
-        self._preset_widget.setVisible(active == 1)
-        self._load_widget.setVisible(active == 2)
+        pid = self._preset_group.checkedId()
+        has_preset = pid in (1, 2)
+
+        self._combo.setEnabled(pid == 1)
+        self._btn_browse.setEnabled(pid == 2)
+
+        # "From preset XMP" dostępne tylko gdy mamy preset
+        self._rb_wb_preset.setEnabled(has_preset)
+        if not has_preset and self._rb_wb_preset.isChecked():
+            self._rb_wb_exif.setChecked(True)
+
         self.adjustSize()
+
+    def _on_wb_toggled(self, btn_id: int, checked: bool):
+        """Włącza/wyłącza pole Kelvin zależnie od wyboru WB."""
+        if not checked:
+            return
+        self._kelvin_edit.setEnabled(self._wb_group.checkedId() == 1)
 
     def _on_load_preset(self):
         """Otwiera file dialog do wyboru pliku XMP."""
-        from pathlib import Path as _Path
         start_dir = (
-            str(_Path(self._session_path).parent)
+            str(Path(self._session_path).parent)
             if self._session_path
-            else str(_Path.home())
+            else str(Path.home())
         )
         src, _ = QFileDialog.getOpenFileName(
             self, self.tr("Select XMP preset"), start_dir,
