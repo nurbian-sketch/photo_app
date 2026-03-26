@@ -12,6 +12,12 @@ Zmiany vs oryginał:
 - pending_sends: zdjęcia w trakcie obróbki → auto-wysyłka gdy gotowe
 - Groq AI: wykrywanie intencji z dowolnego tekstu (klient nie musi znać komend)
 - fallback na statyczne teksty gdy Groq niedostępny
+- [fix1] nieznany tekst → podpowiedź z przyciskiem Menu (nie spam całego menu)
+- [fix2] greeting + privacy + email_info → jedna wiadomość przed plikami
+- [fix3] komunikat o paczkowaniu używa _t() zamiast hardkodowanego angielskiego
+- [fix4] _sent_this_session persystentne na dysku (odporność na restart bota)
+- [fix5] state machine: kontekst oczekiwania na kod sesji
+- [fix6] lang=None → bezpieczny fallback "en"
 """
 import json
 import logging
@@ -42,6 +48,7 @@ _DATA_DIR    = os.path.expanduser("~/.local/share/photo_app")
 LOCK_FILE    = os.path.join(_DATA_DIR, "share_bot.lock")
 STATUS_FILE  = os.path.join(_DATA_DIR, "share_bot_status.json")
 PENDING_FILE = os.path.join(_DATA_DIR, "share_bot_pending.json")
+SENT_FILE    = os.path.join(_DATA_DIR, "share_bot_sent.json")   # [fix4]
 
 # ─────────────────────────── Konfiguracja z QSettings
 
@@ -77,8 +84,11 @@ STUDIO_ADDR  = "ul. Jana Henryka Dąbrowskiego 4/13\n42-202 Częstochowa"
 STUDIO_PHONE = "+48 603 666 111"
 BOT_USERNAME = "pryzmat_studio_bot"
 
-# Kody wysłane w tej sesji bota (reset przy restarcie)
+# [fix4] historia wysłanych kodów — ładowana z dysku przy starcie
 _sent_this_session: set[str] = set()
+
+# [fix5] state machine — chat_id → lang oczekujący na kod
+_waiting_for_code: dict[int, str] = {}
 
 # ─────────────────────────── Lock + Status
 
@@ -209,6 +219,34 @@ def _check_pending():
         _save_pending(pending)
 
 
+# ─────────────────────────── Persystentna historia wysłanych kodów [fix4]
+
+def _load_sent() -> set[str]:
+    """Wczytuje historię wysłanych kodów z dysku."""
+    try:
+        if os.path.exists(SENT_FILE):
+            with open(SENT_FILE, encoding="utf-8") as f:
+                return set(json.load(f))
+    except Exception:
+        pass
+    return set()
+
+
+def _save_sent(sent: set[str]):
+    os.makedirs(_DATA_DIR, exist_ok=True)
+    try:
+        with open(SENT_FILE, "w", encoding="utf-8") as f:
+            json.dump(list(sent), f)
+    except OSError:
+        pass
+
+
+def _mark_sent(key: str):
+    """Dodaje klucz do historii wysłanych (pamięć + dysk)."""
+    _sent_this_session.add(key)
+    _save_sent(_sent_this_session)
+
+
 # ─────────────────────────── Email log (GDrive _meta)
 
 _email_log_cache: list[dict] = []
@@ -274,14 +312,13 @@ def _groq_detect_intent(text: str) -> dict:
     import re as _re
 
     # Regex tylko gdy tekst jest krótki i wygląda jak sam kod
-    # (bez spacji lub max jedno słowo) — unikamy fałszywych trafień
     stripped = text.strip()
     if _re.fullmatch(r'[A-Z0-9]{6}', stripped.upper()):
         return {"intent": "code", "code": stripped.upper()}
 
     # Bez Groq — prosta heurystyka
     if not GROQ_KEY:
-        keywords = ["zdjęci", "photo", "foto", "код", "фото", "знімк", "код"]
+        keywords = ["zdjęci", "photo", "foto", "код", "фото", "знімк"]
         if any(k in text.lower() for k in keywords):
             return {"intent": "get_photos", "code": None}
         return {"intent": "other", "code": None}
@@ -337,6 +374,7 @@ _TEXTS: dict[str, dict[str, str]] = {
         "btn_cancel":    "📅 Odwołanie sesji",
         "btn_private":   "🔒 Sesja prywatna",
         "btn_rules":     "📋 Zasady studia",
+        "btn_menu":      "📋 Menu",
         "location_text": (
             "📍 Pryzmat Studio\n"
             "ul. Jana Henryka Dąbrowskiego 4/13\n"
@@ -375,7 +413,7 @@ _TEXTS: dict[str, dict[str, str]] = {
             "i nie są udostępniane osobom trzecim. "
             "Materiały będą dostępne przez {expiry} dni od daty sesji."
         ),
-        "done":          "Gotowe! Zapraszamy ponownie do Pryzmat Studio 🙂",
+        "done":     "Gotowe! Zapraszamy ponownie do Pryzmat Studio 🙂",
         "not_found": (
             "Nie znalazłem zdjęć dla tego kodu. Możliwe że minęło {expiry} dni "
             "i materiały zostały usunięte, lub kod jest nieprawidłowy.\n"
@@ -393,9 +431,7 @@ _TEXTS: dict[str, dict[str, str]] = {
             "📸 Twoje zdjęcia są właśnie wywoływane z cyfrowych negatywów.\n"
             "Dam Ci znać gdy będą gotowe — zazwyczaj zajmuje to kilka minut. ⏳"
         ),
-        "pending_ready": (
-            "✅ Twoje zdjęcia są gotowe! Wysyłam je teraz… 📸"
-        ),
+        "pending_ready":   "✅ Twoje zdjęcia są gotowe! Wysyłam je teraz… 📸",
         "pending_timeout": (
             "Przepraszamy za opóźnienie. Skontaktuj się ze studiem — "
             "na pewno znajdziemy rozwiązanie. 🙏\n"
@@ -410,6 +446,8 @@ _TEXTS: dict[str, dict[str, str]] = {
         "notify_no_btn":    "❌ Nie, dziękuję",
         "notify_confirmed": "Super! Powiadomię Cię gdy zdjęcia będą gotowe. 🙂",
         "notify_declined":  "Ok! Jeśli zmienisz zdanie, napisz ponownie swój kod sesji.",
+        "batch_sending":    "📦 Wysyłam {total} zdjęć w paczkach po {batch}…",   # [fix3]
+        "unknown_text":     "Nie rozumiem. Skorzystaj z menu 👇",                 # [fix1]
     },
     "ru": {
         "menu_greeting": "Привет! 👋 Добро пожаловать в бот Pryzmat Studio.\nЧем могу помочь?",
@@ -419,6 +457,7 @@ _TEXTS: dict[str, dict[str, str]] = {
         "btn_cancel":    "📅 Отмена сессии",
         "btn_private":   "🔒 Частная сессия",
         "btn_rules":     "📋 Правила студии",
+        "btn_menu":      "📋 Меню",
         "location_text": (
             "📍 Pryzmat Studio\n"
             "ул. Яна Хенрика Домбровского 4/13\n"
@@ -450,8 +489,8 @@ _TEXTS: dict[str, dict[str, str]] = {
             "🔒 Твои фото хранятся только на зашифрованном сервере студии. "
             "Доступны {expiry} дней с даты сессии."
         ),
-        "done":            "Готово! Ждём тебя снова в Pryzmat Studio 🙂",
-        "not_found":       (
+        "done":     "Готово! Ждём тебя снова в Pryzmat Studio 🙂",
+        "not_found": (
             "Фото по этому коду не найдены. Возможно прошло {expiry} дней, "
             "или код неверный.\nСвяжись со студией — найдём решение."
         ),
@@ -475,6 +514,8 @@ _TEXTS: dict[str, dict[str, str]] = {
         "notify_no_btn":    "❌ Нет, спасибо",
         "notify_confirmed": "Отлично! Сообщу, когда фото будут готовы. 🙂",
         "notify_declined":  "Хорошо! Если передумаешь — напиши свой код снова.",
+        "batch_sending":    "📦 Отправляю {total} фото пачками по {batch}…",
+        "unknown_text":     "Не понимаю. Воспользуйся меню 👇",
     },
     "uk": {
         "menu_greeting": "Привіт! 👋 Ласкаво просимо до бота Pryzmat Studio.\nЧим можу допомогти?",
@@ -484,6 +525,7 @@ _TEXTS: dict[str, dict[str, str]] = {
         "btn_cancel":    "📅 Скасування сесії",
         "btn_private":   "🔒 Приватна сесія",
         "btn_rules":     "📋 Правила студії",
+        "btn_menu":      "📋 Меню",
         "location_text": (
             "📍 Pryzmat Studio\n"
             "вул. Яна Хенрика Домбровського 4/13\n"
@@ -515,8 +557,8 @@ _TEXTS: dict[str, dict[str, str]] = {
             "🔒 Твої фото зберігаються лише на зашифрованому сервері студії. "
             "Доступні {expiry} днів з дати сесії."
         ),
-        "done":            "Готово! Чекаємо тебе знову в Pryzmat Studio 🙂",
-        "not_found":       (
+        "done":     "Готово! Чекаємо тебе знову в Pryzmat Studio 🙂",
+        "not_found": (
             "Фото за цим кодом не знайдено. Можливо минуло {expiry} днів, "
             "або код невірний.\nЗв'яжись зі студією — знайдемо рішення."
         ),
@@ -540,6 +582,8 @@ _TEXTS: dict[str, dict[str, str]] = {
         "notify_no_btn":    "❌ Ні, дякую",
         "notify_confirmed": "Чудово! Повідомлю, коли фото будуть готові. 🙂",
         "notify_declined":  "Добре! Якщо зміниш думку — напиши свій код знову.",
+        "batch_sending":    "📦 Надсилаю {total} фото пачками по {batch}…",
+        "unknown_text":     "Не розумію. Скористайся меню 👇",
     },
     "en": {
         "menu_greeting": "Hi! 👋 Welcome to the Pryzmat Studio bot.\nHow can I help you?",
@@ -549,6 +593,7 @@ _TEXTS: dict[str, dict[str, str]] = {
         "btn_cancel":    "📅 Cancel session",
         "btn_private":   "🔒 Private session",
         "btn_rules":     "📋 Studio rules",
+        "btn_menu":      "📋 Menu",
         "location_text": (
             "📍 Pryzmat Studio\n"
             "ul. Jana Henryka Dąbrowskiego 4/13\n"
@@ -580,8 +625,8 @@ _TEXTS: dict[str, dict[str, str]] = {
             "🔒 Your photos are stored exclusively on the studio's encrypted server. "
             "Available for {expiry} days from your session date."
         ),
-        "done":            "Done! We hope to see you again at Pryzmat Studio 🙂",
-        "not_found":       (
+        "done":     "Done! We hope to see you again at Pryzmat Studio 🙂",
+        "not_found": (
             "I couldn't find photos for this code. It's possible {expiry} days have passed "
             "and the materials were deleted, or the code is incorrect.\n"
             "Please contact the studio — we'll find a solution."
@@ -606,6 +651,8 @@ _TEXTS: dict[str, dict[str, str]] = {
         "notify_no_btn":    "❌ No, thanks",
         "notify_confirmed": "Great! I'll let you know when your photos are ready. 🙂",
         "notify_declined":  "No problem! If you change your mind, just send your code again.",
+        "batch_sending":    "📦 Sending {total} photos in batches of {batch}…",
+        "unknown_text":     "I didn't understand that. Use the menu 👇",
     },
 }
 
@@ -748,13 +795,37 @@ def _send_location(chat_id: int, lang: str) -> None:
     _api("sendLocation", chat_id=chat_id, latitude=STUDIO_LAT, longitude=STUDIO_LNG)
 
 
+def _send_unknown(chat_id: int, lang: str) -> None:
+    """[fix1] Nieznany tekst → krótka podpowiedź z przyciskiem Menu (bez spamu całego menu)."""
+    keyboard = {
+        "inline_keyboard": [[
+            {"text": _t(lang, "btn_menu"), "callback_data": "menu"},
+        ]]
+    }
+    _post(
+        "sendMessage",
+        json.dumps({
+            "chat_id":      chat_id,
+            "text":         _t(lang, "unknown_text"),
+            "reply_markup": keyboard,
+        }).encode(),
+        "application/json",
+    )
+
+
 def _handle_callback(callback_id: str, chat_id: int, lang: str, data: str) -> None:
     if data == "location":
         _send_location(chat_id, lang)
     elif data == "call":
         _send(chat_id, _t(lang, "call_text"))
     elif data == "get_photos":
+        # [fix5] ustaw stan oczekiwania na kod
+        _waiting_for_code[chat_id] = lang
         _send(chat_id, _t(lang, "ask_code"))
+    elif data == "menu":
+        # [fix5] wyczyść stan przy powrocie do menu
+        _waiting_for_code.pop(chat_id, None)
+        _send_menu(chat_id, lang)
     elif data == "cancel":
         _send(chat_id, _t(lang, "cancel_text"))
     elif data == "private":
@@ -800,16 +871,17 @@ def _send_files_to_client(chat_id: int, lang: str, code: str, files: list[str]):
     total = len(files)
     ok    = 0
 
-    for i in range(0, total, BATCH):
-        batch = files[i:i + BATCH]
-        if total > BATCH and i == 0:
-            _send(chat_id, f"📦 Sending {total} photos in batches of {BATCH}…")
-        for path in batch:
-            if _send_document(chat_id, path):
-                ok += 1
-            time.sleep(0.3)
+    if total > BATCH:
+        # [fix3] lokalizowany komunikat zamiast hardkodowanego angielskiego
+        _send(chat_id, _t(lang, "batch_sending", total=total, batch=BATCH))
 
-    _sent_this_session.add(f"{chat_id}:{code}")
+    for path in files:
+        if _send_document(chat_id, path):
+            ok += 1
+        time.sleep(0.3)
+
+    # [fix4] persystentny zapis wysłanych kodów
+    _mark_sent(f"{chat_id}:{code}")
     logger.info(f"Wysłano {ok}/{total} plików dla kodu {code} → chat {chat_id}")
     _send(chat_id, _t(lang, "done"))
 
@@ -840,6 +912,9 @@ def _handle_code(chat_id: int, lang: str, code: str) -> None:
     code = code.upper().strip()
     key  = f"{chat_id}:{code}"
 
+    # [fix5] wyczyść stan oczekiwania niezależnie od wyniku
+    _waiting_for_code.pop(chat_id, None)
+
     if key in _sent_this_session:
         _send(chat_id, _t(lang, "already_sent"))
         return
@@ -857,12 +932,11 @@ def _handle_code(chat_id: int, lang: str, code: str) -> None:
         _send_notify_ask(chat_id, lang, code)
         return
 
-    # Pliki gotowe — wyślij
+    # [fix2] greeting + privacy + email_sent_info → jedna wiadomość
     _write_status("sending", len(_load_pending()))
-    _send(chat_id, _t(lang, "greeting"))
-    _send(chat_id, _t(lang, "privacy"))
 
-    # Poinformuj o mailu jeśli był wysłany
+    intro_lines = [_t(lang, "greeting"), _t(lang, "privacy")]
+
     email_info = _get_email_sent_info(code)
     if email_info:
         try:
@@ -870,16 +944,19 @@ def _handle_code(chat_id: int, lang: str, code: str) -> None:
             sent_str = sent_dt.strftime("%d.%m.%Y %H:%M")
         except Exception:
             sent_str = email_info.get("sent_at", "")
-        _send(chat_id, _t(lang, "email_sent_info",
-                          email=email_info.get("email", ""),
-                          sent_at=sent_str))
+        intro_lines.append(_t(lang, "email_sent_info",
+                              email=email_info.get("email", ""),
+                              sent_at=sent_str))
 
+    _send(chat_id, "\n\n".join(intro_lines))
     _send_files_to_client(chat_id, lang, code, files)
 
 
 # ─────────────────────────── Główna pętla
 
 def main():
+    global _sent_this_session
+
     if not TOKEN:
         print("[share_bot] Błąd: brak tokenu Telegram w QSettings")
         sys.exit(1)
@@ -888,11 +965,16 @@ def main():
         print("[share_bot] Już uruchomiony — wychodzę")
         sys.exit(0)
 
-    logger.info("Share bot uruchomiony (PID %d)", os.getpid())
+    # [fix4] załaduj historię wysłanych kodów z dysku
+    _sent_this_session = _load_sent()
+    logger.info(
+        "Share bot uruchomiony (PID %d), załadowano %d wysłanych kodów",
+        os.getpid(), len(_sent_this_session),
+    )
     _write_status("idle")
 
-    offset         = 0
-    pending_check  = 0   # licznik iteracji — sprawdzaj pending co 60 iteracji (~2 min)
+    offset        = 0
+    pending_check = 0   # licznik iteracji — sprawdzaj pending co 60 iteracji (~2 min)
 
     try:
         while True:
@@ -917,7 +999,8 @@ def main():
                 if cb:
                     cb_chat = cb.get("message", {}).get("chat", {})
                     if cb_chat.get("type") == "private":
-                        lang = cb.get("from", {}).get("language_code", "en")[:2]
+                        # [fix6] bezpieczny fallback gdy language_code=None
+                        lang = (cb.get("from", {}).get("language_code") or "en")[:2]
                         _handle_callback(cb["id"], cb_chat["id"], lang, cb.get("data", ""))
                     continue
 
@@ -931,26 +1014,36 @@ def main():
                     continue
 
                 chat_id = msg["chat"]["id"]
-                lang    = msg.get("from", {}).get("language_code", "en")[:2]
+                # [fix6] bezpieczny fallback gdy language_code=None
+                lang    = (msg.get("from", {}).get("language_code") or "en")[:2]
                 parts   = text.split()
                 cmd     = parts[0] if parts else ""
 
-                # Najpierw obsłuż komendy
+                # Obsłuż komendy
                 if cmd == "/start" and len(parts) >= 2:
+                    _waiting_for_code.pop(chat_id, None)
                     _handle_code(chat_id, lang, parts[1])
                 elif cmd in ("/start", "/menu"):
+                    _waiting_for_code.pop(chat_id, None)
                     _send_menu(chat_id, lang)
                 elif cmd == "/code" and len(parts) >= 2:
                     _handle_code(chat_id, lang, parts[1])
                 else:
-                    # Dowolny tekst → Groq wykrywa intencję
-                    intent = _groq_detect_intent(text)
-                    if intent["intent"] == "code" and intent.get("code"):
-                        _handle_code(chat_id, lang, intent["code"])
-                    elif intent["intent"] == "get_photos":
-                        _send(chat_id, _t(lang, "ask_code"))
+                    # [fix5] sprawdź stan oczekiwania na kod
+                    if chat_id in _waiting_for_code:
+                        _handle_code(chat_id, _waiting_for_code[chat_id], text)
                     else:
-                        _send_menu(chat_id, lang)
+                        # Dowolny tekst → Groq wykrywa intencję
+                        intent = _groq_detect_intent(text)
+                        if intent["intent"] == "code" and intent.get("code"):
+                            _handle_code(chat_id, lang, intent["code"])
+                        elif intent["intent"] == "get_photos":
+                            # [fix5] ustaw stan oczekiwania na kod
+                            _waiting_for_code[chat_id] = lang
+                            _send(chat_id, _t(lang, "ask_code"))
+                        else:
+                            # [fix1] krótka podpowiedź zamiast pełnego menu
+                            _send_unknown(chat_id, lang)
 
             time.sleep(POLL_INT)
 
