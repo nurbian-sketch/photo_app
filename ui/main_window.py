@@ -188,6 +188,8 @@ class MainWindow(QMainWindow):
 
         self.read_settings()
         self.setup_menu()
+        # Teraz menu istnieje — uruchom ponownie logikę aktywacji dla widoku startowego
+        self.change_view(start_view)
 
         # Połączenia SessionView
         self.session_view.status_message.connect(
@@ -352,6 +354,21 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logging.getLogger(__name__).warning(f"Tray monitor launch failed: {e}")
 
+    def _launch_bot_tray(self):
+        """Uruchamia share_bot_tray z --parent-pid — tray pojawi się dopiero po zamknięciu aplikacji."""
+        project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        try:
+            subprocess.Popen(
+                [sys.executable, "-m", "share_bot_tray",
+                 "--parent-pid", str(os.getpid())],
+                start_new_session=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                cwd=project_dir,
+            )
+        except Exception as e:
+            logging.getLogger(__name__).warning(f"Bot tray launch failed: {e}")
+
     def setup_menu(self):
         menu_bar = QMenuBar()
         self.setMenuBar(menu_bar)
@@ -371,26 +388,89 @@ class MainWindow(QMainWindow):
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
-        # SELECT MENU — między File a View, pozycje wyszarzane poza Pictures
-        self._select_menu = menu_bar.addMenu(self.tr("Select"))
+        # EDIT MENU — aktywne tylko w Darkroom
+        self._edit_menu = menu_bar.addMenu(self.tr("Edit"))
+
         self._action_mw_select_all = QAction(self.tr("Select All"), self)
-        self._action_mw_deselect_all = QAction(self.tr("Deselect All"), self)
+        self._action_mw_select_all.setShortcut(QKeySequence("Ctrl+A"))
         self._action_mw_select_all.triggered.connect(
             lambda: self.darkroom_view._select_all()
         )
+        self._action_mw_select_all.setEnabled(False)
+
+        self._action_mw_deselect_all = QAction(self.tr("Deselect All"), self)
+        self._action_mw_deselect_all.setShortcut(QKeySequence("Escape"))
         self._action_mw_deselect_all.triggered.connect(
             lambda: self.darkroom_view._deselect_all()
         )
-        self._action_mw_select_all.setEnabled(False)
         self._action_mw_deselect_all.setEnabled(False)
-        self._select_menu.addAction(self._action_mw_select_all)
-        self._select_menu.addAction(self._action_mw_deselect_all)
+
+        self._edit_menu.addAction(self._action_mw_select_all)
+        self._edit_menu.addAction(self._action_mw_deselect_all)
+        self._edit_menu.addSeparator()
+
+        self._action_mw_copy = QAction(self.tr("Copy to…"), self)
+        self._action_mw_copy.triggered.connect(
+            lambda: self.darkroom_view._copy_or_move_selected(move=False)
+        )
+        self._action_mw_copy.setEnabled(False)
+
+        self._action_mw_move = QAction(self.tr("Move to…"), self)
+        self._action_mw_move.triggered.connect(
+            lambda: self.darkroom_view._copy_or_move_selected(move=True)
+        )
+        self._action_mw_move.setEnabled(False)
+
+        self._action_mw_delete = QAction(self.tr("Delete Selected"), self)
+        self._action_mw_delete.setShortcut(QKeySequence("Delete"))
+        self._action_mw_delete.triggered.connect(
+            lambda: self.darkroom_view.delete_images()
+        )
+        self._action_mw_delete.setEnabled(False)
+
+        self._edit_menu.addAction(self._action_mw_copy)
+        self._edit_menu.addAction(self._action_mw_move)
+        self._edit_menu.addAction(self._action_mw_delete)
 
         # TOOLS MENU
         tools_menu = menu_bar.addMenu(self.tr("Tools"))
         self._action_sync_now = QAction(self.tr("Sync now"), self)
         self._action_sync_now.triggered.connect(self._sync_now)
         tools_menu.addAction(self._action_sync_now)
+
+        # EXTERNAL MENU — zewnętrzne programy, aktywne tylko w Darkroom
+        self._external_menu = menu_bar.addMenu(self.tr("External"))
+
+        self._action_mw_develop = QAction(self.tr("Develop…"), self)
+        self._action_mw_develop.triggered.connect(
+            lambda: self.darkroom_view._on_develop_requested()
+        )
+        self._action_mw_develop.setEnabled(False)
+
+        self._action_mw_darktable = QAction(self.tr("Open in Darktable"), self)
+        self._action_mw_darktable.triggered.connect(
+            lambda: self.darkroom_view._open_in_darktable()
+        )
+        self._action_mw_darktable.setEnabled(False)
+
+        self._external_menu.addAction(self._action_mw_develop)
+        self._external_menu.addAction(self._action_mw_darktable)
+        self._external_menu.addSeparator()
+
+        self._action_mw_send = QAction(self.tr("Send via Telegram…"), self)
+        self._action_mw_send.triggered.connect(
+            lambda: self.darkroom_view._send_via_telegram()
+        )
+        self._action_mw_send.setEnabled(False)
+
+        self._action_mw_telegram_config = QAction(self.tr("Configure Telegram…"), self)
+        self._action_mw_telegram_config.triggered.connect(
+            lambda: self.darkroom_view._configure_telegram()
+        )
+        self._action_mw_telegram_config.setEnabled(False)
+
+        self._external_menu.addAction(self._action_mw_send)
+        self._external_menu.addAction(self._action_mw_telegram_config)
 
         # VIEW MENU
         self._view_menu = menu_bar.addMenu(self.tr("View"))
@@ -458,13 +538,27 @@ class MainWindow(QMainWindow):
         elif name == "Darkroom":
             QTimer.singleShot(150, self.darkroom_view.btn_open_folder.setFocus)
 
-        # Sort By i Select aktywne tylko w Darkroom
+        # Menus aktywne tylko w Darkroom
         is_pictures = (name == "Darkroom")
         if hasattr(self, '_sort_menu'):
             self._sort_menu.setEnabled(is_pictures)
-        if hasattr(self, '_action_mw_select_all'):
-            self._action_mw_select_all.setEnabled(is_pictures)
-            self._action_mw_deselect_all.setEnabled(is_pictures)
+        # Statyczne — zawsze aktywne w Darkroom (nie zależą od selekcji)
+        for attr in [
+            '_action_mw_select_all', '_action_mw_deselect_all',
+            '_action_mw_darktable', '_action_mw_telegram_config',
+        ]:
+            if hasattr(self, attr):
+                getattr(self, attr).setEnabled(is_pictures)
+        # Dynamiczne — reset do False; update_selection_count() ustawi właściwy stan
+        for attr in [
+            '_action_mw_copy', '_action_mw_move', '_action_mw_delete',
+            '_action_mw_develop', '_action_mw_send',
+        ]:
+            if hasattr(self, attr):
+                getattr(self, attr).setEnabled(False)
+        # Wejście do Darkroom — odśwież stan selekcji natychmiast
+        if is_pictures:
+            self.darkroom_view.update_selection_count()
 
         self._probe_camera(enforce_fv=(name == "Camera"))
 
@@ -684,6 +778,14 @@ class MainWindow(QMainWindow):
             self.darkroom_view.splitter.restoreState(self.settings.value("darkroom_splitter"))
 
     def closeEvent(self, event):
+        # Usuń PID file — nie jesteśmy już "poprzednią instancją"
+        import os as _os
+        _pid_file = _os.path.expanduser("~/.local/share/photo_app/app.pid")
+        try:
+            _os.unlink(_pid_file)
+        except OSError:
+            pass
+
         self.camera_view.close_all_previews()
         self.camera_view.on_leave()
         self.session_view.on_leave()  # zatrzymuje worker ustawień i USB polling
@@ -698,6 +800,10 @@ class MainWindow(QMainWindow):
         if self._is_sync_running() or self._developer_manager.get_pending_count() > 0:
             self._show_sync_close_info()
             self._launch_tray_monitor()
+
+        # Share bot tray — gdy token skonfigurowany (ikona przenosi się z paska do traya)
+        if self.settings.value("telegram/bot_token", "").strip():
+            self._launch_bot_tray()
 
         super().closeEvent(event)
 

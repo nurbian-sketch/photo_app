@@ -879,6 +879,7 @@ class DarkroomView(QWidget):
 
         # Plik
         self.current_image_path = path if not self._sd_mode else None
+        self.update_selection_count()  # przyciski i menu reagują na zmianę bieżącego pliku
 
         # Aktualizuj label ścieżki: folder / NAZWA.EXT
         if not self._sd_mode and path:
@@ -953,13 +954,20 @@ class DarkroomView(QWidget):
 
     def delete_images(self):
         """Usuwa zaznaczone pliki — z dysku lub z karty SD (PTP)."""
+        eff_paths = set(self._effective_files())
+        if not eff_paths:
+            return
         to_delete = []
         for i in range(self.list_widget.count()):
             item = self.list_widget.item(i)
-            if (item.data(_ITEM_TYPE_ROLE) == 'file'
-                    and item.data(Qt.ItemDataRole.UserRole + 1)):
+            if item.data(_ITEM_TYPE_ROLE) != 'file':
+                continue
+            if self._sd_mode:
+                p = item.data(_SD_LOCAL_PATH_ROLE)
+            else:
+                p = item.data(_ITEM_PATH_ROLE) or item.data(Qt.ItemDataRole.UserRole)
+            if p in eff_paths:
                 to_delete.append((i, item))
-
         if not to_delete:
             return
 
@@ -1043,63 +1051,98 @@ class DarkroomView(QWidget):
             main_window.status_bar.showMessage(msg, timeout)
 
     def _on_list_context_menu(self, pos):
-        """Menu kontekstowe listy miniatur: sort, XMP, copy/move, develop, select."""
+        """Menu kontekstowe listy miniatur — pełny zestaw operacji."""
         item = self.list_widget.itemAt(pos)
         menu = QMenu(self)
 
-        # Kliknięto na plik XMP
+        # ── Operacje na pliku XMP ────────────────────────────────────────────
         if item and item.data(_ITEM_TYPE_ROLE) == 'file':
             path = item.data(_ITEM_PATH_ROLE) or ""
             if path.lower().endswith(".xmp"):
-                action_dev_all = menu.addAction(
-                    self.tr("Develop all RAW files in this folder…")
+                menu.addAction(
+                    self.tr("Develop all RAW files in this folder…"),
+                    self._on_develop_requested
                 )
-                action_dev_all.triggered.connect(self._on_develop_requested)
-                action_edit = menu.addAction(self.tr("Edit XMP…"))
-                action_edit.triggered.connect(lambda: self._on_edit_xmp_file(path))
+                menu.addAction(
+                    self.tr("Edit XMP…"),
+                    lambda: self._on_edit_xmp_file(path)
+                )
                 menu.addSeparator()
 
-        # Zaznaczone RAW-y
-        raw_files = self._selected_raw_files()
-        if raw_files and not self._sd_mode:
-            menu.addAction(
-                self.tr(f"Develop {len(raw_files)} selected RAW file(s)…"),
+        eff = self._effective_files()
+        count = len(eff)
+        raw_count = len(self._effective_raw_files())
+
+        # ── Develop ─────────────────────────────────────────────────────────
+        if not self._sd_mode:
+            act_develop = menu.addAction(
+                self.tr(f"Develop {raw_count} RAW file(s)…") if raw_count > 1
+                else self.tr("Develop RAW…"),
                 self._on_develop_requested
             )
+            act_develop.setEnabled(raw_count > 0)
+
+            act_darktable = menu.addAction(
+                self.tr("Open in Darktable"),
+                self._open_in_darktable
+            )
             menu.addSeparator()
 
-        # Copy/Move zaznaczonych
-        count = sum(
-            1 for i in range(self.list_widget.count())
-            if self.list_widget.item(i).data(_ITEM_TYPE_ROLE) == 'file'
-            and self.list_widget.item(i).data(Qt.ItemDataRole.UserRole + 1)
-        )
-        if count > 0 and not self._sd_mode:
-            menu.addAction(
-                self.tr(f"Copy {count} file(s) to…"),
+        # ── Copy / Move ──────────────────────────────────────────────────────
+        if not self._sd_mode:
+            act_copy = menu.addAction(
+                self.tr(f"Copy {count} file(s) to…") if count > 1
+                else self.tr("Copy to…"),
                 lambda: self._copy_or_move_selected(move=False)
             )
-            menu.addAction(
-                self.tr(f"Move {count} file(s) to…"),
+            act_copy.setEnabled(count > 0)
+
+            act_move = menu.addAction(
+                self.tr(f"Move {count} file(s) to…") if count > 1
+                else self.tr("Move to…"),
                 lambda: self._copy_or_move_selected(move=True)
             )
+            act_move.setEnabled(count > 0)
             menu.addSeparator()
 
+        # ── SD: Copy to Disk ─────────────────────────────────────────────────
+        if self._sd_mode:
+            act_copy_disk = menu.addAction(
+                self.tr("Copy to Disk"),
+                self._copy_to_disk
+            )
+            act_copy_disk.setEnabled(count > 0)
+            menu.addSeparator()
+
+        # ── Send / Delete ────────────────────────────────────────────────────
+        act_send = menu.addAction(
+            self.tr("Send via Telegram…"),
+            lambda: self._send_via_telegram()
+        )
+        act_send.setEnabled(count > 0)
+
+        act_delete = menu.addAction(
+            self.tr(f"Delete {count} file(s)…") if count > 1
+            else self.tr("Delete…"),
+            self.delete_images
+        )
+        act_delete.setEnabled(count > 0)
+        menu.addSeparator()
+
+        # ── Selekcja ─────────────────────────────────────────────────────────
         menu.addAction(self.tr("Select All"),   self._select_all)
         menu.addAction(self.tr("Deselect All"), self._deselect_all)
         menu.addSeparator()
 
-        # Sortowanie
-        sort_labels = [
+        # ── Sortowanie ───────────────────────────────────────────────────────
+        for key, label in [
             ('name', self.tr("Sort by Name")),
             ('date', self.tr("Sort by Date")),
             ('type', self.tr("Sort by Type")),
-        ]
-        for key, label in sort_labels:
+        ]:
             action = menu.addAction(label)
             action.setCheckable(True)
             action.setChecked(self._sort_key == key)
-            action.setData(key)
             action.triggered.connect(lambda checked, k=key: self.set_sort(k))
 
         menu.exec(self.list_widget.mapToGlobal(pos))
@@ -1165,25 +1208,8 @@ class DarkroomView(QWidget):
     # ─────────────────────────── Telegram
 
     def _get_selected_file_paths(self) -> list[str]:
-        """
-        Zwraca ścieżki zaznaczonych plików.
-        W trybie SD: lokalne ścieżki do plików tymczasowych.
-        W trybie dysk: bezpośrednie ścieżki z systemu plików.
-        """
-        paths = []
-        for i in range(self.list_widget.count()):
-            item = self.list_widget.item(i)
-            if (item.data(_ITEM_TYPE_ROLE) == 'file'
-                    and item.data(Qt.ItemDataRole.UserRole + 1)):
-                if self._sd_mode:
-                    local = item.data(_SD_LOCAL_PATH_ROLE)
-                    if local and os.path.isfile(local):
-                        paths.append(local)
-                else:
-                    path = item.data(Qt.ItemDataRole.UserRole)
-                    if path and os.path.isfile(path):
-                        paths.append(path)
-        return paths
+        """Zwraca ścieżki plików do wysyłki (efektywna selekcja)."""
+        return self._effective_files()
 
     def _configure_telegram(self):
         """Otwiera dialog konfiguracji Telegrama."""
@@ -1292,18 +1318,29 @@ class DarkroomView(QWidget):
             else:
                 main_window.status_bar.showMessage(self.tr("Ready"))
 
-        # btn_delete aktywny zawsze gdy coś zaznaczone
-        self.btn_delete.setEnabled(count > 0)
-        # btn_copy_to_disk — aktywny w SD mode gdy coś zaznaczone
+        # Efektywna selekcja: checkbox lub bieżący plik
+        has_any = count > 0 or bool(self.current_image_path)
+        # btn_delete aktywny gdy coś wybrane
+        self.btn_delete.setEnabled(has_any)
+        # btn_copy_to_disk — aktywny w SD mode
         if self._sd_mode:
-            self.btn_copy_to_disk.setEnabled(count > 0)
+            self.btn_copy_to_disk.setEnabled(has_any)
         if not self._sd_mode:
-            self.btn_copy_folder.setEnabled(count > 0)
-            self.btn_move_folder.setEnabled(count > 0)
-            has_raw = bool(self._selected_raw_files())
+            self.btn_copy_folder.setEnabled(has_any)
+            self.btn_move_folder.setEnabled(has_any)
+            has_raw = bool(self._effective_raw_files())
             self.btn_develop.setEnabled(has_raw)
-        # btn_send — aktywny gdy coś zaznaczone (oba tryby)
-        self.btn_send.setEnabled(count > 0)
+        # btn_send — aktywny gdy coś wybrane (oba tryby)
+        self.btn_send.setEnabled(has_any)
+
+        # Synchronizuj dynamiczne akcje menu w głównym oknie
+        mw = main_window
+        for attr in ('_action_mw_copy', '_action_mw_move', '_action_mw_delete', '_action_mw_send'):
+            if hasattr(mw, attr):
+                getattr(mw, attr).setEnabled(has_any)
+        if hasattr(mw, '_action_mw_develop'):
+            has_raw = has_raw if not self._sd_mode else False
+            mw._action_mw_develop.setEnabled(has_raw)
 
     # ─────────────────────────── Cleanup
 
@@ -1316,19 +1353,39 @@ class DarkroomView(QWidget):
     # ─────────────────────────── Copy / Move / Develop
 
     def _selected_raw_files(self) -> list[str]:
-        """Zwraca ścieżki zaznaczonych plików RAW."""
-        from core.image_io import RAW_EXTENSIONS
-        result = []
+        """Zwraca ścieżki zaznaczonych plików RAW (lub bieżącego jeśli brak zaznaczonych)."""
+        return self._effective_raw_files()
+
+    def _effective_files(self) -> list[str]:
+        """Zwraca zaznaczone pliki (checkbox) lub bieżący plik jeśli brak zaznaczonych.
+        W trybie SD: używa _SD_LOCAL_PATH_ROLE dla bieżącego pliku."""
+        paths = []
         for i in range(self.list_widget.count()):
             item = self.list_widget.item(i)
             if item.data(_ITEM_TYPE_ROLE) != 'file':
                 continue
             if not item.data(Qt.ItemDataRole.UserRole + 1):
                 continue
-            path = item.data(_ITEM_PATH_ROLE)
-            if path and os.path.splitext(path)[1].lower() in RAW_EXTENSIONS:
-                result.append(path)
-        return result
+            if self._sd_mode:
+                local = item.data(_SD_LOCAL_PATH_ROLE)
+                if local and os.path.isfile(local):
+                    paths.append(local)
+            else:
+                p = item.data(_ITEM_PATH_ROLE) or item.data(Qt.ItemDataRole.UserRole)
+                if p and os.path.isfile(p):
+                    paths.append(p)
+        if paths:
+            return paths
+        # Fallback: bieżący podglądany plik
+        if self.current_image_path and os.path.isfile(self.current_image_path):
+            return [self.current_image_path]
+        return []
+
+    def _effective_raw_files(self) -> list[str]:
+        """Zwraca pliki RAW z efektywnej selekcji."""
+        from core.image_io import RAW_EXTENSIONS
+        return [p for p in self._effective_files()
+                if os.path.splitext(p)[1].lower() in RAW_EXTENSIONS]
 
     def _on_develop_requested(self):
         """Emituje sygnał develop_requested z katalogiem bieżącym."""
@@ -1339,13 +1396,8 @@ class DarkroomView(QWidget):
         """Kopiuje lub przenosi zaznaczone pliki do wybranego folderu."""
         import shutil
 
-        selected_items = [
-            self.list_widget.item(i)
-            for i in range(self.list_widget.count())
-            if self.list_widget.item(i).data(_ITEM_TYPE_ROLE) == 'file'
-            and self.list_widget.item(i).data(Qt.ItemDataRole.UserRole + 1)
-        ]
-        if not selected_items:
+        source_paths = self._effective_files()
+        if not source_paths:
             return
 
         dest_dir = QFileDialog.getExistingDirectory(
@@ -1357,16 +1409,15 @@ class DarkroomView(QWidget):
             return
 
         errors = []
-        moved_indices = []
-        for item in selected_items:
-            src = item.data(Qt.ItemDataRole.UserRole)
-            if not src or not os.path.isfile(src):
+        moved_paths: set[str] = set()
+        for src in source_paths:
+            if not os.path.isfile(src):
                 continue
             dest = os.path.join(dest_dir, os.path.basename(src))
             try:
                 if move:
                     shutil.move(src, dest)
-                    moved_indices.append(self.list_widget.row(item))
+                    moved_paths.add(src)
                     if src == self.current_image_path:
                         self.preview.clear()
                         self.current_image_path = None
@@ -1375,8 +1426,12 @@ class DarkroomView(QWidget):
             except Exception as e:
                 errors.append(f"{os.path.basename(src)}: {e}")
 
-        for idx in sorted(moved_indices, reverse=True):
-            self.list_widget.takeItem(idx)
+        if move and moved_paths:
+            for i in range(self.list_widget.count() - 1, -1, -1):
+                item = self.list_widget.item(i)
+                p = item.data(_ITEM_PATH_ROLE) or item.data(Qt.ItemDataRole.UserRole)
+                if p in moved_paths:
+                    self.list_widget.takeItem(i)
 
         if errors:
             QMessageBox.warning(
@@ -1385,7 +1440,7 @@ class DarkroomView(QWidget):
                 "\n".join(errors[:5])
             )
         else:
-            n = len(selected_items) - len(errors)
+            n = len(source_paths) - len(errors)
             verb = self.tr("Moved") if move else self.tr("Copied")
             self._show_status(self.tr(f"{verb} {n} file(s) → {dest_dir}"), 4000)
 

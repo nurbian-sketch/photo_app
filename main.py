@@ -42,7 +42,45 @@ def _load_translator(app: QApplication) -> QTranslator | None:
     return None
 
 
+_APP_PID_FILE        = os.path.expanduser("~/.local/share/photo_app/app.pid")
+_TRAY_LOCK_FILE      = os.path.expanduser("~/.local/share/photo_app/tray_monitor.lock")
+_BOT_TRAY_LOCK_FILE  = os.path.expanduser("~/.local/share/photo_app/share_bot_tray.lock")
+
+
+def _kill_pid_file(path: str, signum: int = 15):
+    """Wysyła sygnał do procesu z pliku PID i usuwa plik."""
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path) as f:
+            pid = int(f.read().strip())
+        os.kill(pid, signum)
+    except (ValueError, ProcessLookupError, OSError):
+        pass
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+
+
+def _write_app_pid():
+    """Zapisuje PID bieżącej instancji aplikacji."""
+    os.makedirs(os.path.dirname(_APP_PID_FILE), exist_ok=True)
+    try:
+        with open(_APP_PID_FILE, "w") as f:
+            f.write(str(os.getpid()))
+    except OSError:
+        pass
+
+
 def main():
+    # Zamknij poprzednią instancję aplikacji (niesie ikonę bota w pasku stanu)
+    _kill_pid_file(_APP_PID_FILE)
+    # Zamknij tray_monitor i share_bot_tray z poprzedniej sesji
+    _kill_pid_file(_TRAY_LOCK_FILE)
+    _kill_pid_file(_BOT_TRAY_LOCK_FILE)
+    _write_app_pid()
+
     app = QApplication(sys.argv)
     _load_translator(app)
     app.setStyle('Fusion')
