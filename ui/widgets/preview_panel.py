@@ -179,20 +179,21 @@ class PreviewPanel(QWidget):
 
         # Control bar
         self.control_bar = QWidget()
+        self.control_bar.setMinimumHeight(28)
         set_panel_bg(self.control_bar)
         ctrl = QHBoxLayout(self.control_bar)
         ctrl.setContentsMargins(10, 5, 10, 5)
         ctrl.setSpacing(8)
 
         btn_rotate_left = QPushButton("↶")
-        btn_rotate_left.setFixedSize(32, 28)
+        btn_rotate_left.setFixedWidth(32)
         btn_rotate_left.setToolTip(self.tr("Rotate left 90° [←]"))
         _f16 = btn_rotate_left.font(); _f16.setPixelSize(16); btn_rotate_left.setFont(_f16)
         btn_rotate_left.clicked.connect(self.rotate_left)
         ctrl.addWidget(btn_rotate_left)
 
         btn_rotate_right = QPushButton("↷")
-        btn_rotate_right.setFixedSize(32, 28)
+        btn_rotate_right.setFixedWidth(32)
         btn_rotate_right.setToolTip(self.tr("Rotate right 90° [→]"))
         _f16 = btn_rotate_right.font(); _f16.setPixelSize(16); btn_rotate_right.setFont(_f16)
         btn_rotate_right.clicked.connect(self.rotate_right)
@@ -203,7 +204,7 @@ class PreviewPanel(QWidget):
         ctrl.addWidget(sep)
 
         btn_zoom_out = QPushButton("−")
-        btn_zoom_out.setFixedSize(32, 28)
+        btn_zoom_out.setFixedWidth(32)
         _f18 = btn_zoom_out.font(); _f18.setPixelSize(18); _f18.setBold(True); btn_zoom_out.setFont(_f18)
         btn_zoom_out.clicked.connect(self._zoom_out)
         ctrl.addWidget(btn_zoom_out)
@@ -215,13 +216,13 @@ class PreviewPanel(QWidget):
         ctrl.addWidget(self._zoom_label)
 
         btn_zoom_in = QPushButton("+")
-        btn_zoom_in.setFixedSize(32, 28)
+        btn_zoom_in.setFixedWidth(32)
         _f18 = btn_zoom_in.font(); _f18.setPixelSize(18); _f18.setBold(True); btn_zoom_in.setFont(_f18)
         btn_zoom_in.clicked.connect(self._zoom_in)
         ctrl.addWidget(btn_zoom_in)
 
         btn_fit = QPushButton(self.tr("Fit"))
-        btn_fit.setFixedSize(50, 28)
+        btn_fit.setFixedWidth(50)
         btn_fit.setToolTip(self.tr("Fit to window [0]"))
         btn_fit.clicked.connect(self._zoom_fit)
         ctrl.addWidget(btn_fit)
@@ -232,7 +233,7 @@ class PreviewPanel(QWidget):
 
         # WB picker
         self._btn_wb = QPushButton(self.tr("Pick WB"))
-        self._btn_wb.setFixedSize(70, 28)
+        self._btn_wb.setFixedWidth(70)
         self._btn_wb.setCheckable(True)
         self._btn_wb.setToolTip(self.tr("Click on a neutral white/grey area to pick white balance"))
         self._btn_wb.clicked.connect(self._toggle_wb_mode)
@@ -245,13 +246,13 @@ class PreviewPanel(QWidget):
         ctrl.addWidget(self._wb_label)
 
         self._btn_wb_accept = QPushButton(self.tr("Apply"))
-        self._btn_wb_accept.setFixedSize(55, 28)
+        self._btn_wb_accept.setFixedWidth(55)
         self._btn_wb_accept.setVisible(False)
         self._btn_wb_accept.clicked.connect(self._accept_wb)
         ctrl.addWidget(self._btn_wb_accept)
 
         self._btn_wb_cancel = QPushButton(self.tr("Cancel"))
-        self._btn_wb_cancel.setFixedSize(55, 28)
+        self._btn_wb_cancel.setFixedWidth(55)
         self._btn_wb_cancel.setVisible(False)
         self._btn_wb_cancel.clicked.connect(self._cancel_wb)
         ctrl.addWidget(self._btn_wb_cancel)
