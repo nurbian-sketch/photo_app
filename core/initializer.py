@@ -19,32 +19,12 @@ class AppInitializer(QObject):
         super().__init__()
 
     def _ensure_share_bot(self) -> str:
-        """Uruchamia share_bot_tray jeśli nie działa. Zwraca komunikat do splash."""
+        """Tray bota startuje przy zamknięciu aplikacji (closeEvent w main_window)."""
         settings = QSettings("Grzeza", "SessionsAssistant")
         token = settings.value("telegram/bot_token", "").strip()
         if not token:
             return "Share bot: brak tokenu Telegram — pomijam"
-
-        # Sprawdź przez lock file czy już działa
-        lock_file = os.path.expanduser("~/.local/share/photo_app/share_bot_tray.lock")
-        if os.path.exists(lock_file):
-            try:
-                with open(lock_file) as f:
-                    pid = int(f.read().strip())
-                os.kill(pid, 0)
-                return "Share bot: już uruchomiony"
-            except (ProcessLookupError, ValueError, OSError):
-                pass  # martwy PID — startuj nowy
-
-        project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        subprocess.Popen(
-            [sys.executable, "-m", "share_bot_tray", "--parent-pid", str(os.getpid())],
-            start_new_session=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            cwd=project_dir,
-        )
-        return "Share bot: uruchomiony"
+        return "Share bot: uruchomi się po zamknięciu aplikacji"
 
     def _run_archive(self) -> str:
         """Przenosi stare sesje CLIENT do katalogu archiwum. Zwraca komunikat do splash."""
