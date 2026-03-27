@@ -264,12 +264,12 @@ class DarkroomView(QWidget):
 
         groups_row.addWidget(grp_image)
 
-        # ── Grupa Operations ──────────────────────────────────────────────────
-        grp_ops = QGroupBox(self.tr("Operations"))
-        grp_ops.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
-        row_ops = QHBoxLayout(grp_ops)
-        row_ops.setContentsMargins(6, 4, 6, 4)
-        row_ops.setSpacing(4)
+        # ── Grupa Edit ───────────────────────────────────────────────────────
+        grp_edit = QGroupBox(self.tr("Edit"))
+        grp_edit.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        row_edit = QHBoxLayout(grp_edit)
+        row_edit.setContentsMargins(6, 4, 6, 4)
+        row_edit.setSpacing(4)
 
         # Pulldown Select — klik = toggle, strzałka = menu
         self.btn_select = QToolButton()
@@ -286,22 +286,6 @@ class DarkroomView(QWidget):
         self._action_select_all.triggered.connect(self._select_all)
         self._action_deselect_all.triggered.connect(self._deselect_all)
 
-        # Telegram — klik = wyślij, strzałka = konfiguracja
-        self.btn_send = QToolButton()
-        self.btn_send.setText(self.tr("Send…"))
-        self.btn_send.setMinimumHeight(BTN_H)
-        self.btn_send.setMinimumWidth(90)
-        self.btn_send.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
-        self.btn_send.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.btn_send.setIcon(QIcon.fromTheme("telegram"))
-        self.btn_send.setEnabled(False)
-        send_menu = QMenu(self)
-        self._action_telegram_config = send_menu.addAction(self.tr("Configure Telegram…"))
-        self.btn_send.setMenu(send_menu)
-        # klik = wyślij jako plik (bezstratnie)
-        self.btn_send.clicked.connect(lambda: self._send_via_telegram())
-        self._action_telegram_config.triggered.connect(self._configure_telegram)
-
         self.btn_delete = QPushButton(self.tr("Delete Selected"))
         self.btn_delete.setMinimumHeight(BTN_H)
         self.btn_delete.setEnabled(False)
@@ -317,7 +301,7 @@ class DarkroomView(QWidget):
         self.btn_format_card.setStyleSheet(BTN_STYLE_RED)
         self.btn_format_card.setVisible(False)
 
-        # Disk only — copy/move/develop zaznaczonych
+        # Disk only
         self.btn_copy_folder = QPushButton(self.tr("Copy to…"))
         self.btn_copy_folder.setMinimumHeight(BTN_H)
         self.btn_copy_folder.setEnabled(False)
@@ -328,18 +312,45 @@ class DarkroomView(QWidget):
         self.btn_move_folder.setEnabled(False)
         self.btn_move_folder.clicked.connect(lambda: self._copy_or_move_selected(move=True))
 
+        for w in [self.btn_select, self.btn_delete,
+                  self.btn_copy_to_disk, self.btn_format_card,
+                  self.btn_copy_folder, self.btn_move_folder]:
+            row_edit.addWidget(w)
+
+        groups_row.addWidget(grp_edit)
+
+        # ── Grupa External ───────────────────────────────────────────────────
+        grp_external = QGroupBox(self.tr("External"))
+        grp_external.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        row_external = QHBoxLayout(grp_external)
+        row_external.setContentsMargins(6, 4, 6, 4)
+        row_external.setSpacing(4)
+
+        # Telegram — klik = wyślij, strzałka = konfiguracja
+        self.btn_send = QToolButton()
+        self.btn_send.setText(self.tr("Send…"))
+        self.btn_send.setMinimumHeight(BTN_H)
+        self.btn_send.setMinimumWidth(90)
+        self.btn_send.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        self.btn_send.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.btn_send.setIcon(QIcon.fromTheme("telegram"))
+        self.btn_send.setEnabled(False)
+        send_menu = QMenu(self)
+        self._action_telegram_config = send_menu.addAction(self.tr("Configure Telegram…"))
+        self.btn_send.setMenu(send_menu)
+        self.btn_send.clicked.connect(lambda: self._send_via_telegram())
+        self._action_telegram_config.triggered.connect(self._configure_telegram)
+
         self.btn_develop = QPushButton(self.tr("Develop…"))
         self.btn_develop.setMinimumHeight(BTN_H)
         self.btn_develop.setIcon(QIcon.fromTheme("darktable"))
         self.btn_develop.setEnabled(False)
         self.btn_develop.clicked.connect(self._on_develop_requested)
 
-        for w in [self.btn_select, self.btn_send, self.btn_delete,
-                  self.btn_copy_to_disk, self.btn_format_card,
-                  self.btn_copy_folder, self.btn_move_folder, self.btn_develop]:
-            row_ops.addWidget(w)
+        for w in [self.btn_send, self.btn_develop]:
+            row_external.addWidget(w)
 
-        groups_row.addWidget(grp_ops)
+        groups_row.addWidget(grp_external)
         groups_row.addStretch()
         right_layout.addLayout(groups_row)
 
@@ -636,6 +647,10 @@ class DarkroomView(QWidget):
     def set_sd_card_ready(self, ready: bool):
         self._sd_card_ready = ready
         self.btn_sd_card.setVisible(ready)
+        # Synchronizuj akcję SD Card w menu głównym
+        mw = self.window()
+        if hasattr(mw, '_action_file_sd_card'):
+            mw._action_file_sd_card.setEnabled(ready)
 
     def _open_sd_card(self):
         self._sd_mode = True

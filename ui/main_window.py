@@ -416,6 +416,13 @@ class MainWindow(QMainWindow):
         self._action_file_open_folder.setEnabled(False)
         file_menu.addAction(self._action_file_open_folder)
 
+        self._action_file_sd_card = QAction(self.tr("SD Card"), self)
+        self._action_file_sd_card.triggered.connect(
+            lambda: self.darkroom_view._open_sd_card()
+        )
+        self._action_file_sd_card.setEnabled(False)
+        file_menu.addAction(self._action_file_sd_card)
+
         file_menu.addSeparator()
 
         exit_action = QAction(self.tr("Exit"), self)
@@ -482,14 +489,7 @@ class MainWindow(QMainWindow):
         )
         self._action_mw_develop.setEnabled(False)
 
-        self._action_mw_darktable = QAction(self.tr("Open in Darktable"), self)
-        self._action_mw_darktable.triggered.connect(
-            lambda: self.darkroom_view._open_in_darktable()
-        )
-        self._action_mw_darktable.setEnabled(False)
-
         self._external_menu.addAction(self._action_mw_develop)
-        self._external_menu.addAction(self._action_mw_darktable)
         self._external_menu.addSeparator()
 
         self._action_mw_send = QAction(self.tr("Send via Telegram…"), self)
@@ -498,14 +498,7 @@ class MainWindow(QMainWindow):
         )
         self._action_mw_send.setEnabled(False)
 
-        self._action_mw_telegram_config = QAction(self.tr("Configure Telegram…"), self)
-        self._action_mw_telegram_config.triggered.connect(
-            lambda: self.darkroom_view._configure_telegram()
-        )
-        self._action_mw_telegram_config.setEnabled(False)
-
         self._external_menu.addAction(self._action_mw_send)
-        self._external_menu.addAction(self._action_mw_telegram_config)
 
         # VIEW MENU
         self._view_menu = menu_bar.addMenu(self.tr("View"))
@@ -659,7 +652,6 @@ class MainWindow(QMainWindow):
         # Statyczne — zawsze aktywne w Darkroom (nie zależą od selekcji)
         for attr in [
             '_action_mw_select_all', '_action_mw_deselect_all',
-            '_action_mw_darktable', '_action_mw_telegram_config',
             # File menu
             '_action_file_sessions', '_action_file_last_session',
             '_action_file_open_folder',
