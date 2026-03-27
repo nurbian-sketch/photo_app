@@ -23,6 +23,17 @@ _DATA_DIR  = os.path.expanduser("~/.local/share/photo_app")
 _LOCK_FILE = os.path.join(_DATA_DIR, "share_bot_tray.lock")
 
 
+def _already_running() -> bool:
+    """Zwraca True jeśli poprzednia instancja tray nadal żyje."""
+    try:
+        with open(_LOCK_FILE) as f:
+            pid = int(f.read().strip())
+        os.kill(pid, 0)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
 def _write_lock():
     os.makedirs(_DATA_DIR, exist_ok=True)
     with open(_LOCK_FILE, "w") as f:
@@ -54,6 +65,10 @@ def _start_bot():
 
 
 def main():
+    # Ochrona przed wielokrotnymi instancjami tray
+    if _already_running():
+        sys.exit(0)
+
     # Opcjonalny PID rodzica (głównej aplikacji) — tray ukryty dopóki rodzic żyje
     parent_pid: int | None = None
     if "--parent-pid" in sys.argv:
@@ -64,7 +79,11 @@ def main():
             pass
 
     _write_lock()
-    _start_bot()
+
+    # Uruchom bota tylko jeśli nie działa
+    from share_bot_tray.bot_tray_app import _bot_alive
+    if not _bot_alive():
+        _start_bot()
 
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
