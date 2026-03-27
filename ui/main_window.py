@@ -383,6 +383,30 @@ class MainWindow(QMainWindow):
 
         file_menu.addSeparator()
 
+        self._action_file_sessions = QAction(self.tr("Sessions"), self)
+        self._action_file_sessions.triggered.connect(
+            lambda: self.darkroom_view._open_sessions_dir()
+        )
+        self._action_file_sessions.setEnabled(False)
+        file_menu.addAction(self._action_file_sessions)
+
+        self._action_file_last_session = QAction(self.tr("Last Session"), self)
+        self._action_file_last_session.triggered.connect(
+            lambda: self.darkroom_view.open_last_session()
+        )
+        self._action_file_last_session.setEnabled(False)
+        file_menu.addAction(self._action_file_last_session)
+
+        self._action_file_open_folder = QAction(self.tr("Open Folder…"), self)
+        self._action_file_open_folder.setShortcut(QKeySequence("Ctrl+O"))
+        self._action_file_open_folder.triggered.connect(
+            lambda: self.darkroom_view.open_folder()
+        )
+        self._action_file_open_folder.setEnabled(False)
+        file_menu.addAction(self._action_file_open_folder)
+
+        file_menu.addSeparator()
+
         exit_action = QAction(self.tr("Exit"), self)
         exit_action.setShortcut(QKeySequence("Ctrl+Q"))
         exit_action.triggered.connect(self.close)
@@ -495,6 +519,83 @@ class MainWindow(QMainWindow):
         self._sort_actions['name'].setChecked(True)
         self._sort_menu.setEnabled(False)
 
+        self._view_menu.addSeparator()
+
+        # Submenu Filter — aktywne tylko w Darkroom
+        self._filter_menu = self._view_menu.addMenu(self.tr("Filter"))
+        self._action_view_filter_all  = QAction(self.tr("All Files"),  self)
+        self._action_view_filter_jpeg = QAction(self.tr("JPEG Only"),  self)
+        self._action_view_filter_raw  = QAction(self.tr("RAW Only"),   self)
+        for a in [self._action_view_filter_all,
+                  self._action_view_filter_jpeg,
+                  self._action_view_filter_raw]:
+            a.setCheckable(True)
+            self._filter_menu.addAction(a)
+        self._action_view_filter_all.setChecked(True)
+        self._action_view_filter_all.triggered.connect(
+            lambda: self.darkroom_view._set_filter('all')
+        )
+        self._action_view_filter_jpeg.triggered.connect(
+            lambda: self.darkroom_view._set_filter('jpeg')
+        )
+        self._action_view_filter_raw.triggered.connect(
+            lambda: self.darkroom_view._set_filter('raw')
+        )
+        self._filter_menu.setEnabled(False)
+
+        self._action_view_large_thumbs = QAction(self.tr("Large Thumbnails"), self)
+        self._action_view_large_thumbs.setCheckable(True)
+        self._action_view_large_thumbs.triggered.connect(
+            lambda: self.darkroom_view.toggle_thumb_size()
+        )
+        self._action_view_large_thumbs.setEnabled(False)
+        self._view_menu.addAction(self._action_view_large_thumbs)
+
+        self._view_menu.addSeparator()
+
+        # Kontrolki obrazu — rotate/zoom, aktywne tylko w Darkroom
+        self._action_view_rotate_left = QAction(self.tr("Rotate Left"), self)
+        self._action_view_rotate_left.setShortcut(QKeySequence("Ctrl+Left"))
+        self._action_view_rotate_left.triggered.connect(
+            lambda: self.darkroom_view.preview.rotate_left()
+        )
+        self._action_view_rotate_left.setEnabled(False)
+        self._view_menu.addAction(self._action_view_rotate_left)
+
+        self._action_view_rotate_right = QAction(self.tr("Rotate Right"), self)
+        self._action_view_rotate_right.setShortcut(QKeySequence("Ctrl+Right"))
+        self._action_view_rotate_right.triggered.connect(
+            lambda: self.darkroom_view.preview.rotate_right()
+        )
+        self._action_view_rotate_right.setEnabled(False)
+        self._view_menu.addAction(self._action_view_rotate_right)
+
+        self._view_menu.addSeparator()
+
+        self._action_view_zoom_in = QAction(self.tr("Zoom In"), self)
+        self._action_view_zoom_in.setShortcut(QKeySequence("Ctrl+="))
+        self._action_view_zoom_in.triggered.connect(
+            lambda: self.darkroom_view.preview._zoom_in()
+        )
+        self._action_view_zoom_in.setEnabled(False)
+        self._view_menu.addAction(self._action_view_zoom_in)
+
+        self._action_view_zoom_out = QAction(self.tr("Zoom Out"), self)
+        self._action_view_zoom_out.setShortcut(QKeySequence("Ctrl+-"))
+        self._action_view_zoom_out.triggered.connect(
+            lambda: self.darkroom_view.preview._zoom_out()
+        )
+        self._action_view_zoom_out.setEnabled(False)
+        self._view_menu.addAction(self._action_view_zoom_out)
+
+        self._action_view_zoom_fit = QAction(self.tr("Fit to Window"), self)
+        self._action_view_zoom_fit.setShortcut(QKeySequence("Ctrl+0"))
+        self._action_view_zoom_fit.triggered.connect(
+            lambda: self.darkroom_view.preview._zoom_fit()
+        )
+        self._action_view_zoom_fit.setEnabled(False)
+        self._view_menu.addAction(self._action_view_zoom_fit)
+
         # Separator + dynamiczne wpisy dla okien podglądu
         self._preview_separator = self._view_menu.addSeparator()
         self._preview_separator.setVisible(False)
@@ -542,10 +643,19 @@ class MainWindow(QMainWindow):
         is_pictures = (name == "Darkroom")
         if hasattr(self, '_sort_menu'):
             self._sort_menu.setEnabled(is_pictures)
+        if hasattr(self, '_filter_menu'):
+            self._filter_menu.setEnabled(is_pictures)
         # Statyczne — zawsze aktywne w Darkroom (nie zależą od selekcji)
         for attr in [
             '_action_mw_select_all', '_action_mw_deselect_all',
             '_action_mw_darktable', '_action_mw_telegram_config',
+            # File menu
+            '_action_file_sessions', '_action_file_last_session',
+            '_action_file_open_folder',
+            # View menu
+            '_action_view_large_thumbs',
+            '_action_view_rotate_left', '_action_view_rotate_right',
+            '_action_view_zoom_in', '_action_view_zoom_out', '_action_view_zoom_fit',
         ]:
             if hasattr(self, attr):
                 getattr(self, attr).setEnabled(is_pictures)

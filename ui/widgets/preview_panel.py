@@ -178,9 +178,9 @@ class PreviewPanel(QWidget):
         layout.addWidget(self._exif_bar)
 
         # Control bar
-        control_bar = QWidget()
-        set_panel_bg(control_bar)
-        ctrl = QHBoxLayout(control_bar)
+        self.control_bar = QWidget()
+        set_panel_bg(self.control_bar)
+        ctrl = QHBoxLayout(self.control_bar)
         ctrl.setContentsMargins(10, 5, 10, 5)
         ctrl.setSpacing(8)
 
@@ -257,7 +257,7 @@ class PreviewPanel(QWidget):
         ctrl.addWidget(self._btn_wb_cancel)
 
         ctrl.addStretch()
-        layout.addWidget(control_bar)
+        layout.addWidget(self.control_bar)
 
         # Event filter — przechwytuje kliknięcia w trybie WB picker
         self._label.installEventFilter(self)

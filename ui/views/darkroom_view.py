@@ -135,6 +135,8 @@ class DarkroomView(QWidget):
     # ─────────────────────────── UI
 
     def setup_ui(self):
+        BTN_H = 28
+
         # Panel lewy: ścieżka + miniatury
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
@@ -174,28 +176,17 @@ class DarkroomView(QWidget):
         self.list_widget.customContextMenuRequested.connect(self._on_list_context_menu)
         left_layout.addWidget(self.list_widget, 1)
 
-        # Panel prawy: podgląd + kontrolki
-        right_panel = QWidget()
-        right_layout = QVBoxLayout(right_panel)
-        right_layout.setContentsMargins(5, 5, 5, 5)
-        right_layout.setSpacing(6)
+        # Dolny pasek lewego panelu: File + View
+        left_bottom = QHBoxLayout()
+        left_bottom.setSpacing(6)
+        left_bottom.setContentsMargins(4, 4, 4, 4)
 
-        self.preview = PreviewPanel()
-        right_layout.addWidget(self.preview, 1)
-
-        BTN_H = 28
-
-        # Wiersz grup — wszystkie w jednym QHBoxLayout ze stretch na końcu
-        groups_row = QHBoxLayout()
-        groups_row.setSpacing(8)
-        groups_row.setContentsMargins(0, 0, 0, 0)
-
-        # ── Grupa 1: Location ────────────────────────────────────────────────
-        grp_loc = QGroupBox(self.tr("Location"))
-        grp_loc.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
-        row_loc = QHBoxLayout(grp_loc)
-        row_loc.setContentsMargins(6, 4, 6, 4)
-        row_loc.setSpacing(4)
+        # ── Grupa File (dawniej Location) ────────────────────────────────────
+        grp_file = QGroupBox(self.tr("File"))
+        grp_file.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        row_file = QHBoxLayout(grp_file)
+        row_file.setContentsMargins(6, 4, 6, 4)
+        row_file.setSpacing(4)
 
         self.btn_sessions     = QPushButton(self.tr("Sessions"))
         self.btn_last_session = QPushButton(self.tr("Last Session"))
@@ -206,16 +197,16 @@ class DarkroomView(QWidget):
         for btn in [self.btn_sessions, self.btn_last_session,
                     self.btn_open_folder, self.btn_sd_card]:
             btn.setMinimumHeight(BTN_H)
-            row_loc.addWidget(btn)
+            row_file.addWidget(btn)
 
-        groups_row.addWidget(grp_loc)
+        left_bottom.addWidget(grp_file)
 
-        # ── Grupa 2: View ─────────────────────────────────────────────────────
-        grp_view = QGroupBox(self.tr("View"))
-        grp_view.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
-        row_view = QHBoxLayout(grp_view)
-        row_view.setContentsMargins(6, 4, 6, 4)
-        row_view.setSpacing(4)
+        # ── Grupa View ───────────────────────────────────────────────────────
+        grp_view_left = QGroupBox(self.tr("View"))
+        grp_view_left.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        row_view_left = QHBoxLayout(grp_view_left)
+        row_view_left.setContentsMargins(6, 4, 6, 4)
+        row_view_left.setSpacing(4)
 
         # Dropdown filtru — klik = cykliczne, strzałka = menu z checkmarkami
         self.btn_filter = QToolButton()
@@ -227,8 +218,7 @@ class DarkroomView(QWidget):
         self._action_filter_all  = filter_menu.addAction(self.tr("All Files"))
         self._action_filter_jpeg = filter_menu.addAction(self.tr("JPEG Only"))
         self._action_filter_raw  = filter_menu.addAction(self.tr("RAW Only"))
-        for a in [self._action_filter_all, self._action_filter_jpeg,
-                  self._action_filter_raw]:
+        for a in [self._action_filter_all, self._action_filter_jpeg, self._action_filter_raw]:
             a.setCheckable(True)
         self._action_filter_all.setChecked(True)
         self.btn_filter.setMenu(filter_menu)
@@ -238,16 +228,43 @@ class DarkroomView(QWidget):
         self._action_filter_jpeg.triggered.connect(lambda: self._set_filter('jpeg'))
         self._action_filter_raw.triggered.connect(lambda: self._set_filter('raw'))
 
-        # Toggle rozmiar miniatur — prosty przycisk, etykieta = przyszły stan
+        # Toggle rozmiar miniatur
         self.btn_toggle_size = QPushButton(self.tr("Large Thumbs"))
         self.btn_toggle_size.setMinimumHeight(BTN_H)
+        self.btn_toggle_size.clicked.connect(self.toggle_thumb_size)
 
-        row_view.addWidget(self.btn_filter)
-        row_view.addWidget(self.btn_toggle_size)
+        row_view_left.addWidget(self.btn_filter)
+        row_view_left.addWidget(self.btn_toggle_size)
 
-        groups_row.addWidget(grp_view)
+        left_bottom.addWidget(grp_view_left)
+        left_bottom.addStretch()
+        left_layout.addLayout(left_bottom)
 
-        # ── Grupa 3: Operations ───────────────────────────────────────────────
+        # Panel prawy: podgląd + kontrolki
+        right_panel = QWidget()
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(5, 5, 5, 5)
+        right_layout.setSpacing(6)
+
+        self.preview = PreviewPanel()
+        right_layout.addWidget(self.preview, 1)
+
+        # Wiersz grup — wszystkie w jednym QHBoxLayout ze stretch na końcu
+        groups_row = QHBoxLayout()
+        groups_row.setSpacing(8)
+        groups_row.setContentsMargins(0, 0, 0, 0)
+
+        # ── Grupa Image — wrappuje control_bar PreviewPanel ─────────────────
+        grp_image = QGroupBox(self.tr("Image"))
+        grp_image.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        row_image = QHBoxLayout(grp_image)
+        row_image.setContentsMargins(0, 0, 0, 0)
+        row_image.setSpacing(0)
+        row_image.addWidget(self.preview.control_bar)
+
+        groups_row.addWidget(grp_image)
+
+        # ── Grupa Operations ──────────────────────────────────────────────────
         grp_ops = QGroupBox(self.tr("Operations"))
         grp_ops.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         row_ops = QHBoxLayout(grp_ops)
@@ -343,8 +360,6 @@ class DarkroomView(QWidget):
         self.btn_open_folder.clicked.connect(self.open_folder)
         self.btn_sd_card.clicked.connect(self._open_sd_card)
 
-        self.btn_filter.clicked.connect(self._cycle_filter)
-        self.btn_toggle_size.clicked.connect(self.toggle_thumb_size)
         self.btn_delete.clicked.connect(self.delete_images)
         self.btn_copy_to_disk.clicked.connect(self._copy_to_disk)
         self.btn_format_card.clicked.connect(self._format_card)
