@@ -355,7 +355,18 @@ class MainWindow(QMainWindow):
             logging.getLogger(__name__).warning(f"Tray monitor launch failed: {e}")
 
     def _launch_bot_tray(self):
-        """Uruchamia share_bot_tray z --parent-pid — tray pojawi się dopiero po zamknięciu aplikacji."""
+        """Uruchamia share_bot_tray po zamknięciu — tylko jeśli nie działa."""
+        import os as _os
+        lock = _os.path.expanduser("~/.local/share/photo_app/share_bot_tray.lock")
+        if _os.path.exists(lock):
+            try:
+                with open(lock) as f:
+                    pid = int(f.read().strip())
+                _os.kill(pid, 0)
+                return  # już działa
+            except (ProcessLookupError, ValueError, OSError):
+                pass   # martwy PID — startuj nowy
+
         project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         try:
             subprocess.Popen(

@@ -107,7 +107,7 @@ def _acquire_lock() -> bool:
             f.write(str(os.getpid()))
         return True
     except Exception:
-        return True
+        return False   # przy błędzie — nie startuj, bezpieczniej
 
 
 def _release_lock():
