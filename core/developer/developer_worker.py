@@ -17,7 +17,6 @@ from pathlib import Path
 
 # ── ŚCIEŻKI ──────────────────────────────────────────────────────────────────
 _SCRIPT_DIR  = Path(__file__).parent
-PRESETS_DIR  = _SCRIPT_DIR.parent.parent / "presets"
 CLI_DEV_PATH = _SCRIPT_DIR / "cli_developer.py"
 
 CONFIG_DIR   = Path("~/.config/SessionsAssistant").expanduser()
@@ -66,30 +65,21 @@ def _update_entry(session_path: str, **kwargs) -> None:
     _save_queue(entries)
 
 
-def _find_preset_xmp(preset_name: str) -> Path | None:
-    """
-    Szuka pliku presetu: najpierw presets/user/, potem presets/.
-    Jeśli podana ścieżka absolutna — używa bezpośrednio.
-    Zwraca Path lub None.
-    """
-    # Ścieżka absolutna (np. z "Load preset…" w dialogu)
-    if Path(preset_name).is_absolute():
-        p = Path(preset_name)
-        return p if p.exists() else None
-    user_xmp = PRESETS_DIR / "user" / f"{preset_name}.xmp"
-    if user_xmp.exists():
-        return user_xmp
-    base_xmp = PRESETS_DIR / f"{preset_name}.xmp"
-    if base_xmp.exists():
-        return base_xmp
-    return None
-
-
 def _wait_if_liveview() -> None:
     """Blokuje wykonanie gdy liveview.lock istnieje."""
     while LV_LOCK_PATH.exists():
         print("[dev_worker] LiveView aktywny — pauza...", flush=True)
         time.sleep(LV_POLL_INTERVAL)
+
+
+def _wait_if_darktable_gui(poll: int = 10) -> None:
+    """Blokuje wykonanie gdy darktable GUI jest uruchomione (trzyma lock na data.db)."""
+    while True:
+        result = subprocess.run(["pgrep", "-x", "darktable"], capture_output=True)
+        if result.returncode != 0:
+            break
+        print(f"[dev_worker] darktable GUI aktywny — pauza {poll}s...", flush=True)
+        time.sleep(poll)
 
 
 def _reorganize_session(session_dir: Path) -> list[Path]:
@@ -138,25 +128,20 @@ def _reorganize_session(session_dir: Path) -> list[Path]:
     return moved_raws
 
 
-def _develop_file_auto(raw: Path, out_jpeg: Path, kelvin: int | None) -> bool:
-    """Wywołanie bez presetu XMP — darktable auto (ignoruje kelvin)."""
-    _wait_if_liveview()
-    from core.developer.cli_developer import export_raw_fallback
-    return export_raw_fallback(raw, out_jpeg)
-
-
-def _develop_file(raw: Path, preset_xmp: Path, out_jpeg: Path,
+def _develop_file(raw: Path, preset: str, out_jpeg: Path,
                   kelvin: int | None) -> bool:
     """
     Wywołuje cli_developer.py dla jednego pliku RAW przez nice +10.
+    Czeka jeśli LiveView lub darktable GUI aktywne.
     Zwraca True gdy JPEG powstał.
     """
     _wait_if_liveview()
+    _wait_if_darktable_gui()
 
     cmd = [
         "nice", "-n", "10",
         sys.executable, str(CLI_DEV_PATH),
-        str(raw), str(preset_xmp), str(out_jpeg),
+        str(raw), preset, str(out_jpeg),
     ]
     if kelvin is not None:
         cmd += ["--kelvin", str(kelvin)]
@@ -190,16 +175,8 @@ def _process_session(entry: dict) -> None:
 
     print(f"[dev_worker] Sesja: {session_path}  preset={preset}  kelvin={kelvin}", flush=True)
 
-    # Znajdź preset XMP (lub ustaw None dla trybu auto)
-    if preset == _AUTO_PRESET:
-        preset_xmp = None
-    else:
-        preset_xmp = _find_preset_xmp(preset)
-        if preset_xmp is None:
-            print(f"[dev_worker] Nie znaleziono presetu: {preset}", file=sys.stderr, flush=True)
-            _update_entry(session_path, status="error",
-                          error_msg=f"Preset nie znaleziony: {preset}")
-            return
+    # preset jest przekazywany bezpośrednio do cli_developer
+    # ("__auto__" | "nazwa stylu" | "/ścieżka/plik.dtstyle")
 
     # Oznacz jako processing
     _update_entry(session_path, status="processing", worker_pid=os.getpid())
@@ -225,10 +202,7 @@ def _process_session(entry: dict) -> None:
         errors = []
         for raw in raw_files:
             out_jpeg = session_dir / (raw.stem + ".jpg")
-            if preset_xmp is None:
-                ok = _develop_file_auto(raw, out_jpeg, kelvin)
-            else:
-                ok = _develop_file(raw, preset_xmp, out_jpeg, kelvin)
+            ok = _develop_file(raw, preset, out_jpeg, kelvin)
             if ok:
                 processed += 1
                 print(f"[dev_worker] [{processed}/{total}] ✔ {raw.name}", flush=True)

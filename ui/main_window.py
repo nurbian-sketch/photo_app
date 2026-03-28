@@ -746,8 +746,7 @@ class MainWindow(QMainWindow):
     def _show_develop_dialog(self, session_path: str):
         """Otwiera DevelopDialog i po akceptacji dodaje sesję do kolejki developer."""
         from ui.dialogs.develop_dialog import DevelopDialog
-        presets_dir = Path(__file__).parent.parent / "presets"
-        dlg = DevelopDialog(session_path, presets_dir, parent=self)
+        dlg = DevelopDialog(session_path, parent=self)
         if dlg.exec():
             self._developer_manager.start(
                 session_path  = session_path,
