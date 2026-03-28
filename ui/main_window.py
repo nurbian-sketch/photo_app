@@ -1,7 +1,8 @@
 # --- PyQt6 ---
 from PyQt6.QtWidgets import (
     QMainWindow, QStackedWidget, QMenuBar, QStatusBar,
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QMessageBox, QApplication
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QMessageBox, QApplication,
+    QDialog,
 )
 from PyQt6.QtGui import QAction, QIcon, QKeySequence, QShortcut, QKeyEvent, QPixmap, QImage, QPainter
 from PyQt6.QtCore import Qt, QTimer, QTranslator, QSettings, QSize
@@ -759,16 +760,30 @@ class MainWindow(QMainWindow):
 
         # Sprawdź czy darktable GUI nie blokuje bazy — pętla aż użytkownik zamknie
         while self._darktable_gui_running():
-            ret = QMessageBox.warning(
-                self,
-                self.tr("Darktable is running"),
+            from ui.styles import DIALOG_SPACING, DIALOG_MARGINS, DIALOG_BTN_H
+            from PyQt6.QtWidgets import QDialogButtonBox as _BB
+            _dlg = QDialog(self)
+            _dlg.setWindowTitle(self.tr("Darktable is running"))
+            _dlg.setModal(True)
+            _lay = QVBoxLayout(_dlg)
+            _lay.setSpacing(DIALOG_SPACING)
+            _lay.setContentsMargins(*DIALOG_MARGINS)
+            _lbl = QLabel(
                 self.tr(
                     "Darktable is open and holds a lock on its database.\n"
                     "Close Darktable, then click OK to continue."
-                ),
-                QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
+                )
             )
-            if ret == QMessageBox.StandardButton.Cancel:
+            _lbl.setWordWrap(True)
+            _lay.addWidget(_lbl)
+            _bb = _BB(_BB.StandardButton.Ok | _BB.StandardButton.Cancel)
+            _bb.accepted.connect(_dlg.accept)
+            _bb.rejected.connect(_dlg.reject)
+            _bb.button(_BB.StandardButton.Ok).setDefault(True)
+            for _btn in _bb.buttons():
+                _btn.setFixedHeight(DIALOG_BTN_H)
+            _lay.addWidget(_bb)
+            if _dlg.exec() != QDialog.DialogCode.Accepted:
                 return
 
         self._developer_manager.start(

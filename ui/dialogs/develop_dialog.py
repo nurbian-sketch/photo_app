@@ -146,6 +146,7 @@ class DevelopDialog(QDialog):
         )
         bb.accepted.connect(self._on_accept)
         bb.rejected.connect(self.reject)
+        bb.button(QDialogButtonBox.StandardButton.Ok).setDefault(True)
         layout.addWidget(bb)
 
     def _populate_combo(self):
