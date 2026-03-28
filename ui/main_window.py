@@ -743,17 +743,40 @@ class MainWindow(QMainWindow):
         # Odśwież info o miejscu na remote po zakończeniu sesji
         QTimer.singleShot(5000, self._start_space_check)
 
+    @staticmethod
+    def _darktable_gui_running() -> bool:
+        """Sprawdza czy darktable GUI jest uruchomione."""
+        return subprocess.run(
+            ["pgrep", "-x", "darktable"], capture_output=True
+        ).returncode == 0
+
     def _show_develop_dialog(self, session_path: str):
         """Otwiera DevelopDialog i po akceptacji dodaje sesję do kolejki developer."""
         from ui.dialogs.develop_dialog import DevelopDialog
         dlg = DevelopDialog(session_path, parent=self)
-        if dlg.exec():
-            self._developer_manager.start(
-                session_path  = session_path,
-                preset        = dlg.selected_preset,
-                kelvin        = dlg.selected_kelvin,
+        if not dlg.exec():
+            return
+
+        # Sprawdź czy darktable GUI nie blokuje bazy — pętla aż użytkownik zamknie
+        while self._darktable_gui_running():
+            ret = QMessageBox.warning(
+                self,
+                self.tr("Darktable is running"),
+                self.tr(
+                    "Darktable is open and holds a lock on its database.\n"
+                    "Close Darktable, then click OK to continue."
+                ),
+                QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
             )
-            self._update_developer_icon()
+            if ret == QMessageBox.StandardButton.Cancel:
+                return
+
+        self._developer_manager.start(
+            session_path  = session_path,
+            preset        = dlg.selected_preset,
+            kelvin        = dlg.selected_kelvin,
+        )
+        self._update_developer_icon()
 
     def _on_developer_icon_clicked(self):
         """Klik na ikonę developera — retry gdy błąd."""

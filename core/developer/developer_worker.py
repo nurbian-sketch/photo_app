@@ -84,19 +84,25 @@ def _wait_if_darktable_gui(poll: int = 10) -> None:
 
 def _reorganize_session(session_dir: Path) -> list[Path]:
     """
-    Przenosi pliki RAW do raw/ i sparowane JPEG do jpg/.
-    Zwraca listę plików RAW w katalogu raw/.
+    Reorganizuje pliki sesji:
+      - tylko JPG  → bez zmian, zwraca []
+      - tylko RAW  → RAW → raw/, wywołane JPG będą w root
+      - RAW + JPG  → RAW → raw/, istniejące JPG → jpg/, wywołane JPG w root
     """
-    raw_files = [
-        f for f in session_dir.iterdir()
-        if f.is_file() and f.suffix.lower() in RAW_EXT
-    ]
-
     raw_dir = session_dir / "raw"
     jpg_dir = session_dir / "jpg"
 
+    raw_files = sorted(
+        f for f in session_dir.iterdir()
+        if f.is_file() and f.suffix.lower() in RAW_EXT
+    )
+    jpg_files = sorted(
+        f for f in session_dir.iterdir()
+        if f.is_file() and f.suffix.lower() in (".jpg", ".jpeg")
+    )
+
     if not raw_files:
-        # RAW-y mogły zostać przeniesione przez poprzednią (nieudaną) próbę
+        # Retry: RAW-y mogły być przeniesione przez poprzednią próbę
         if raw_dir.is_dir():
             already_moved = sorted(
                 f for f in raw_dir.iterdir()
@@ -107,23 +113,22 @@ def _reorganize_session(session_dir: Path) -> list[Path]:
                 return already_moved
         return []
 
+    # Przenieś RAW do raw/
     raw_dir.mkdir(exist_ok=True)
-    # jpg_dir tworzymy tylko gdy faktycznie są sparowane JPEG
-
     moved_raws = []
-    for raw in sorted(raw_files):
-        # Szukaj sparowanego JPEG (ta sama bazowa nazwa)
-        paired_jpg = session_dir / (raw.stem + ".jpg")
-        if paired_jpg.exists():
-            jpg_dir.mkdir(exist_ok=True)          # lazy create
-            dest_jpg = jpg_dir / paired_jpg.name
-            paired_jpg.rename(dest_jpg)
-            print(f"[dev_worker] JPEG → jpg/{paired_jpg.name}", flush=True)
-
-        dest_raw = raw_dir / raw.name
-        raw.rename(dest_raw)
-        moved_raws.append(dest_raw)
+    for raw in raw_files:
+        dest = raw_dir / raw.name
+        raw.rename(dest)
+        moved_raws.append(dest)
         print(f"[dev_worker] RAW → raw/{raw.name}", flush=True)
+
+    # Przenieś istniejące JPG do jpg/ (tylko gdy są razem z RAW)
+    if jpg_files:
+        jpg_dir.mkdir(exist_ok=True)
+        for jpg in jpg_files:
+            dest = jpg_dir / jpg.name
+            jpg.rename(dest)
+            print(f"[dev_worker] JPG → jpg/{jpg.name}", flush=True)
 
     return moved_raws
 

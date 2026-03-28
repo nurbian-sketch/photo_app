@@ -240,17 +240,17 @@ class DevelopDialog(QDialog):
 
     def _restore_settings(self):
         """Przywraca ostatnie ustawienia z QSettings."""
-        src = self._settings.value("developer/last_preset_src", "no_style")
-        if src == "use_style":
+        src = self._settings.value("developer/last_preset_src", "use_style")
+        if src == "no_style":
+            self._rb_no_style.setChecked(True)
+        elif src == "load_style":
+            self._rb_load_style.setChecked(True)
+        else:
             name = self._settings.value("developer/last_preset", "")
             idx = self._combo.findData(name)
             if idx >= 0:
                 self._combo.setCurrentIndex(idx)
             self._rb_use_style.setChecked(True)
-        elif src == "load_style":
-            self._rb_load_style.setChecked(True)
-        else:
-            self._rb_no_style.setChecked(True)
 
         wb = self._settings.value("developer/last_wb", "exif")
         if wb == "manual":
