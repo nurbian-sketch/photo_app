@@ -27,36 +27,8 @@ NC='\033[0m'
 
 mkdir -p "$OUTPUT_DIR"
 
-STYLES=(
-    "*Agent Orange"
-    "*Autumnal"
-    "**Basic Adjustments - No Colour Zones"
-    "canon rp starting point"
-    "*Chrome Extra"
-    "*Chrome It!"
-    "*Crimson Boost"
-    "*Crunchy Sepia"
-    "*Desaturate"
-    "*Futureist"
-    "*Gotham"
-    "*Grey Skies To Blue"
-    "**Magenta Film (Add To Look)"
-    "*Magenta Skies"
-    "*Mono Chrome"
-    "*Mono Infraredish"
-    "*Monochrome Contrast"
-    "*Monochrome Darksky"
-    "*Monochrome Foilage"
-    "*Monochrome Portrait"
-    "*Natural Look Colour Portraits"
-    "*Natural Look"
-    "*Pastel"
-    "*Preety"
-    "*Radiant"
-    "*Sunset Bliss"
-    "*Velviatic Portraits"
-    "*Velviatic"
-)
+DARKTABLE_DB="$HOME/.config/darktable/data.db"
+mapfile -t STYLES < <(sqlite3 "$DARKTABLE_DB" "SELECT name FROM styles ORDER BY name;")
 
 # --- Wybierz pierwsze znalezione zdjęcie CR3 ---
 CR3=$(find "$CR3_DIR" -maxdepth 1 \( -iname "*.CR3" -o -iname "*.cr3" \) | sort | head -1)
