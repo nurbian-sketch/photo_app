@@ -763,32 +763,9 @@ class MainWindow(QMainWindow):
             return
 
         # Sprawdź czy darktable GUI nie blokuje bazy — pętla aż użytkownik zamknie
+        from ui.dialogs.darktable_running_dialog import DarktableRunningDialog
         while self._darktable_gui_running():
-            from ui.styles import DIALOG_SPACING, DIALOG_MARGINS, DIALOG_BTN_H, DIALOG_BTN_W
-            from PyQt6.QtWidgets import QDialogButtonBox as _BB
-            _dlg = QDialog(self)
-            _dlg.setWindowTitle(self.tr("Darktable is running"))
-            _dlg.setModal(True)
-            _lay = QVBoxLayout(_dlg)
-            _lay.setSpacing(DIALOG_SPACING)
-            _lay.setContentsMargins(*DIALOG_MARGINS)
-            _lbl = QLabel(
-                self.tr(
-                    "Darktable is open and holds a lock on its database.\n"
-                    "Close Darktable, then click OK to continue."
-                )
-            )
-            _lbl.setWordWrap(True)
-            _lay.addWidget(_lbl)
-            _bb = _BB(_BB.StandardButton.Ok | _BB.StandardButton.Cancel)
-            _bb.accepted.connect(_dlg.accept)
-            _bb.rejected.connect(_dlg.reject)
-            _bb.button(_BB.StandardButton.Ok).setDefault(True)
-            for _btn in _bb.buttons():
-                _btn.setFixedHeight(DIALOG_BTN_H)
-                _btn.setFixedWidth(DIALOG_BTN_W)
-            _lay.addWidget(_bb)
-            if _dlg.exec() != QDialog.DialogCode.Accepted:
+            if DarktableRunningDialog(self).exec() != QDialog.DialogCode.Accepted:
                 return
 
         self._developer_manager.start(
