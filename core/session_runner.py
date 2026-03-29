@@ -267,8 +267,9 @@ class SessionRunner(QThread):
             return
 
         try:
-            # Odczytaj offset zegarów i wylistuj nowe pliki
-            self.context.camera_time_offset = self._get_time_offset(camera, gp_context)
+            # Użyj offsetu z kontekstu (obliczonego przed sesją) lub oblicz teraz jako fallback
+            if not self.context.camera_time_offset:
+                self.context.camera_time_offset = self._get_time_offset(camera, gp_context)
             print(f"[IMPORT] offset={self.context.camera_time_offset}s  started_at={self.context.started_at}", flush=True)
             logger.info(f"Offset zegarów aparat↔system: {self.context.camera_time_offset}s")
 
@@ -487,13 +488,15 @@ class SessionRunner(QThread):
         Uwzględnia offset zegarów.
         Zwraca listę (folder, filename).
         """
-        # Próg: czas kliknięcia Start (lub started_at jeśli nie przekazano)
+        # Dolna granica: czas startu sesji w czasie aparatu (- 5s bufor)
         ref_time         = self._session_start_time or self.context.started_at
         session_start_ts = int(ref_time.timestamp())
-        threshold_ts     = session_start_ts + self.context.camera_time_offset
-        # Bufor 30s — na wypadek drobnych rozbieżności zegarów
-        threshold_ts    -= 30
-        print(f"[LIST] ref={ref_time}  session_start_ts={session_start_ts}  threshold_ts={threshold_ts}", flush=True)
+        threshold_ts     = session_start_ts + self.context.camera_time_offset - 5
+        # Górna granica: czas końca sesji w czasie aparatu (+ 5s bufor)
+        upper_ts = None
+        if self.context.ended_at:
+            upper_ts = int(self.context.ended_at.timestamp()) + self.context.camera_time_offset + 5
+        print(f"[LIST] ref={ref_time}  threshold={threshold_ts}  upper={upper_ts}", flush=True)
 
         result = []
 
@@ -517,7 +520,9 @@ class SessionRunner(QThread):
                     try:
                         info = camera.file_get_info(folder_path, filename, gp_context)
                         mtime = info.file.mtime
-                        inc = mtime >= threshold_ts
+                        inc   = mtime >= threshold_ts
+                        if inc and upper_ts is not None:
+                            inc = mtime <= upper_ts
                         print(f"[LIST]  {filename}: mtime={mtime}  include={inc}", flush=True)
                         if inc:
                             result.append((folder_path, filename))

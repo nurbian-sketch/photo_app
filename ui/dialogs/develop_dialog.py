@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
 
 from ui.styles import (
     DIALOG_SPACING, DIALOG_MARGINS, DIALOG_MIN_WIDTH,
-    DIALOG_BTN_H,
+    DIALOG_BTN_H, DIALOG_BTN_W,
     center_on_parent,
 )
 
@@ -171,6 +171,7 @@ class DevelopDialog(QDialog):
         self._btn_ok.setAutoDefault(True)
         for _b in bb.buttons():
             _b.setFixedHeight(DIALOG_BTN_H)
+            _b.setFixedWidth(DIALOG_BTN_W)
         layout.addWidget(bb)
 
     def _populate_combo(self):

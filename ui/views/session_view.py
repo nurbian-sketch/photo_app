@@ -95,6 +95,32 @@ def _snapshot_card_files() -> set:
         return set()
 
 
+def _read_camera_time_offset() -> int:
+    """
+    Odczytuje offset czasu aparat↔system gdy USB wolne.
+    Zwraca różnicę (cam_ts - sys_ts) w sekundach. 0 przy błędzie.
+    """
+    import logging as _log
+    _logger = _log.getLogger(__name__)
+    try:
+        import gphoto2 as gp
+        ctx = gp.Context()
+        camera = gp.Camera()
+        camera.init(ctx)
+        try:
+            cfg    = camera.get_config(ctx)
+            cam_ts = int(cfg.get_child_by_name("datetime").get_value())
+            sys_ts = int(datetime.now().timestamp())
+            offset = cam_ts - sys_ts
+            _logger.info(f"Offset przed sesją: cam={cam_ts} sys={sys_ts} offset={offset}s")
+            return offset
+        finally:
+            camera.exit(ctx)
+    except Exception as e:
+        _logger.warning(f"Nie można odczytać czasu aparatu (offset=0): {e}")
+        return 0
+
+
 # ─────────────────────────── PANEL KONFIGURACJI
 
 class ConfigPanel(QWidget):
@@ -584,6 +610,9 @@ class SessionView(QWidget):
         self._settings_panel.deactivate()
         self._stop_usb_polling()
 
+        # Odczytaj offset zegarów aparat↔system (USB jeszcze wolne)
+        cam_offset = _read_camera_time_offset()
+
         # Zapamiętaj czas startu przed dialogiem — bez kontaktu z aparatem
         session_start_time = datetime.now()
 
@@ -608,6 +637,7 @@ class SessionView(QWidget):
 
         cam_settings = self._current_camera_settings or CameraSettings()
         ctx = make_session_context(email, duration_min, base_dir, captures, cam_settings)
+        ctx.camera_time_offset = cam_offset   # wektor czasu obliczony przed dialogiem
         # Tryb testowy: 5 sec zamiast duration_min minut
         if self._config_panel.duration_slider.get_value() == DURATION_TEST_LABEL:
             ctx.duration_sec_override = 5
