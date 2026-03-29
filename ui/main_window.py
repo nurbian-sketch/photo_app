@@ -492,7 +492,14 @@ class MainWindow(QMainWindow):
         )
         self._action_mw_develop.setEnabled(False)
 
+        self._action_mw_edit_gimp = QAction(self.tr("Edit in GIMP…"), self)
+        self._action_mw_edit_gimp.triggered.connect(
+            lambda: self.darkroom_view._edit_in_gimp()
+        )
+        self._action_mw_edit_gimp.setEnabled(False)
+
         self._external_menu.addAction(self._action_mw_develop)
+        self._external_menu.addAction(self._action_mw_edit_gimp)
         self._external_menu.addSeparator()
 
         self._action_mw_send = QAction(self.tr("Send via Telegram…"), self)
@@ -668,10 +675,15 @@ class MainWindow(QMainWindow):
         # Dynamiczne — reset do False; update_selection_count() ustawi właściwy stan
         for attr in [
             '_action_mw_copy', '_action_mw_move', '_action_mw_delete',
-            '_action_mw_develop', '_action_mw_send',
+            '_action_mw_develop', '_action_mw_edit_gimp', '_action_mw_send',
         ]:
             if hasattr(self, attr):
                 getattr(self, attr).setEnabled(False)
+        # SD Card — aktywne w menu File tylko gdy widok Darkroom i karta wykryta
+        if hasattr(self, '_action_file_sd_card'):
+            sd_ready = getattr(self, 'sd_ready', False)
+            self._action_file_sd_card.setEnabled(is_pictures and sd_ready)
+
         # Wejście do Darkroom — odśwież stan selekcji natychmiast
         if is_pictures:
             self.darkroom_view.update_selection_count()

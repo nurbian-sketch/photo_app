@@ -1,11 +1,11 @@
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QListWidgetItem,
-    QLabel, QPushButton, QMessageBox, QFileDialog, QSizePolicy, QSplitter,
-    QStyledItemDelegate, QStyle, QStyleOptionButton, QApplication, QMenu,
-    QGroupBox, QToolButton
+    QLabel, QPushButton, QMessageBox, QFileDialog, QInputDialog, QSizePolicy,
+    QSplitter, QStyledItemDelegate, QStyle, QStyleOptionButton, QApplication,
+    QMenu, QGroupBox, QToolButton
 )
 from PyQt6.QtGui import QPixmap, QIcon
-from PyQt6.QtCore import Qt, QSize, QTimer, QRect, pyqtSignal
+from PyQt6.QtCore import Qt, QSize, QTimer, QRect, QProcess, QFileSystemWatcher, pyqtSignal
 
 import os
 from pathlib import Path
@@ -111,6 +111,13 @@ class DarkroomView(QWidget):
         self._sd_mode           = False
         self._loader            = None
         self._browser_worker    = None
+
+        # Stan edycji GIMP
+        self._gimp_process:       QProcess | None = None
+        self._gimp_jpg_path:      str | None = None
+        self._gimp_png_path:      str | None = None
+        self._gimp_watcher:       QFileSystemWatcher | None = None
+        self._gimp_export_timer:  QTimer | None = None
         self._format_worker     = None
         self._list_file_offset  = 0
 
@@ -296,11 +303,6 @@ class DarkroomView(QWidget):
         self.btn_copy_to_disk.setEnabled(False)
         self.btn_copy_to_disk.setVisible(False)
 
-        self.btn_format_card = QPushButton(self.tr("Format Card"))
-        self.btn_format_card.setMinimumHeight(BTN_H)
-        self.btn_format_card.setStyleSheet(BTN_STYLE_RED)
-        self.btn_format_card.setVisible(False)
-
         # Disk only
         self.btn_copy_folder = QPushButton(self.tr("Copy to…"))
         self.btn_copy_folder.setMinimumHeight(BTN_H)
@@ -313,11 +315,36 @@ class DarkroomView(QWidget):
         self.btn_move_folder.clicked.connect(lambda: self._copy_or_move_selected(move=True))
 
         for w in [self.btn_select, self.btn_delete,
-                  self.btn_copy_to_disk, self.btn_format_card,
+                  self.btn_copy_to_disk,
                   self.btn_copy_folder, self.btn_move_folder]:
             row_edit.addWidget(w)
 
         groups_row.addWidget(grp_edit)
+
+        # ── Grupa Dir ────────────────────────────────────────────────────────
+        grp_dir = QGroupBox(self.tr("Dir"))
+        grp_dir.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        row_dir = QHBoxLayout(grp_dir)
+        row_dir.setContentsMargins(6, 4, 6, 4)
+        row_dir.setSpacing(4)
+
+        # Disk only
+        self.btn_make_dir = QPushButton(self.tr("Make Dir"))
+        self.btn_make_dir.setMinimumHeight(BTN_H)
+
+        self.btn_delete_dir = QPushButton(self.tr("Delete Dir"))
+        self.btn_delete_dir.setMinimumHeight(BTN_H)
+
+        # SD card only — domyślnie ukryty; zastępuje Make/Delete Dir w trybie SD
+        self.btn_format_card = QPushButton(self.tr("Format Card"))
+        self.btn_format_card.setMinimumHeight(BTN_H)
+        self.btn_format_card.setStyleSheet(BTN_STYLE_RED)
+        self.btn_format_card.setVisible(False)
+
+        for w in [self.btn_make_dir, self.btn_delete_dir, self.btn_format_card]:
+            row_dir.addWidget(w)
+
+        groups_row.addWidget(grp_dir)
 
         # ── Grupa External ───────────────────────────────────────────────────
         grp_external = QGroupBox(self.tr("External"))
@@ -325,6 +352,18 @@ class DarkroomView(QWidget):
         row_external = QHBoxLayout(grp_external)
         row_external.setContentsMargins(6, 4, 6, 4)
         row_external.setSpacing(4)
+
+        self.btn_develop = QPushButton(self.tr("Develop…"))
+        self.btn_develop.setMinimumHeight(BTN_H)
+        self.btn_develop.setIcon(QIcon.fromTheme("darktable"))
+        self.btn_develop.setEnabled(False)
+        self.btn_develop.clicked.connect(self._on_develop_requested)
+
+        self.btn_edit_gimp = QPushButton(self.tr("Edit…"))
+        self.btn_edit_gimp.setMinimumHeight(BTN_H)
+        self.btn_edit_gimp.setIcon(QIcon.fromTheme("gimp"))
+        self.btn_edit_gimp.setEnabled(False)
+        self.btn_edit_gimp.clicked.connect(self._edit_in_gimp)
 
         # Telegram — klik = wyślij, strzałka = konfiguracja
         self.btn_send = QToolButton()
@@ -341,13 +380,7 @@ class DarkroomView(QWidget):
         self.btn_send.clicked.connect(lambda: self._send_via_telegram())
         self._action_telegram_config.triggered.connect(self._configure_telegram)
 
-        self.btn_develop = QPushButton(self.tr("Develop…"))
-        self.btn_develop.setMinimumHeight(BTN_H)
-        self.btn_develop.setIcon(QIcon.fromTheme("darktable"))
-        self.btn_develop.setEnabled(False)
-        self.btn_develop.clicked.connect(self._on_develop_requested)
-
-        for w in [self.btn_send, self.btn_develop]:
+        for w in [self.btn_develop, self.btn_edit_gimp, self.btn_send]:
             row_external.addWidget(w)
 
         groups_row.addWidget(grp_external)
@@ -374,6 +407,8 @@ class DarkroomView(QWidget):
         self.btn_delete.clicked.connect(self.delete_images)
         self.btn_copy_to_disk.clicked.connect(self._copy_to_disk)
         self.btn_format_card.clicked.connect(self._format_card)
+        self.btn_make_dir.clicked.connect(self._make_dir)
+        self.btn_delete_dir.clicked.connect(self._delete_dir)
 
         self.preview.wb_applied.connect(self._on_wb_applied)
 
@@ -647,10 +682,11 @@ class DarkroomView(QWidget):
     def set_sd_card_ready(self, ready: bool):
         self._sd_card_ready = ready
         self.btn_sd_card.setVisible(ready)
-        # Synchronizuj akcję SD Card w menu głównym
+        # Synchronizuj akcję SD Card — aktywna w menu tylko gdy widok Darkroom
         mw = self.window()
         if hasattr(mw, '_action_file_sd_card'):
-            mw._action_file_sd_card.setEnabled(ready)
+            in_darkroom = getattr(mw, '_current_view_name', 'Darkroom') == 'Darkroom'
+            mw._action_file_sd_card.setEnabled(ready and in_darkroom)
 
     def _open_sd_card(self):
         self._sd_mode = True
@@ -667,6 +703,9 @@ class DarkroomView(QWidget):
         self.btn_copy_folder.setVisible(False)
         self.btn_move_folder.setVisible(False)
         self.btn_develop.setVisible(False)
+        self.btn_edit_gimp.setVisible(False)
+        self.btn_make_dir.setVisible(False)
+        self.btn_delete_dir.setVisible(False)
         # Pokaż przyciski SD-only
         self.btn_copy_to_disk.setVisible(True)
         self.btn_format_card.setVisible(True)
@@ -753,6 +792,9 @@ class DarkroomView(QWidget):
         self.btn_copy_folder.setVisible(True)
         self.btn_move_folder.setVisible(True)
         self.btn_develop.setVisible(True)
+        self.btn_edit_gimp.setVisible(True)
+        self.btn_make_dir.setVisible(True)
+        self.btn_delete_dir.setVisible(True)
         CameraCardBrowserWorker.cleanup_temp()
 
     # ─────────────────────────── Selekcja
@@ -1116,6 +1158,11 @@ class DarkroomView(QWidget):
                 self.tr("Open in Darktable"),
                 self._open_in_darktable
             )
+            act_edit_gimp = menu.addAction(
+                self.tr("Edit in GIMP…"),
+                self._edit_in_gimp
+            )
+            act_edit_gimp.setEnabled(bool(self._effective_jpeg_files()))
             menu.addSeparator()
 
         # ── Copy / Move ──────────────────────────────────────────────────────
@@ -1360,6 +1407,8 @@ class DarkroomView(QWidget):
             self.btn_move_folder.setEnabled(has_any)
             has_raw = bool(self._effective_raw_files())
             self.btn_develop.setEnabled(has_raw)
+            has_jpg = bool(self._effective_jpeg_files())
+            self.btn_edit_gimp.setEnabled(has_jpg)
         # btn_send — aktywny gdy coś wybrane (oba tryby)
         self.btn_send.setEnabled(has_any)
 
@@ -1371,6 +1420,10 @@ class DarkroomView(QWidget):
         if hasattr(mw, '_action_mw_develop'):
             has_raw = has_raw if not self._sd_mode else False
             mw._action_mw_develop.setEnabled(has_raw)
+        if hasattr(mw, '_action_mw_edit_gimp'):
+            mw._action_mw_edit_gimp.setEnabled(
+                has_jpg if not self._sd_mode else False
+            )
 
     # ─────────────────────────── Cleanup
 
@@ -1416,6 +1469,207 @@ class DarkroomView(QWidget):
         from core.image_io import RAW_EXTENSIONS
         return [p for p in self._effective_files()
                 if os.path.splitext(p)[1].lower() in RAW_EXTENSIONS]
+
+    def _effective_jpeg_files(self) -> list[str]:
+        """Zwraca ścieżki efektywnych plików JPEG (zaznaczone lub bieżący)."""
+        return [p for p in self._effective_files()
+                if os.path.splitext(p)[1].lower() in {'.jpg', '.jpeg'}]
+
+    # ─────────────────────────── Edycja w GIMP
+
+    def _edit_in_gimp(self):
+        """Otwiera zaznaczony JPG w GIMP jako temp PNG.
+        QFileSystemWatcher obserwuje PNG — eksport do JPG natychmiast po zapisie.
+        """
+        if self._sd_mode:
+            return
+        jpgs = self._effective_jpeg_files()
+        if not jpgs:
+            return
+        if (self._gimp_process and
+                self._gimp_process.state() != QProcess.ProcessState.NotRunning):
+            from ui.dialogs.gimp_running_dialog import GimpRunningDialog
+            GimpRunningDialog(self).exec()
+            return
+
+        jpg_path = jpgs[0]
+
+        try:
+            from PIL import Image
+            import tempfile
+            tmp_dir  = tempfile.mkdtemp(prefix='photo_app_gimp_')
+            base     = os.path.splitext(os.path.basename(jpg_path))[0]
+            png_path = os.path.join(tmp_dir, base + '.png')
+            img = Image.open(jpg_path).convert('RGB')
+            img.save(png_path, 'PNG')
+        except Exception as e:
+            self._show_status(self.tr(f"⚠ GIMP prepare error: {e}"), 8000)
+            return
+
+        self._gimp_jpg_path = jpg_path
+        self._gimp_png_path = png_path
+        self.btn_edit_gimp.setEnabled(False)
+
+        self._gimp_process = QProcess(self)
+        self._gimp_process.finished.connect(self._on_gimp_finished)
+        self._gimp_process.start('gimp', ['--new-instance', '--no-splash', png_path])
+        if not self._gimp_process.waitForStarted(3000):
+            self._show_status(self.tr("⚠ Cannot start GIMP"), 6000)
+            self._gimp_process  = None
+            self._gimp_jpg_path = None
+            self._gimp_png_path = None
+            import shutil
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            self.update_selection_count()
+            return
+
+        # Obserwuj temp PNG — eksportuj do JPG przy każdym zapisie w GIMP
+        self._gimp_watcher = QFileSystemWatcher([png_path], self)
+        self._gimp_watcher.fileChanged.connect(self._on_gimp_png_changed)
+
+    def _on_gimp_png_changed(self, path: str) -> None:
+        """Plik PNG zmieniony przez GIMP — debounce 500 ms, potem eksport do JPG.
+
+        GIMP może usuwać i odtwarzać plik przy atomicznym zapisie,
+        co kasuje obserwację — przywracamy addPath po 300 ms.
+        """
+        QTimer.singleShot(300, lambda: (
+            self._gimp_watcher.addPath(path)
+            if self._gimp_watcher and path not in self._gimp_watcher.files()
+            else None
+        ))
+        # Debounce — eksportuj 500 ms po ostatniej zmianie
+        if self._gimp_export_timer:
+            self._gimp_export_timer.stop()
+        else:
+            self._gimp_export_timer = QTimer(self)
+            self._gimp_export_timer.setSingleShot(True)
+            self._gimp_export_timer.timeout.connect(self._do_gimp_export)
+        self._gimp_export_timer.start(500)
+
+    def _do_gimp_export(self) -> None:
+        """Eksportuje aktualny temp PNG do oryginalnego JPG (quality=95, sRGB)."""
+        jpg_path = self._gimp_jpg_path
+        png_path = self._gimp_png_path
+        if not jpg_path or not png_path or not os.path.exists(png_path):
+            return
+        try:
+            from PIL import Image, ImageCms
+            img          = Image.open(png_path).convert('RGB')
+            srgb         = ImageCms.createProfile('sRGB')
+            profile_data = ImageCms.ImageCmsProfile(srgb).tobytes()
+            img.save(jpg_path, 'JPEG', quality=95,
+                     icc_profile=profile_data, subsampling=0)
+            self._show_status(
+                self.tr(f"Saved: {os.path.basename(jpg_path)}"), 4000
+            )
+            self._refresh_thumbnail(jpg_path)
+        except Exception as e:
+            self._show_status(self.tr(f"⚠ GIMP export error: {e}"), 8000)
+
+    def _on_gimp_finished(self, exit_code: int, exit_status) -> None:
+        """Proces GIMP zakończony — finalny eksport i cleanup."""
+        # Finalny eksport na wypadek gdyby watcher nie złapał ostatniego zapisu
+        self._do_gimp_export()
+
+        # Cleanup watchera i timera
+        if self._gimp_watcher:
+            self._gimp_watcher.deleteLater()
+            self._gimp_watcher = None
+        if self._gimp_export_timer:
+            self._gimp_export_timer.stop()
+            self._gimp_export_timer = None
+
+        png_path = self._gimp_png_path
+        self._gimp_jpg_path = None
+        self._gimp_png_path = None
+        self._gimp_process  = None
+
+        if png_path:
+            import shutil
+            shutil.rmtree(os.path.dirname(png_path), ignore_errors=True)
+
+        self.update_selection_count()
+
+    def _refresh_thumbnail(self, path: str) -> None:
+        """Unieważnia miniaturę i odświeża ikonę w liście."""
+        from pathlib import Path
+        for i in range(self.list_widget.count()):
+            item = self.list_widget.item(i)
+            if item.data(_ITEM_PATH_ROLE) == path:
+                try:
+                    pixmap = self.darkcache.get_pixmap(
+                        Path(path), self.large_thumbs, force=True
+                    )
+                except TypeError:
+                    pixmap = self.darkcache.get_pixmap(Path(path), self.large_thumbs)
+                if pixmap and not pixmap.isNull():
+                    item.setIcon(QIcon(pixmap))
+                break
+
+    # ─────────────────────────── Zarządzanie katalogami
+
+    def _make_dir(self) -> None:
+        """Tworzy podkatalog w bieżącym folderze."""
+        if not self.current_dir or self._sd_mode:
+            return
+        name, ok = QInputDialog.getText(
+            self, self.tr("Make Directory"), self.tr("Directory name:")
+        )
+        if not ok or not name.strip():
+            return
+        path = os.path.join(self.current_dir, name.strip())
+        try:
+            os.makedirs(path, exist_ok=False)
+            self._show_status(
+                self.tr(f"Created: {name.strip()}"), 3000
+            )
+        except FileExistsError:
+            QMessageBox.warning(
+                self, self.tr("Make Directory"),
+                self.tr(f"Directory '{name.strip()}' already exists.")
+            )
+        except Exception as e:
+            QMessageBox.warning(self, self.tr("Make Directory"), str(e))
+
+    def _delete_dir(self) -> None:
+        """Usuwa wybrany podkatalog bieżącego folderu."""
+        if not self.current_dir or self._sd_mode:
+            return
+        target = QFileDialog.getExistingDirectory(
+            self, self.tr("Delete Directory"), self.current_dir
+        )
+        if not target:
+            return
+        # Tylko podkatalogi bieżącego folderu — zabezpieczenie przed usunięciem roota
+        real_current = os.path.realpath(self.current_dir)
+        real_target  = os.path.realpath(target)
+        if not real_target.startswith(real_current + os.sep):
+            QMessageBox.warning(
+                self, self.tr("Delete Directory"),
+                self.tr("Only subdirectories of the current folder can be deleted.")
+            )
+            return
+        reply = QMessageBox.question(
+            self,
+            self.tr("Delete Directory"),
+            self.tr(
+                "Delete '{}' and all its contents?".format(
+                    os.path.basename(target)
+                )
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            import shutil
+            shutil.rmtree(real_target)
+            self._show_status(
+                self.tr(f"Deleted: {os.path.basename(target)}"), 4000
+            )
+        except Exception as e:
+            QMessageBox.warning(self, self.tr("Delete Directory"), str(e))
 
     def _on_develop_requested(self):
         """Emituje sygnał develop_requested z katalogiem bieżącym."""
