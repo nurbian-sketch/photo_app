@@ -993,9 +993,8 @@ class MainWindow(QMainWindow):
         msg.exec()
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key.Key_F11:
-            self.toggle_fullscreen()
-        elif event.key() == Qt.Key.Key_Escape and self.isFullScreen():
+        # F11 obsługiwany przez QShortcut (ApplicationShortcut) — działa też w dialogach modalnych
+        if event.key() == Qt.Key.Key_Escape and self.isFullScreen():
             self.toggle_fullscreen()
         else:
             super().keyPressEvent(event)

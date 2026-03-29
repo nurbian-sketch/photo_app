@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QRadioButton,
     QButtonGroup, QComboBox,
-    QLineEdit, QFileDialog, QDialogButtonBox, QMessageBox,
+    QLineEdit, QFileDialog, QDialogButtonBox,
 )
 
 from ui.styles import (
@@ -72,17 +72,26 @@ class DevelopDialog(QDialog):
     def showEvent(self, event):
         super().showEvent(event)
         center_on_parent(self)
-        # Fokus na aktywny radio button stylu, nie na przycisku OK
-        checked = self._style_group.checkedButton()
-        if checked:
-            QTimer.singleShot(0, checked.setFocus)
+        # Fokus na OK — Enter zatwierdza bez przekierowywania przez widgety
+        QTimer.singleShot(0, self._btn_ok.setFocus)
 
-    def keyPressEvent(self, event):
-        """Enter/Return uruchamia akceptację bez względu na fokus."""
-        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            self._on_accept()
-        else:
-            super().keyPressEvent(event)
+    def _warn(self, title: str, msg: str):
+        """Wyświetla ostrzeżenie w stylu Fusion (zamiast QMessageBox)."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle(title)
+        dlg.setModal(True)
+        lay = QVBoxLayout(dlg)
+        lay.setSpacing(DIALOG_SPACING)
+        lay.setContentsMargins(*DIALOG_MARGINS)
+        lbl = QLabel(msg)
+        lbl.setWordWrap(True)
+        lay.addWidget(lbl)
+        bb = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        bb.accepted.connect(dlg.accept)
+        for b in bb.buttons():
+            b.setFixedHeight(DIALOG_BTN_H)
+        lay.addWidget(bb)
+        dlg.exec()
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
@@ -157,8 +166,9 @@ class DevelopDialog(QDialog):
         )
         bb.accepted.connect(self._on_accept)
         bb.rejected.connect(self.reject)
-        bb.button(QDialogButtonBox.StandardButton.Ok).setDefault(True)
-        bb.button(QDialogButtonBox.StandardButton.Ok).setAutoDefault(True)
+        self._btn_ok = bb.button(QDialogButtonBox.StandardButton.Ok)
+        self._btn_ok.setDefault(True)
+        self._btn_ok.setAutoDefault(True)
         layout.addWidget(bb)
 
     def _populate_combo(self):
@@ -180,19 +190,13 @@ class DevelopDialog(QDialog):
         elif sid == 1:
             data = self._combo.currentData()
             if not data:
-                QMessageBox.warning(
-                    self, self.tr("No style"),
-                    self.tr("No style selected.")
-                )
+                self._warn(self.tr("No style"), self.tr("No style selected."))
                 return
             self.selected_preset = data
 
         else:
             if self._loaded_dtstyle_path is None:
-                QMessageBox.warning(
-                    self, self.tr("No file"),
-                    self.tr("Please select a .dtstyle file first.")
-                )
+                self._warn(self.tr("No file"), self.tr("Please select a .dtstyle file first."))
                 return
             self.selected_preset = str(self._loaded_dtstyle_path)
 
@@ -204,10 +208,7 @@ class DevelopDialog(QDialog):
             try:
                 self.selected_kelvin = int(self._kelvin_edit.text())
             except ValueError:
-                QMessageBox.warning(
-                    self, self.tr("Invalid value"),
-                    self.tr("Enter a valid Kelvin value (e.g. 5500).")
-                )
+                self._warn(self.tr("Invalid value"), self.tr("Enter a valid Kelvin value (e.g. 5500)."))
                 return
 
         # Zapamiętaj ustawienia
