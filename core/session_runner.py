@@ -279,8 +279,8 @@ class SessionRunner(QThread):
 
             # Krok 2: brak zdjęć — nie ma po co tworzyć katalogu ani kodu
             if not files_to_import:
-                self._warnings.append("Import: brak nowych plików na karcie")
-                logger.info("finalize: brak zdjęć — pomijam kod i katalog")
+                self._warnings.append("Import: no new files on card")
+                logger.info("finalize: no new files — skipping code and directory")
                 return
 
             # Krok 3: kod sesji i katalog (dopiero gdy wiadomo że są zdjęcia)

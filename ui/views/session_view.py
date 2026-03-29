@@ -56,15 +56,16 @@ EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
 # ─────────────────────────── SNAPSHOT KARTY SD
 
-def _snapshot_card_files() -> set:
+def _read_pre_session_info() -> tuple[set, int]:
     """
-    Szybki snapshot nazw plików na karcie SD aparatu (bez pobierania treści).
-    Canon EOS RP zwraca mtime=0 — nie można filtrować po czasie; filtrujemy po tym
-    czy plik istniał przed sesją.
-    Zwraca pusty zbiór przy braku aparatu lub błędzie.
+    Jedno połączenie gphoto2: snapshot nazw plików + offset zegarów.
+    Zwraca (filenames: set, cam_time_offset: int).
+    Canon EOS RP zwraca mtime=0 dla nowych plików — snapshot filtruje po nazwie.
     """
     import logging as _log
     _logger = _log.getLogger(__name__)
+    filenames: set = set()
+    offset: int    = 0
     try:
         import gphoto2 as gp
         ctx = gp.Context()
@@ -72,53 +73,32 @@ def _snapshot_card_files() -> set:
         al  = gp.CameraAbilitiesList(); al.load(ctx)
         cameras = al.detect(pil, ctx)
         if not cameras:
-            return set()
+            return filenames, offset
         model, port = cameras[0]
         camera = gp.Camera()
         camera.set_abilities(al[al.lookup_model(model)])
         camera.set_port_info(pil[pil.lookup_path(port)])
         camera.init(ctx)
-        filenames: set = set()
         try:
+            # Snapshot plików
             dcim = camera.folder_list_folders("/store_00020001/DCIM", ctx)
             for i in range(dcim.count()):
                 fpath = f"/store_00020001/DCIM/{dcim.get_name(i)}"
                 files = camera.folder_list_files(fpath, ctx)
                 for j in range(files.count()):
                     filenames.add(files.get_name(j))
-        finally:
-            camera.exit(ctx)
-        _logger.info(f"Snapshot karty: {len(filenames)} plików przed sesją")
-        return filenames
-    except Exception as e:
-        _logger.warning(f"Snapshot karty nie powiódł się: {e}")
-        return set()
-
-
-def _read_camera_time_offset() -> int:
-    """
-    Odczytuje offset czasu aparat↔system gdy USB wolne.
-    Zwraca różnicę (cam_ts - sys_ts) w sekundach. 0 przy błędzie.
-    """
-    import logging as _log
-    _logger = _log.getLogger(__name__)
-    try:
-        import gphoto2 as gp
-        ctx = gp.Context()
-        camera = gp.Camera()
-        camera.init(ctx)
-        try:
+            _logger.info(f"Snapshot karty: {len(filenames)} plików przed sesją")
+            # Offset zegarów
             cfg    = camera.get_config(ctx)
             cam_ts = int(cfg.get_child_by_name("datetime").get_value())
             sys_ts = int(datetime.now().timestamp())
             offset = cam_ts - sys_ts
-            _logger.info(f"Offset przed sesją: cam={cam_ts} sys={sys_ts} offset={offset}s")
-            return offset
+            _logger.info(f"Offset zegarów: cam={cam_ts} sys={sys_ts} offset={offset}s")
         finally:
             camera.exit(ctx)
     except Exception as e:
-        _logger.warning(f"Nie można odczytać czasu aparatu (offset=0): {e}")
-        return 0
+        _logger.warning(f"Pre-session info nie powiodło się: {e}")
+    return filenames, offset
 
 
 # ─────────────────────────── PANEL KONFIGURACJI
@@ -610,11 +590,8 @@ class SessionView(QWidget):
         self._settings_panel.deactivate()
         self._stop_usb_polling()
 
-        # Snapshot nazw plików przed sesją — filtr dla plików z mtime=0 (Canon EOS RP)
-        pre_session_files = _snapshot_card_files()
-
-        # Odczytaj offset zegarów aparat↔system (USB jeszcze wolne)
-        cam_offset = _read_camera_time_offset()
+        # Jedno połączenie gphoto2: snapshot plików + offset zegarów
+        pre_session_files, cam_offset = _read_pre_session_info()
 
         # Zapamiętaj czas startu przed dialogiem — bez kontaktu z aparatem
         session_start_time = datetime.now()
