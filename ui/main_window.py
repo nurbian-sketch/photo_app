@@ -764,7 +764,7 @@ class MainWindow(QMainWindow):
 
         # Sprawdź czy darktable GUI nie blokuje bazy — pętla aż użytkownik zamknie
         while self._darktable_gui_running():
-            from ui.styles import DIALOG_SPACING, DIALOG_MARGINS, DIALOG_BTN_H
+            from ui.styles import DIALOG_SPACING, DIALOG_MARGINS, DIALOG_BTN_H, DIALOG_BTN_W
             from PyQt6.QtWidgets import QDialogButtonBox as _BB
             _dlg = QDialog(self)
             _dlg.setWindowTitle(self.tr("Darktable is running"))
@@ -786,6 +786,7 @@ class MainWindow(QMainWindow):
             _bb.button(_BB.StandardButton.Ok).setDefault(True)
             for _btn in _bb.buttons():
                 _btn.setFixedHeight(DIALOG_BTN_H)
+                _btn.setFixedWidth(DIALOG_BTN_W)
             _lay.addWidget(_bb)
             if _dlg.exec() != QDialog.DialogCode.Accepted:
                 return
