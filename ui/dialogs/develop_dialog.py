@@ -5,7 +5,7 @@ Wywoływany po zakończeniu sesji gdy w katalogu sesji są pliki RAW.
 import sqlite3
 from pathlib import Path
 
-from PyQt6.QtCore import Qt, QSettings
+from PyQt6.QtCore import Qt, QSettings, QTimer
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QRadioButton,
@@ -72,6 +72,17 @@ class DevelopDialog(QDialog):
     def showEvent(self, event):
         super().showEvent(event)
         center_on_parent(self)
+        # Fokus na aktywny radio button stylu, nie na przycisku OK
+        checked = self._style_group.checkedButton()
+        if checked:
+            QTimer.singleShot(0, checked.setFocus)
+
+    def keyPressEvent(self, event):
+        """Enter/Return uruchamia akceptację bez względu na fokus."""
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self._on_accept()
+        else:
+            super().keyPressEvent(event)
 
     def _build_ui(self):
         layout = QVBoxLayout(self)

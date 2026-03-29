@@ -584,6 +584,10 @@ class SessionView(QWidget):
         self._settings_panel.deactivate()
         self._stop_usb_polling()
 
+        # Snapshot nazw plików na karcie SD przed sesją — filtrowanie importu
+        # Canon EOS RP zwraca mtime=0, więc filtrujemy po nazwie pliku, nie czasie
+        pre_session_files = _snapshot_card_files()
+
         # Zapamiętaj czas startu przed dialogiem — bez kontaktu z aparatem
         session_start_time = datetime.now()
 
@@ -616,6 +620,7 @@ class SessionView(QWidget):
 
         store = SessionStore(base_dir)
         self._runner = SessionRunner(ctx, store, rclone_rem, rclone_dst,
+                                     pre_session_files=pre_session_files,
                                      session_start_time=session_start_time)
         self._runner.warning.connect(lambda m: self.status_message.emit(f"⚠ {m}"))
         self._runner.error.connect(lambda m: self.status_message.emit(f"✖ {m}"))

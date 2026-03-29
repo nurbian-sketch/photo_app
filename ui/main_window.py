@@ -189,6 +189,10 @@ class MainWindow(QMainWindow):
 
         self.read_settings()
         self.setup_menu()
+        # Skrót F11 działa także gdy otwarty jest dialog modalny (ApplicationShortcut)
+        self._fs_shortcut = QShortcut(QKeySequence("F11"), self)
+        self._fs_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        self._fs_shortcut.activated.connect(self.toggle_fullscreen)
         # Teraz menu istnieje — uruchom ponownie logikę aktywacji dla widoku startowego
         self.change_view(start_view)
 
