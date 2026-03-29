@@ -169,6 +169,8 @@ class DevelopDialog(QDialog):
         self._btn_ok = bb.button(QDialogButtonBox.StandardButton.Ok)
         self._btn_ok.setDefault(True)
         self._btn_ok.setAutoDefault(True)
+        for _b in bb.buttons():
+            _b.setFixedHeight(DIALOG_BTN_H)
         layout.addWidget(bb)
 
     def _populate_combo(self):

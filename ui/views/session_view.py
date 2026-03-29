@@ -584,10 +584,7 @@ class SessionView(QWidget):
         self._settings_panel.deactivate()
         self._stop_usb_polling()
 
-        # Snapshot A: pliki na karcie PRZED sesją (przy podłączonym USB)
-        pre_session_files = _snapshot_card_files()
-
-        # Zapamiętaj czas startu przed dialogiem
+        # Zapamiętaj czas startu przed dialogiem — bez kontaktu z aparatem
         session_start_time = datetime.now()
 
         # Dialog OFF→ON: bez USB aparat aktywuje moduł BT
@@ -597,10 +594,6 @@ class SessionView(QWidget):
             if self._view_active:
                 self._settings_panel.activate()
             return
-
-        # Snapshot B: pliki zrobione podczas fazy BT (zanim użytkownik kliknął Start)
-        # USB jest już podłączone — BT nieaktywne, bezpieczny kontakt
-        pre_session_files |= _snapshot_card_files()
 
         # Natychmiast blokuj komunikację z aparatem
         self._lock_camera_panel()
@@ -623,7 +616,6 @@ class SessionView(QWidget):
 
         store = SessionStore(base_dir)
         self._runner = SessionRunner(ctx, store, rclone_rem, rclone_dst,
-                                     pre_session_files=pre_session_files,
                                      session_start_time=session_start_time)
         self._runner.warning.connect(lambda m: self.status_message.emit(f"⚠ {m}"))
         self._runner.error.connect(lambda m: self.status_message.emit(f"✖ {m}"))
