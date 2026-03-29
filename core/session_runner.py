@@ -520,9 +520,14 @@ class SessionRunner(QThread):
                     try:
                         info = camera.file_get_info(folder_path, filename, gp_context)
                         mtime = info.file.mtime
-                        inc   = mtime >= threshold_ts
-                        if inc and upper_ts is not None:
-                            inc = mtime <= upper_ts
+                        if mtime == 0:
+                            # Canon EOS RP zwraca mtime=0 dla nowych plików —
+                            # nie można filtrować po czasie; decyduje snapshot
+                            inc = True
+                        else:
+                            inc = mtime >= threshold_ts
+                            if inc and upper_ts is not None:
+                                inc = mtime <= upper_ts
                         print(f"[LIST]  {filename}: mtime={mtime}  include={inc}", flush=True)
                         if inc:
                             result.append((folder_path, filename))

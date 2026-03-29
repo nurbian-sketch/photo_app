@@ -610,6 +610,9 @@ class SessionView(QWidget):
         self._settings_panel.deactivate()
         self._stop_usb_polling()
 
+        # Snapshot nazw plików przed sesją — filtr dla plików z mtime=0 (Canon EOS RP)
+        pre_session_files = _snapshot_card_files()
+
         # Odczytaj offset zegarów aparat↔system (USB jeszcze wolne)
         cam_offset = _read_camera_time_offset()
 
@@ -646,6 +649,7 @@ class SessionView(QWidget):
 
         store = SessionStore(base_dir)
         self._runner = SessionRunner(ctx, store, rclone_rem, rclone_dst,
+                                     pre_session_files=pre_session_files,
                                      session_start_time=session_start_time)
         self._runner.warning.connect(lambda m: self.status_message.emit(f"⚠ {m}"))
         self._runner.error.connect(lambda m: self.status_message.emit(f"✖ {m}"))
