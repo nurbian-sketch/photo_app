@@ -119,6 +119,19 @@ class CameraProbe:
             logger.warning(f"CameraProbe: nie udało się ustawić Fv: {e}")
             return False
 
+    def sync_datetime(self) -> bool:
+        """Synchronizuje zegar aparatu z czasem systemowym (actions/syncdatetime)."""
+        try:
+            config = self.camera.get_config(self.context)
+            w = config.get_child_by_name('syncdatetime')
+            w.set_value(1)
+            self.camera.set_config(config, self.context)
+            logger.info("CameraProbe: zsynchronizowano czas aparatu")
+            return True
+        except Exception as e:
+            logger.warning(f"CameraProbe: sync czasu nieudany: {e}")
+            return False
+
     def get_battery(self) -> int:
         """Zwraca poziom baterii (0-100) lub -1."""
         val = self._get_value('batterylevel')
@@ -202,6 +215,8 @@ class CameraProbe:
             warnings.append(
                 f"Camera is in {mode} mode. Required: {REQUIRED_MODE}."
             )
+
+        self.sync_datetime()
 
         battery = self.get_battery()
         if 0 <= battery < 30:

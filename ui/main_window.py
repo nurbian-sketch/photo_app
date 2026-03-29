@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
     QDialog,
 )
 from PyQt6.QtGui import QAction, QIcon, QKeySequence, QShortcut, QKeyEvent, QPixmap, QImage, QPainter
-from PyQt6.QtCore import Qt, QTimer, QTranslator, QSettings, QSize
+from PyQt6.QtCore import Qt, QTimer, QTranslator, QSettings, QSize, QEvent
 import json
 import os
 import subprocess
@@ -189,10 +189,8 @@ class MainWindow(QMainWindow):
 
         self.read_settings()
         self.setup_menu()
-        # Skrót F11 działa także gdy otwarty jest dialog modalny (ApplicationShortcut)
-        self._fs_shortcut = QShortcut(QKeySequence("F11"), self)
-        self._fs_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
-        self._fs_shortcut.activated.connect(self.toggle_fullscreen)
+        # F11 przez eventFilter — działa nawet gdy modal blokuje event loop
+        QApplication.instance().installEventFilter(self)
         # Teraz menu istnieje — uruchom ponownie logikę aktywacji dla widoku startowego
         self.change_view(start_view)
 
@@ -970,12 +968,16 @@ class MainWindow(QMainWindow):
         msg.setStandardButtons(QMessageBox.StandardButton.Ok)
         msg.exec()
 
-    def keyPressEvent(self, event):
-        # F11 obsługiwany przez QShortcut (ApplicationShortcut) — działa też w dialogach modalnych
-        if event.key() == Qt.Key.Key_Escape and self.isFullScreen():
-            self.toggle_fullscreen()
-        else:
-            super().keyPressEvent(event)
+    def eventFilter(self, obj, event):
+        """Globalny filtr zdarzeń — F11 przełącza fullscreen niezależnie od fokusa."""
+        if event.type() == QEvent.Type.KeyPress:
+            if event.key() == Qt.Key.Key_F11:
+                self.toggle_fullscreen()
+                return True
+            if event.key() == Qt.Key.Key_Escape and self.isFullScreen():
+                self.toggle_fullscreen()
+                return True
+        return False
 
     def toggle_fullscreen(self):
         if self.isFullScreen():

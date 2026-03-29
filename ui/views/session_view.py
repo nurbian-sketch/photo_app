@@ -593,9 +593,6 @@ class SessionView(QWidget):
         # Jedno połączenie gphoto2: snapshot plików + offset zegarów
         pre_session_files, cam_offset = _read_pre_session_info()
 
-        # Zapamiętaj czas startu przed dialogiem — bez kontaktu z aparatem
-        session_start_time = datetime.now()
-
         # Dialog OFF→ON: bez USB aparat aktywuje moduł BT
         dlg = UsbDisconnectDialog(self)
         dlg.status_changed.connect(self.status_message)
@@ -603,6 +600,9 @@ class SessionView(QWidget):
             if self._view_active:
                 self._settings_panel.activate()
             return
+
+        # Czas startu sesji — po kliknięciu Start Session w dialogu
+        session_start_time = datetime.now()
 
         # Natychmiast blokuj komunikację z aparatem
         self._lock_camera_panel()
