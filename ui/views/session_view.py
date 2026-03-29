@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import re
+from datetime import datetime
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QSettings, QTimer, QSize, pyqtSignal
@@ -583,8 +584,8 @@ class SessionView(QWidget):
         self._settings_panel.deactivate()
         self._stop_usb_polling()
 
-        # Snapshot plików na karcie PRZED sesją
-        pre_session_files = _snapshot_card_files()
+        # Zapamiętaj czas startu przed dialogiem — bez kontaktu z aparatem
+        session_start_time = datetime.now()
 
         # Dialog OFF→ON: bez USB aparat aktywuje moduł BT
         dlg = UsbDisconnectDialog(self)
@@ -614,7 +615,8 @@ class SessionView(QWidget):
         # Kod sesji i ścieżka generowane przez runner.finalize() po zakończeniu
 
         store = SessionStore(base_dir)
-        self._runner = SessionRunner(ctx, store, rclone_rem, rclone_dst, pre_session_files)
+        self._runner = SessionRunner(ctx, store, rclone_rem, rclone_dst,
+                                     session_start_time=session_start_time)
         self._runner.warning.connect(lambda m: self.status_message.emit(f"⚠ {m}"))
         self._runner.error.connect(lambda m: self.status_message.emit(f"✖ {m}"))
         self._runner.state_changed.connect(self._on_state_changed)

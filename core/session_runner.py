@@ -97,22 +97,25 @@ class SessionRunner(QThread):
         rclone_remote: str = "",
         rclone_dest: str = "",
         pre_session_files: Optional[set] = None,
+        session_start_time: Optional[datetime] = None,
         parent=None,
     ):
         """
         Args:
-            context:            gotowy SessionContext z make_session_context()
-            store:              SessionStore do zapisu metadanych
-            rclone_remote:      nazwa remote rclone (np. "gdrive")
-            rclone_dest:        ścieżka docelowa na remote (np. "Sessions")
-            pre_session_files:  zestaw nazw plików na karcie PRZED sesją (snapshot)
+            context:             gotowy SessionContext z make_session_context()
+            store:               SessionStore do zapisu metadanych
+            rclone_remote:       nazwa remote rclone (np. "gdrive")
+            rclone_dest:         ścieżka docelowa na remote (np. "Sessions")
+            pre_session_files:   opcjonalny zestaw nazw plików PRZED sesją (legacy)
+            session_start_time:  czas kliknięcia Start — próg filtrowania po mtime
         """
         super().__init__(parent)
-        self.context            = context
-        self.store              = store
-        self.rclone_remote      = rclone_remote
-        self.rclone_dest        = rclone_dest
-        self._pre_session_files = pre_session_files or set()
+        self.context              = context
+        self.store                = store
+        self.rclone_remote        = rclone_remote
+        self.rclone_dest          = rclone_dest
+        self._pre_session_files   = pre_session_files or set()
+        self._session_start_time  = session_start_time
 
         self._state        = SessionState.IDLE
         self._stop_flag    = False
@@ -484,13 +487,13 @@ class SessionRunner(QThread):
         Uwzględnia offset zegarów.
         Zwraca listę (folder, filename).
         """
-        # Przelicz próg: czas startu sesji w czasie aparatu
-        session_start_ts = int(self.context.started_at.timestamp())
+        # Próg: czas kliknięcia Start (lub started_at jeśli nie przekazano)
+        ref_time         = self._session_start_time or self.context.started_at
+        session_start_ts = int(ref_time.timestamp())
         threshold_ts     = session_start_ts + self.context.camera_time_offset
-        # Bufor 30s — na wypadek drobnych rozbieżności
+        # Bufor 30s — na wypadek drobnych rozbieżności zegarów
         threshold_ts    -= 30
-        print(f"[LIST] session_start_ts={session_start_ts}  threshold_ts={threshold_ts}", flush=True)
-        print(f"[LIST] pre_session_files={len(self._pre_session_files)} plików do pominięcia", flush=True)
+        print(f"[LIST] ref={ref_time}  session_start_ts={session_start_ts}  threshold_ts={threshold_ts}", flush=True)
 
         result = []
 
@@ -514,9 +517,8 @@ class SessionRunner(QThread):
                     try:
                         info = camera.file_get_info(folder_path, filename, gp_context)
                         mtime = info.file.mtime
-                        inc = mtime == 0 or mtime >= threshold_ts
+                        inc = mtime >= threshold_ts
                         print(f"[LIST]  {filename}: mtime={mtime}  include={inc}", flush=True)
-                        # mtime=0 → gphoto2 nie odczytał czasu (Canon EOS RP) → dołącz plik
                         if inc:
                             result.append((folder_path, filename))
                     except Exception as e:
