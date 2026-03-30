@@ -1012,7 +1012,7 @@ class DarkroomView(QWidget):
             self._loader.start()
 
     def _show_session_summary(self, json_path: str) -> None:
-        """Czyta session_summary.json i wyświetla dane sesji w panelu podglądu."""
+        """Czyta session_summary.json i wyświetla dane jako czytelną listę par klucz: wartość."""
         import json as _json
         try:
             data = _json.loads(open(json_path, encoding="utf-8").read())
@@ -1020,68 +1020,106 @@ class DarkroomView(QWidget):
             self.preview.set_message(self.tr(f"Cannot read session summary:\n{e}"))
             return
 
-        def _v(key, default="—"):
-            v = data.get(key)
-            return str(v) if v not in (None, "", []) else default
+        # Pola pominięte w widoku
+        SKIP = {"camera_time_offset", "session_path", "captures_path", "mode"}
 
-        # Sekcja: identyfikacja
-        lines = []
-        lines.append(f"<b>{_v('session_id')}</b>")
-        lines.append(f"{_v('started_at')} → {_v('ended_at')}  •  {_v('duration_min')} min")
-        lines.append(f"<b>{_v('email')}</b>  •  code: <b>{_v('share_code')}</b>")
-        lines.append("")
+        def _fmt_value(key, val) -> str:
+            """Formatuje wartość pola do czytelnej postaci."""
+            if val is None:
+                return "—"
+            if isinstance(val, list):
+                if key == "imported_files":
+                    return f"{len(val)} files"
+                if key == "develop_errors":
+                    return ", ".join(val) if val else "none"
+                return f"{len(val)} items"
+            if isinstance(val, dict):
+                return ""   # sekcja — obsłużona osobno
+            return str(val)
 
-        # Sekcja: aparat
+        def _row(label: str, value: str, bold_val: bool = False,
+                 color: str = "") -> str:
+            """Jeden wiersz tabeli: etykieta + wartość."""
+            val_style = f"color:{color};" if color else ""
+            val_html  = f"<b>{value}</b>" if bold_val else value
+            return (
+                f"<tr>"
+                f"<td style='color:#888; padding-right:16px; white-space:nowrap;"
+                f"vertical-align:top'>{label}</td>"
+                f"<td style='{val_style}vertical-align:top'>{val_html}</td>"
+                f"</tr>"
+            )
+
+        rows = []
+
+        # ── Pola główne ──────────────────────────────────────────────────────
+        order = [
+            "session_id", "share_code", "email",
+            "started_at", "ended_at", "duration_min",
+        ]
+        for key in order:
+            if key not in data:
+                continue
+            bold = key in ("share_code",)
+            rows.append(_row(key + ":", _fmt_value(key, data[key]), bold_val=bold))
+
+        rows.append("<tr><td colspan='2'><hr style='border-color:#333'/></td></tr>")
+
+        # ── Ustawienia aparatu ───────────────────────────────────────────────
         cs = data.get("camera_settings", {})
         if cs:
-            lines.append(f"<small>{cs.get('model','')}  •  {cs.get('lensname','')}</small>")
-            lines.append(
-                f"<small>{cs.get('shutterspeed','')}  f/{cs.get('aperture','')}  "
-                f"ISO {cs.get('iso','')}  {cs.get('imageformat','')}</small>"
-            )
-            lines.append("")
+            for k, v in cs.items():
+                if v:
+                    rows.append(_row(f"  {k}:", str(v)))
+            rows.append("<tr><td colspan='2'><hr style='border-color:#333'/></td></tr>")
 
-        # Sekcja: import
+        # ── Import ───────────────────────────────────────────────────────────
         imported = data.get("imported_files", [])
-        lines.append(f"Imported: <b>{len(imported)}</b> files")
+        rows.append(_row("imported_files:", f"{len(imported)} files"))
+        rows.append("<tr><td colspan='2'><hr style='border-color:#333'/></td></tr>")
 
-        # Sekcja: development
-        style      = data.get("develop_style")
+        # ── Development ──────────────────────────────────────────────────────
+        dev_style  = data.get("develop_style")
         dev_count  = data.get("developed_count")
         total_raw  = data.get("total_raw")
         dev_errors = data.get("develop_errors") or []
         dev_time   = data.get("develop_time_sec")
         dev_per    = data.get("develop_sec_per_photo")
 
-        lines.append("")
-        if style is None and dev_count is None:
-            lines.append("Development: <i>not processed</i>")
+        if dev_style is None and dev_count is None:
+            rows.append(_row("development:", "not processed"))
         else:
-            style_str = style if style else "auto"
+            rows.append(_row("develop_style:", dev_style or "auto"))
             count_str = f"{dev_count}/{total_raw}" if dev_count is not None else "—"
-            lines.append(f"Developed: <b>{count_str}</b>  •  style: <i>{style_str}</i>")
+            rows.append(_row("developed_count:", count_str))
             if dev_time is not None:
-                lines.append(f"Time: {dev_time}s  •  {dev_per}s/photo")
+                rows.append(_row("develop_time_sec:", f"{dev_time}s"))
+                rows.append(_row("develop_sec_per_photo:", f"{dev_per}s"))
             if dev_errors:
-                lines.append(
-                    f"<span style='color:#e07070'>Errors ({len(dev_errors)}): "
-                    f"{', '.join(dev_errors)}</span>"
-                )
+                rows.append(_row(
+                    "develop_errors:",
+                    ", ".join(dev_errors),
+                    color="#e07070"
+                ))
+            else:
+                rows.append(_row("develop_errors:", "none"))
 
-        # Sekcja: sync
+        rows.append("<tr><td colspan='2'><hr style='border-color:#333'/></td></tr>")
+
+        # ── Sync ─────────────────────────────────────────────────────────────
         sync_status = data.get("sync_status", "pending")
-        synced_at   = data.get("synced_at")
-        lines.append("")
-        if sync_status == "done" and synced_at:
-            lines.append(f"Synced: <b>{synced_at}</b>")
-        else:
-            lines.append(f"Sync: <b>{sync_status}</b>")
+        synced_at   = data.get("synced_at", "—")
+        sync_color  = "#80c080" if sync_status == "done" else "#e07070"
+        rows.append(_row("sync_status:", sync_status,
+                         bold_val=True, color=sync_color))
+        rows.append(_row("synced_at:", synced_at,
+                         bold_val=(sync_status == "done")))
 
         html = (
-            "<div style='font-size:13px; line-height:1.6; "
-            "padding:20px; text-align:left; color:#cccccc;'>"
-            + "<br>".join(lines)
-            + "</div>"
+            "<div style='font-size:12px; line-height:1.7; padding:16px;'>"
+            "<table style='border-collapse:collapse'>"
+            + "".join(rows)
+            + "</table></div>"
         )
         self.preview.set_message(html)
         if self._loader and self._loader.isRunning():
