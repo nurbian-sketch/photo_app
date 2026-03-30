@@ -220,12 +220,16 @@ class DarkroomView(QWidget):
         self.btn_filter.setMinimumWidth(90)
         self.btn_filter.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         self.btn_filter.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        from PyQt6.QtGui import QActionGroup
         filter_menu = QMenu(self)
         self._action_filter_all  = filter_menu.addAction(self.tr("All Files"))
         self._action_filter_jpeg = filter_menu.addAction(self.tr("JPEG Only"))
         self._action_filter_raw  = filter_menu.addAction(self.tr("RAW Only"))
+        _filter_group = QActionGroup(self)
+        _filter_group.setExclusive(True)
         for a in [self._action_filter_all, self._action_filter_jpeg, self._action_filter_raw]:
             a.setCheckable(True)
+            _filter_group.addAction(a)
         self._action_filter_all.setChecked(True)
         self.btn_filter.setMenu(filter_menu)
         self.btn_filter.setText(self.tr("All Files"))
