@@ -531,7 +531,15 @@ class DarkroomView(QWidget):
                     full = os.path.join(scan, d)
                     if not os.path.isdir(full) or d.startswith("."):
                         continue
+                    # Pliki bezpośrednio w folderze sesji
                     if any(f.lower().endswith(all_ext) for f in os.listdir(full)):
+                        candidates.append(full)
+                        continue
+                    # Fallback: jpg/ po reorganizacji przez developer
+                    jpg_sub = os.path.join(full, "jpg")
+                    if os.path.isdir(jpg_sub) and any(
+                        f.lower().endswith(all_ext) for f in os.listdir(jpg_sub)
+                    ):
                         candidates.append(full)
             # Fallback: bezpośrednie podfoldery base_dir
             if not candidates:
