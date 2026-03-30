@@ -255,11 +255,7 @@ class DarkroomView(QWidget):
         self.preview = PreviewPanel()
         right_layout.addWidget(self.preview, 1)
 
-        # Wiersz grup — wszystkie w jednym QHBoxLayout ze stretch na końcu
-        groups_row = QHBoxLayout()
-        groups_row.setSpacing(8)
-        groups_row.setContentsMargins(0, 0, 0, 0)
-
+        # Grupy przycisków — dwa rzędy (patrz niżej po definicji grup)
         # ── Grupa Image — wrappuje control_bar PreviewPanel ─────────────────
         grp_image = QGroupBox(self.tr("Image"))
         grp_image.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
@@ -382,9 +378,23 @@ class DarkroomView(QWidget):
         for w in [self.btn_develop, self.btn_edit_gimp, self.btn_send]:
             row_external.addWidget(w)
 
-        groups_row.addWidget(grp_external)
-        groups_row.addStretch()
-        right_layout.addLayout(groups_row)
+        # Wiersz 1: kontrolki obrazu
+        row_image_bar = QHBoxLayout()
+        row_image_bar.setSpacing(8)
+        row_image_bar.setContentsMargins(0, 0, 0, 0)
+        row_image_bar.addWidget(grp_image)
+        row_image_bar.addStretch()
+        right_layout.addLayout(row_image_bar)
+
+        # Wiersz 2: Edit + Dir + External
+        row_action_bar = QHBoxLayout()
+        row_action_bar.setSpacing(8)
+        row_action_bar.setContentsMargins(0, 0, 0, 0)
+        row_action_bar.addWidget(grp_edit)
+        row_action_bar.addWidget(grp_dir)
+        row_action_bar.addWidget(grp_external)
+        row_action_bar.addStretch()
+        right_layout.addLayout(row_action_bar)
 
         # Splitter
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
