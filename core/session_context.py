@@ -164,7 +164,6 @@ class SessionContext:
             "imported_files":       self.imported_files,
             # Wypełniane przez developer_worker po developmencie
             "develop_style":        None,
-            "developed_files":      None,
             "develop_errors":       None,
             "develop_time_sec":     None,
             "develop_sec_per_photo": None,

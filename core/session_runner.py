@@ -39,6 +39,44 @@ IMPORT_FILE_TIMEOUT = 60
 SIZE_TOLERANCE = 0
 
 
+def _save_qr_code(session_path: str, share_code: str) -> None:
+    """Generuje QR kod z logo i zapisuje jako qr_code.png w folderze sesji."""
+    try:
+        import qrcode
+        from PIL import Image
+
+        url = f"https://t.me/pryzmat_studio_bot?start={share_code}"
+        qr = qrcode.QRCode(
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=14,
+            border=4,
+        )
+        qr.add_data(url)
+        qr.make(fit=True)
+        qr_img = qr.make_image(fill_color="black", back_color="white").convert("RGBA")
+
+        # Logo w centrum
+        logo_path = os.path.join(
+            os.path.dirname(__file__), "..", "assets", "icons", "pryzmat-ico.png"
+        )
+        logo_path = os.path.normpath(logo_path)
+        if os.path.exists(logo_path):
+            logo = Image.open(logo_path).convert("RGBA")
+            qr_w, qr_h = qr_img.size
+            max_logo = int(qr_w * 0.20)
+            logo.thumbnail((max_logo, max_logo), Image.LANCZOS)
+            pad = 12
+            bg = Image.new("RGBA", (logo.width + pad * 2, logo.height + pad * 2), (255, 255, 255, 255))
+            bg.paste(logo, (pad, pad), logo)
+            pos = ((qr_w - bg.width) // 2, (qr_h - bg.height) // 2)
+            qr_img.paste(bg, pos)
+
+        qr_img.save(os.path.join(session_path, "qr_code.png"))
+        logger.info(f"QR kod zapisany: {session_path}/qr_code.png")
+    except Exception as exc:
+        logger.warning(f"Nie można zapisać QR kodu: {exc}")
+
+
 def _worker_alive(pid) -> bool:
     """Zwraca True jeśli proces o danym PID nadal działa."""
     if not pid:
@@ -297,6 +335,7 @@ class SessionRunner(QThread):
             self.context.session_path  = session_path
             self.context.captures_path = session_path
             os.makedirs(session_path, exist_ok=True)
+            _save_qr_code(session_path, code)
 
             # Krok 4: transfer (reużywamy otwartego połączenia)
             self._card_file_pairs = list(files_to_import)

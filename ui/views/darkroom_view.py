@@ -100,9 +100,10 @@ class DarkroomView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.current_dir        = None
-        self.current_image_path = None
-        self.large_thumbs       = False
+        self.current_dir           = None
+        self.current_image_path    = None
+        self._current_summary_path = None
+        self.large_thumbs          = False
         self._hide_raw          = False
         self._hide_jpeg         = False
         self._filter_state      = 'all'
@@ -134,6 +135,14 @@ class DarkroomView(QWidget):
         self.load_index = 0
         self.timer      = QTimer(self)
         self.timer.timeout.connect(self.load_next_thumbnails)
+
+        # Obserwator zmian w katalogu — auto-odświeżanie po developer/rclone
+        self._dir_watcher = QFileSystemWatcher(self)
+        self._dir_watcher.directoryChanged.connect(self._on_dir_changed)
+        self._dir_watcher_timer = QTimer(self)
+        self._dir_watcher_timer.setSingleShot(True)
+        self._dir_watcher_timer.setInterval(1500)
+        self._dir_watcher_timer.timeout.connect(self._on_dir_watcher_fired)
 
         self.setup_ui()
         QTimer.singleShot(500, self.open_last_session)
@@ -540,7 +549,7 @@ class DarkroomView(QWidget):
                     if os.path.isdir(jpg_sub) and any(
                         f.lower().endswith(all_ext) for f in os.listdir(jpg_sub)
                     ):
-                        candidates.append(full)
+                        candidates.append(jpg_sub)
             # Fallback: bezpośrednie podfoldery base_dir
             if not candidates:
                 for d in os.listdir(base_path):
@@ -569,12 +578,18 @@ class DarkroomView(QWidget):
 
     def load_images(self, folder: str, select_path: str = None):
         self._exit_sd_mode()
-        self.current_dir = folder
+        self.current_dir           = folder
+        self._current_summary_path = None
         self.timer.stop()
         self.list_widget.clear()
         self.preview.clear()
         self.current_image_path = None
         self._list_file_offset  = 0
+
+        # Aktualizuj obserwowany katalog
+        for _d in self._dir_watcher.directories():
+            self._dir_watcher.removePath(_d)
+        self._dir_watcher.addPath(folder)
 
         self.lbl_path.setText(folder)
         self.lbl_path.setTextFormat(Qt.TextFormat.PlainText)
@@ -1131,21 +1146,66 @@ class DarkroomView(QWidget):
         rows.append(_row("synced_at:", synced_at,
                          bold_val=(sync_status == "done")))
 
-        html = (
-            "<div style='font-size:12px; line-height:1.7; padding:16px;'>"
-            "<table style='border-collapse:collapse'>"
+        # QR kod — lewa kolumna: dane sesji, prawa: kod QR
+        import base64 as _b64
+        qr_path = os.path.join(os.path.dirname(json_path), "qr_code.png")
+        qr_col = ""
+        if os.path.exists(qr_path):
+            try:
+                with open(qr_path, "rb") as _f:
+                    _b64data = _b64.b64encode(_f.read()).decode()
+                qr_col = (
+                    "<td style='vertical-align:top; text-align:center; width:260px; padding-left:16px'>"
+                    f"<img src='data:image/png;base64,{_b64data}' width='240' height='240'/>"
+                    "</td>"
+                )
+            except Exception:
+                pass
+
+        data_col = (
+            "<td style='vertical-align:top'>"
+            "<table cellspacing='4'>"
             + "".join(rows)
-            + "</table></div>"
+            + "</table></td>"
+        )
+
+        html = (
+            "<div style='font-family:monospace; font-size:12px; padding:8px'>"
+            "<table width='100%' cellspacing='0' cellpadding='0'><tr>"
+            + data_col
+            + qr_col
+            + "</tr></table></div>"
         )
         self.preview.set_message(html)
         if self._loader and self._loader.isRunning():
             self._loader.wait()
         self._loader = None
-        self.current_image_path = None
+        self.current_image_path    = None
+        self._current_summary_path = json_path
         self.update_selection_count()
 
     def _navigate_to(self, path: str):
         self.load_images(path)
+
+    def _on_dir_changed(self, path: str):
+        """Katalog sesji zmieniony (developer/rclone) — debounce przed odświeżeniem."""
+        self._dir_watcher_timer.start()
+
+    def _on_dir_watcher_fired(self):
+        """Odśwież widok po ustabilizowaniu zmian w katalogu."""
+        if not (self.current_dir and not self._sd_mode and os.path.isdir(self.current_dir)):
+            return
+        summary_was = self._current_summary_path
+        self.load_images(self.current_dir, select_path=self.current_image_path)
+        # Jeśli pokazywano summary — przywróć po przeładowaniu listy
+        if summary_was and os.path.exists(summary_was):
+            self._show_session_summary(summary_was)
+            # Zaznacz element summary w liście
+            for i in range(self.list_widget.count()):
+                item = self.list_widget.item(i)
+                if item.data(_ITEM_TYPE_ROLE) == 'summary':
+                    self.list_widget.setCurrentItem(item)
+                    break
 
     def _on_image_loaded(self, pixmap: QPixmap, exif: dict):
         self.preview.set_pixmap(pixmap, exif.get('orientation', 0))
