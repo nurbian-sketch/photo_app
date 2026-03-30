@@ -760,10 +760,26 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _darktable_gui_running() -> bool:
-        """Sprawdza czy darktable GUI jest uruchomione."""
-        return subprocess.run(
-            ["pgrep", "-x", "darktable"], capture_output=True
-        ).returncode == 0
+        """Sprawdza czy darktable trzyma lock na data.db przez próbę zapisu."""
+        import sqlite3 as _sq
+        from pathlib import Path as _P
+        db = _P("~/.config/darktable/data.db").expanduser()
+        if not db.exists():
+            return False
+        con = None
+        try:
+            con = _sq.connect(str(db), timeout=0)
+            con.execute("BEGIN IMMEDIATE")
+            con.execute("ROLLBACK")
+            return False
+        except _sq.OperationalError:
+            return True
+        finally:
+            if con:
+                try:
+                    con.close()
+                except Exception:
+                    pass
 
     def _show_develop_dialog(self, session_path: str):
         """Otwiera DevelopDialog i po akceptacji dodaje sesję do kolejki developer."""

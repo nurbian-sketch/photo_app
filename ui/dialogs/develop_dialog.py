@@ -102,7 +102,6 @@ class DevelopDialog(QDialog):
         layout.addWidget(QLabel(self.tr("Style:")))
 
         self._rb_no_style = QRadioButton(self.tr("No style (darktable auto)"))
-        self._rb_no_style.setChecked(True)
         layout.addWidget(self._rb_no_style)
 
         # "Use style" + combo w jednym wierszu
@@ -111,7 +110,7 @@ class DevelopDialog(QDialog):
         use_row.addWidget(self._rb_use_style)
         self._combo = QComboBox()
         self._populate_combo()
-        self._combo.setEnabled(False)
+        self._combo.setEnabled(True)
         use_row.addWidget(self._combo, stretch=1)
         layout.addLayout(use_row)
 
