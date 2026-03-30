@@ -658,12 +658,16 @@ class DarkroomView(QWidget):
         self.list_widget.addItem(item)
 
     def _add_folder_item(self, name: str, path: str):
+        import re as _re
         icon = QApplication.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon)
-        item = QListWidgetItem(icon, name)
+        # Katalog sesji (email_YYYY-MM-DD_codeXXXXXX) — skróć do "KOD  YYYY-MM-DD"
+        m = _re.search(r'(\d{4}-\d{2}-\d{2})_code([A-Z0-9]{6})$', name)
+        label = f"{m.group(2)}  {m.group(1)}" if m else name
+        item = QListWidgetItem(icon, label)
         item.setData(Qt.ItemDataRole.UserRole, path)
         item.setData(Qt.ItemDataRole.UserRole + 1, False)
         item.setData(_ITEM_TYPE_ROLE, 'folder')
-        item.setToolTip(path)
+        item.setToolTip(name)
         self.list_widget.addItem(item)
 
     def _add_summary_item(self, path: str) -> None:
