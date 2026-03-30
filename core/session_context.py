@@ -149,33 +149,52 @@ class SessionContext:
         return max(0, self.duration_sec - self.elapsed_sec)
 
     def to_dict(self) -> dict:
+        def _fmt(dt):
+            return dt.strftime("%Y-%m-%d %H:%M") if dt else None
         return {
-            "session_id":         self.session_id,
-            "mode":               self.mode.value,
-            "email":              self.email,
-            "duration_min":       self.duration_min,
-            "started_at":         self.started_at.isoformat(),
-            "ended_at":           self.ended_at.isoformat() if self.ended_at else None,
-            "session_path":       self.session_path,
-            "camera_settings":    self.camera_settings.to_dict(),
-            "imported_files":     self.imported_files,
-            "end_reason":         self.end_reason.value if self.end_reason else None,
-            "sync_status":        self.sync_status,
-            "share_code":         self.share_code,
-            "camera_time_offset": self.camera_time_offset,
+            "session_id":           self.session_id,
+            "session_path":         self.session_path,
+            "share_code":           self.share_code,
+            "mode":                 self.mode.value,
+            "email":                self.email,
+            "duration_min":         self.duration_min,
+            "started_at":           _fmt(self.started_at),
+            "ended_at":             _fmt(self.ended_at),
+            "camera_settings":      self.camera_settings.to_dict(),
+            "imported_files":       self.imported_files,
+            # Wypełniane przez developer_worker po developmencie
+            "develop_style":        None,
+            "developed_files":      None,
+            "develop_errors":       None,
+            "develop_time_sec":     None,
+            "develop_sec_per_photo": None,
+            # Wypełniane przez rclone_sync_worker po synchronizacji
+            "sync_status":          self.sync_status,
+            "synced_at":            None,
+            "camera_time_offset":   self.camera_time_offset,
         }
 
     @staticmethod
     def from_dict(d: dict) -> "SessionContext":
+        def _parse_dt(s: str | None):
+            if not s:
+                return None
+            # Obsługa starego formatu ISO i nowego "%Y-%m-%d %H:%M"
+            for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S"):
+                try:
+                    return datetime.strptime(s, fmt)
+                except ValueError:
+                    pass
+            return datetime.fromisoformat(s)
+
         ctx = SessionContext(
             session_id=d["session_id"],
             mode=SessionMode(d["mode"]),
             email=d.get("email", ""),
             duration_min=d.get("duration_min", 0),
         )
-        ctx.started_at = datetime.fromisoformat(d["started_at"])
-        if d.get("ended_at"):
-            ctx.ended_at = datetime.fromisoformat(d["ended_at"])
+        ctx.started_at         = _parse_dt(d.get("started_at")) or datetime.now()
+        ctx.ended_at           = _parse_dt(d.get("ended_at"))
         ctx.session_path       = d.get("session_path", "")
         ctx.camera_settings    = CameraSettings.from_dict(d.get("camera_settings", {}))
         ctx.imported_files     = d.get("imported_files", [])

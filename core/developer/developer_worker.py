@@ -14,6 +14,7 @@ import sys
 import time
 import json
 from pathlib import Path
+from datetime import datetime
 
 # ── ŚCIEŻKI ──────────────────────────────────────────────────────────────────
 _SCRIPT_DIR  = Path(__file__).parent
@@ -80,6 +81,37 @@ def _wait_if_darktable_gui(poll: int = 10) -> None:
             break
         print(f"[dev_worker] darktable GUI aktywny — pauza {poll}s...", flush=True)
         time.sleep(poll)
+
+
+def _update_summary(session_dir: Path, preset: str, raw_files: list[Path],
+                    errors: list[str], time_sec: float) -> None:
+    """Aktualizuje session_summary.json po zakończeniu developmentu."""
+    path = session_dir / "session_summary.json"
+    if not path.exists():
+        return
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return
+
+    style = None if preset == _AUTO_PRESET else preset
+    developed = [
+        r.name for r in raw_files if r.name not in errors
+    ]
+    n = len(raw_files)
+    data["develop_style"]         = style
+    data["developed_files"]       = developed if developed else []
+    data["develop_errors"]        = errors if errors else []
+    data["develop_time_sec"]      = round(time_sec, 1)
+    data["develop_sec_per_photo"] = round(time_sec / n, 1) if n else 0
+
+    try:
+        path.write_text(
+            json.dumps(data, indent=2, ensure_ascii=False),
+            encoding="utf-8"
+        )
+    except Exception as exc:
+        print(f"[dev_worker] Błąd zapisu summary: {exc}", file=sys.stderr, flush=True)
 
 
 def _reorganize_session(session_dir: Path) -> list[Path]:
@@ -205,6 +237,7 @@ def _process_session(entry: dict) -> None:
         _update_entry(session_path, total=total, processed=0)
 
         errors = []
+        t_start = time.time()
         for raw in raw_files:
             out_jpeg = session_dir / (raw.stem + ".jpg")
             ok = _develop_file(raw, preset, out_jpeg, kelvin)
@@ -215,13 +248,27 @@ def _process_session(entry: dict) -> None:
                 errors.append(raw.name)
                 print(f"[dev_worker] [{processed}/{total}] ✘ {raw.name}", file=sys.stderr, flush=True)
             _update_entry(session_path, processed=processed)
+        t_elapsed = time.time() - t_start
+
+        # Zapisz wyniki do session_summary.json
+        _update_summary(session_dir, preset, raw_files, errors, t_elapsed)
 
         if errors:
+            # Flaga blokująca sync — rclone pominie tę sesję
+            try:
+                (session_dir / ".develop_error").touch()
+            except OSError:
+                pass
             _update_entry(
                 session_path, status="error",
                 error_msg=f"Błędy ({len(errors)}): {', '.join(errors[:3])}"
             )
         else:
+            # Usuń flagę błędu jeśli poprzedni retry był nieudany
+            try:
+                (session_dir / ".develop_error").unlink(missing_ok=True)
+            except OSError:
+                pass
             _update_entry(session_path, status="done")
 
         print(f"[dev_worker] Sesja zakończona: {processed}/{total} OK", flush=True)

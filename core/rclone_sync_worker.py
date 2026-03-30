@@ -85,19 +85,27 @@ def _has_jpeg_files(session_path: str) -> bool:
 def _write_markers(cloud_dir: str) -> None:
     """
     Po udanym sync zapisuje w każdym podfolderze sesji:
-      - sync_status.json  (lokalny, dla tray monitora)
-      - sync_complete     (zostanie wgrany na remote w drugim przebiegu rclone)
+      - sync_status + synced_at w session_summary.json
+      - sync_complete (zostanie wgrany na remote w drugim przebiegu rclone)
+    Pomija sesje z flagą .developing lub .develop_error.
     """
     now = datetime.now().isoformat()
+    now_fmt = datetime.now().strftime("%Y-%m-%d %H:%M")
     try:
         for entry in os.scandir(cloud_dir):
             if not entry.is_dir():
                 continue
-            # Pomiń katalog sesji gdy developer jeszcze pracuje
+            # Pomiń gdy developer jeszcze pracuje
             if os.path.exists(os.path.join(entry.path, ".developing")):
                 continue
-
-            # Sprawdź czy w sesji są pliki JPG — bez nich nie ma co wysyłać
+            # Pomiń gdy development zakończył się błędami
+            if os.path.exists(os.path.join(entry.path, ".develop_error")):
+                print(
+                    f"[sync_worker] Błędy developmentu w {entry.name} — pomijam sync_complete",
+                    flush=True,
+                )
+                continue
+            # Sprawdź czy w sesji są pliki JPG
             if not _has_jpeg_files(entry.path):
                 print(
                     f"[sync_worker] Brak JPG w {entry.name} — pomijam sync_complete",
@@ -106,8 +114,20 @@ def _write_markers(cloud_dir: str) -> None:
                 continue
 
             try:
-                with open(os.path.join(entry.path, STATUS_FILE), "w", encoding="utf-8") as f:
-                    json.dump({"status": "done", "synced_at": now}, f)
+                # Zaktualizuj session_summary.json
+                summary_path = os.path.join(entry.path, "session_summary.json")
+                if os.path.exists(summary_path):
+                    try:
+                        with open(summary_path, encoding="utf-8") as f:
+                            data = json.load(f)
+                        data["sync_status"] = "done"
+                        data["synced_at"]   = now_fmt
+                        with open(summary_path, "w", encoding="utf-8") as f:
+                            json.dump(data, f, indent=2, ensure_ascii=False)
+                    except Exception as exc:
+                        print(f"[sync_worker] Błąd zapisu summary {entry.name}: {exc}",
+                              file=sys.stderr, flush=True)
+                # Zapisz sync_complete
                 with open(os.path.join(entry.path, MARKER_FILE), "w", encoding="utf-8") as f:
                     f.write(now)
             except OSError:
