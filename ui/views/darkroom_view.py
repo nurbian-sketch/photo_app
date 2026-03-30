@@ -1046,17 +1046,20 @@ class DarkroomView(QWidget):
         lines.append(f"Imported: <b>{len(imported)}</b> files")
 
         # Sekcja: development
-        style       = data.get("develop_style")
-        dev_count   = data.get("developed_count")
-        total_raw   = data.get("total_raw")
-        dev_errors  = data.get("develop_errors") or []
-        dev_time    = data.get("develop_time_sec")
-        dev_per     = data.get("develop_sec_per_photo")
+        style      = data.get("develop_style")
+        dev_count  = data.get("developed_count")
+        total_raw  = data.get("total_raw")
+        dev_errors = data.get("develop_errors") or []
+        dev_time   = data.get("develop_time_sec")
+        dev_per    = data.get("develop_sec_per_photo")
 
-        if style is not None:
-            lines.append("")
-            if dev_count is not None and total_raw is not None:
-                lines.append(f"Developed: <b>{dev_count}/{total_raw}</b>  •  style: <i>{style}</i>")
+        lines.append("")
+        if style is None and dev_count is None:
+            lines.append("Development: <i>not processed</i>")
+        else:
+            style_str = style if style else "auto"
+            count_str = f"{dev_count}/{total_raw}" if dev_count is not None else "—"
+            lines.append(f"Developed: <b>{count_str}</b>  •  style: <i>{style_str}</i>")
             if dev_time is not None:
                 lines.append(f"Time: {dev_time}s  •  {dev_per}s/photo")
             if dev_errors:

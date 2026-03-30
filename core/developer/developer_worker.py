@@ -95,12 +95,11 @@ def _update_summary(session_dir: Path, preset: str, raw_files: list[Path],
         return
 
     style = None if preset == _AUTO_PRESET else preset
-    developed = [
-        r.name for r in raw_files if r.name not in errors
-    ]
     n = len(raw_files)
+    developed_count = n - len(errors)
     data["develop_style"]         = style
-    data["developed_files"]       = developed if developed else []
+    data["developed_count"]       = developed_count
+    data["total_raw"]             = n
     data["develop_errors"]        = errors if errors else []
     data["develop_time_sec"]      = round(time_sec, 1)
     data["develop_sec_per_photo"] = round(time_sec / n, 1) if n else 0
