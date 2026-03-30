@@ -1556,7 +1556,7 @@ class DarkroomView(QWidget):
         self.update_selection_count()
 
     def _refresh_thumbnail(self, path: str) -> None:
-        """Unieważnia miniaturę i odświeża ikonę w liście."""
+        """Unieważnia miniaturę i odświeża ikonę w liście oraz podgląd."""
         from pathlib import Path
         for i in range(self.list_widget.count()):
             item = self.list_widget.item(i)
@@ -1570,6 +1570,13 @@ class DarkroomView(QWidget):
                 if pixmap and not pixmap.isNull():
                     item.setIcon(QIcon(pixmap))
                 break
+        # Przeładuj podgląd jeśli to aktualnie wyświetlany plik
+        if path == self.current_image_path:
+            if self._loader and self._loader.isRunning():
+                self._loader.wait()
+            self._loader = ImageLoader(path)
+            self._loader.loaded.connect(self._on_image_loaded)
+            self._loader.start()
 
     # ─────────────────────────── Zarządzanie katalogami
 
