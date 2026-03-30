@@ -582,6 +582,11 @@ class DarkroomView(QWidget):
             self._add_folder_item(d, os.path.join(folder, d))
             self._list_file_offset += 1
 
+        # Podsumowanie sesji — jeśli istnieje w katalogu
+        summary_path = os.path.join(folder, "session_summary.json")
+        if os.path.exists(summary_path):
+            self._add_summary_item(summary_path)
+
         # Pliki obrazów wg filtru i sortowania
         try:
             raw_files = [
@@ -656,6 +661,19 @@ class DarkroomView(QWidget):
         item.setData(_ITEM_TYPE_ROLE, 'folder')
         item.setToolTip(path)
         self.list_widget.addItem(item)
+
+    def _add_summary_item(self, path: str) -> None:
+        """Dodaje session_summary.json jako element listy z własną ikoną."""
+        icon_path = os.path.join("assets", "icons", "session-summary.png")
+        icon = QIcon(icon_path) if os.path.exists(icon_path) else \
+               QApplication.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView)
+        item = QListWidgetItem(icon, "session_summary.json")
+        item.setData(_ITEM_PATH_ROLE, path)
+        item.setData(Qt.ItemDataRole.UserRole + 1, False)
+        item.setData(_ITEM_TYPE_ROLE, 'summary')
+        item.setToolTip(path)
+        self.list_widget.addItem(item)
+        self._list_file_offset += 1
 
     def _add_thumbnail_item(self, index: int):
         path     = self.files[index]
@@ -948,6 +966,10 @@ class DarkroomView(QWidget):
             self._navigate_to(path)
             return
 
+        if item_type == 'summary':
+            self._show_session_summary(path)
+            return
+
         # Plik
         self.current_image_path = path if not self._sd_mode else None
         self.update_selection_count()  # przyciski i menu reagują na zmianę bieżącego pliku
@@ -985,6 +1007,82 @@ class DarkroomView(QWidget):
             self._loader.loaded.connect(self._on_image_loaded)
             self._loader.start()
 
+    def _show_session_summary(self, json_path: str) -> None:
+        """Czyta session_summary.json i wyświetla dane sesji w panelu podglądu."""
+        import json as _json
+        try:
+            data = _json.loads(open(json_path, encoding="utf-8").read())
+        except Exception as e:
+            self.preview.set_message(self.tr(f"Cannot read session summary:\n{e}"))
+            return
+
+        def _v(key, default="—"):
+            v = data.get(key)
+            return str(v) if v not in (None, "", []) else default
+
+        # Sekcja: identyfikacja
+        lines = []
+        lines.append(f"<b>{_v('session_id')}</b>")
+        lines.append(f"{_v('started_at')} → {_v('ended_at')}  •  {_v('duration_min')} min")
+        lines.append(f"<b>{_v('email')}</b>  •  code: <b>{_v('share_code')}</b>")
+        lines.append("")
+
+        # Sekcja: aparat
+        cs = data.get("camera_settings", {})
+        if cs:
+            lines.append(f"<small>{cs.get('model','')}  •  {cs.get('lensname','')}</small>")
+            lines.append(
+                f"<small>{cs.get('shutterspeed','')}  f/{cs.get('aperture','')}  "
+                f"ISO {cs.get('iso','')}  {cs.get('imageformat','')}</small>"
+            )
+            lines.append("")
+
+        # Sekcja: import
+        imported = data.get("imported_files", [])
+        lines.append(f"Imported: <b>{len(imported)}</b> files")
+
+        # Sekcja: development
+        style       = data.get("develop_style")
+        dev_count   = data.get("developed_count")
+        total_raw   = data.get("total_raw")
+        dev_errors  = data.get("develop_errors") or []
+        dev_time    = data.get("develop_time_sec")
+        dev_per     = data.get("develop_sec_per_photo")
+
+        if style is not None:
+            lines.append("")
+            if dev_count is not None and total_raw is not None:
+                lines.append(f"Developed: <b>{dev_count}/{total_raw}</b>  •  style: <i>{style}</i>")
+            if dev_time is not None:
+                lines.append(f"Time: {dev_time}s  •  {dev_per}s/photo")
+            if dev_errors:
+                lines.append(
+                    f"<span style='color:#e07070'>Errors ({len(dev_errors)}): "
+                    f"{', '.join(dev_errors)}</span>"
+                )
+
+        # Sekcja: sync
+        sync_status = data.get("sync_status", "pending")
+        synced_at   = data.get("synced_at")
+        lines.append("")
+        if sync_status == "done" and synced_at:
+            lines.append(f"Synced: <b>{synced_at}</b>")
+        else:
+            lines.append(f"Sync: <b>{sync_status}</b>")
+
+        html = (
+            "<div style='font-size:13px; line-height:1.6; "
+            "padding:20px; text-align:left; color:#cccccc;'>"
+            + "<br>".join(lines)
+            + "</div>"
+        )
+        self.preview.set_message(html)
+        if self._loader and self._loader.isRunning():
+            self._loader.wait()
+        self._loader = None
+        self.current_image_path = None
+        self.update_selection_count()
+
     def _navigate_to(self, path: str):
         self.load_images(path)
 
@@ -1002,6 +1100,8 @@ class DarkroomView(QWidget):
         item_type = item.data(_ITEM_TYPE_ROLE)
         path      = item.data(Qt.ItemDataRole.UserRole)
         if not path:
+            return
+        if item_type == 'summary':
             return
         if item_type == 'parent':
             if path == '__sessions__':
