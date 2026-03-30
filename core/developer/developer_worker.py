@@ -193,6 +193,35 @@ def _develop_file(raw: Path, preset: str, out_jpeg: Path,
 
 # ── PRZETWARZANIE SESJI ───────────────────────────────────────────────────────
 
+def _trigger_sync_if_cloud(session_dir: Path) -> None:
+    """Uruchamia rclone_sync_worker jeśli sesja leży w katalogu cloud/."""
+    if "cloud" not in session_dir.parts:
+        return
+    try:
+        from PyQt6.QtCore import QSettings
+        s = QSettings("Grzeza", "SessionsAssistant")
+        remote = s.value("rclone/remote", "").strip()
+        dest   = s.value("rclone/dest",   "Sessions").strip()
+        base   = s.value(
+            "session/directory",
+            str(Path.home() / "Obrazy" / "sessions")
+        )
+        if not remote:
+            print("[dev_worker] rclone nie skonfigurowany — pomijam sync", flush=True)
+            return
+        cloud_dir   = str(Path(base) / "cloud")
+        worker_path = str(_SCRIPT_DIR.parent / "rclone_sync_worker.py")
+        subprocess.Popen(
+            [sys.executable, worker_path, cloud_dir, remote, dest],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        print(f"[dev_worker] Uruchomiono sync: {cloud_dir} → {remote}:{dest}", flush=True)
+    except Exception as exc:
+        print(f"[dev_worker] Błąd triggera sync: {exc}", file=sys.stderr, flush=True)
+
+
 def _process_session(entry: dict) -> None:
     """
     Przetwarza jedną sesję z kolejki:
@@ -269,6 +298,8 @@ def _process_session(entry: dict) -> None:
             except OSError:
                 pass
             _update_entry(session_path, status="done")
+            # Trigger sync jeśli sesja jest w katalogu cloud/
+            _trigger_sync_if_cloud(session_dir)
 
         print(f"[dev_worker] Sesja zakończona: {processed}/{total} OK", flush=True)
 
