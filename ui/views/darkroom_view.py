@@ -115,7 +115,6 @@ class DarkroomView(QWidget):
         # Stan edycji GIMP
         self._gimp_process:       QProcess | None = None
         self._gimp_jpg_path:      str | None = None
-        self._gimp_png_path:      str | None = None
         self._gimp_watcher:       QFileSystemWatcher | None = None
         self._gimp_export_timer:  QTimer | None = None
         self._format_worker     = None
@@ -1477,9 +1476,10 @@ class DarkroomView(QWidget):
 
     # ─────────────────────────── Edycja w GIMP
 
-    def _edit_in_gimp(self):
-        """Otwiera zaznaczony JPG w GIMP jako temp PNG.
-        QFileSystemWatcher obserwuje PNG — eksport do JPG natychmiast po zapisie.
+    def _edit_in_gimp(self) -> None:
+        """Otwiera wybrany JPG bezpośrednio w GIMP.
+        Script-Fu quit-hook automatycznie eksportuje do JPG przy zamknięciu GIMP.
+        QFileSystemWatcher na JPG odświeża miniaturę przy File > Export w trakcie sesji.
         """
         if self._sd_mode:
             return
@@ -1494,85 +1494,68 @@ class DarkroomView(QWidget):
 
         jpg_path = jpgs[0]
 
-        try:
-            from PIL import Image
-            import tempfile
-            tmp_dir  = tempfile.mkdtemp(prefix='photo_app_gimp_')
-            base     = os.path.splitext(os.path.basename(jpg_path))[0]
-            png_path = os.path.join(tmp_dir, base + '.png')
-            img = Image.open(jpg_path).convert('RGB')
-            img.save(png_path, 'PNG')
-        except Exception as e:
-            self._show_status(self.tr(f"⚠ GIMP prepare error: {e}"), 8000)
-            return
+        # Escaping ścieżki dla Script-Fu (cudzysłów i backslash)
+        p = jpg_path.replace('\\', '\\\\').replace('"', '\\"')
+
+        # Script-Fu: załaduj JPG, pokaż display, zarejestruj quit-hook → auto-eksport
+        # quit-hook odpala się przy każdym zamknięciu GIMP niezależnie od odpowiedzi
+        # na dialog "Save As / Discard Changes" (który dotyczy formatu XCF, nie JPG)
+        script = (
+            f'(let* ((image (car (gimp-file-load RUN-NONINTERACTIVE "{p}" "{p}"))))'
+            f'  (gimp-display-new image)'
+            f'  (gimp-image-clean-all image)'
+            f'  (add-hook! (quote quit-hook)'
+            f'    (lambda ()'
+            f'      (let* ((drawable (car (gimp-image-get-active-drawable image))))'
+            f'        (file-jpeg-save RUN-NONINTERACTIVE image drawable'
+            f'          "{p}" "{p}" 0.95 0 0 0 "" 0 1 0 2 0)))))'
+        )
 
         self._gimp_jpg_path = jpg_path
-        self._gimp_png_path = png_path
         self.btn_edit_gimp.setEnabled(False)
 
         self._gimp_process = QProcess(self)
         self._gimp_process.finished.connect(self._on_gimp_finished)
-        self._gimp_process.start('gimp', ['--new-instance', '--no-splash', png_path])
+        self._gimp_process.start('gimp', ['--new-instance', '--no-splash', '-b', script])
+
         if not self._gimp_process.waitForStarted(3000):
             self._show_status(self.tr("⚠ Cannot start GIMP"), 6000)
             self._gimp_process  = None
             self._gimp_jpg_path = None
-            self._gimp_png_path = None
-            import shutil
-            shutil.rmtree(tmp_dir, ignore_errors=True)
             self.update_selection_count()
             return
 
-        # Obserwuj temp PNG — eksportuj do JPG przy każdym zapisie w GIMP
-        self._gimp_watcher = QFileSystemWatcher([png_path], self)
-        self._gimp_watcher.fileChanged.connect(self._on_gimp_png_changed)
+        # Obserwuj oryginalny JPG — miniatura aktualizuje się przy File > Export w trakcie
+        self._gimp_watcher = QFileSystemWatcher([jpg_path], self)
+        self._gimp_watcher.fileChanged.connect(self._on_gimp_jpg_changed)
 
-    def _on_gimp_png_changed(self, path: str) -> None:
-        """Plik PNG zmieniony przez GIMP — debounce 500 ms, potem eksport do JPG.
+    def _on_gimp_jpg_changed(self, path: str) -> None:
+        """JPG zmieniony przez GIMP (File > Export) — debounce 500 ms, odśwież miniaturę.
 
-        GIMP może usuwać i odtwarzać plik przy atomicznym zapisie,
-        co kasuje obserwację — przywracamy addPath po 300 ms.
+        QFileSystemWatcher traci obserwację gdy plik zostaje usunięty i odtworzony
+        (atomiczny zapis) — przywracamy addPath po 300 ms.
         """
         QTimer.singleShot(300, lambda: (
             self._gimp_watcher.addPath(path)
             if self._gimp_watcher and path not in self._gimp_watcher.files()
             else None
         ))
-        # Debounce — eksportuj 500 ms po ostatniej zmianie
+        # Debounce — odśwież miniaturę 500 ms po ostatniej zmianie pliku
         if self._gimp_export_timer:
             self._gimp_export_timer.stop()
         else:
             self._gimp_export_timer = QTimer(self)
             self._gimp_export_timer.setSingleShot(True)
-            self._gimp_export_timer.timeout.connect(self._do_gimp_export)
+            self._gimp_export_timer.timeout.connect(
+                lambda: self._refresh_thumbnail(path)
+            )
         self._gimp_export_timer.start(500)
 
-    def _do_gimp_export(self) -> None:
-        """Eksportuje aktualny temp PNG do oryginalnego JPG (quality=95, sRGB)."""
-        jpg_path = self._gimp_jpg_path
-        png_path = self._gimp_png_path
-        if not jpg_path or not png_path or not os.path.exists(png_path):
-            return
-        try:
-            from PIL import Image, ImageCms
-            img          = Image.open(png_path).convert('RGB')
-            srgb         = ImageCms.createProfile('sRGB')
-            profile_data = ImageCms.ImageCmsProfile(srgb).tobytes()
-            img.save(jpg_path, 'JPEG', quality=95,
-                     icc_profile=profile_data, subsampling=0)
-            self._show_status(
-                self.tr(f"Saved: {os.path.basename(jpg_path)}"), 4000
-            )
-            self._refresh_thumbnail(jpg_path)
-        except Exception as e:
-            self._show_status(self.tr(f"⚠ GIMP export error: {e}"), 8000)
-
     def _on_gimp_finished(self, exit_code: int, exit_status) -> None:
-        """Proces GIMP zakończony — finalny eksport i cleanup."""
-        # Finalny eksport na wypadek gdyby watcher nie złapał ostatniego zapisu
-        self._do_gimp_export()
+        """Proces GIMP zakończony — Script-Fu quit-hook zapisał JPG, odśwież miniaturę."""
+        jpg_path = self._gimp_jpg_path
 
-        # Cleanup watchera i timera
+        # Cleanup watchera i timera przed odświeżeniem
         if self._gimp_watcher:
             self._gimp_watcher.deleteLater()
             self._gimp_watcher = None
@@ -1580,14 +1563,12 @@ class DarkroomView(QWidget):
             self._gimp_export_timer.stop()
             self._gimp_export_timer = None
 
-        png_path = self._gimp_png_path
         self._gimp_jpg_path = None
-        self._gimp_png_path = None
         self._gimp_process  = None
 
-        if png_path:
-            import shutil
-            shutil.rmtree(os.path.dirname(png_path), ignore_errors=True)
+        # Odśwież miniaturę po zakończeniu — quit-hook już zapisał plik
+        if jpg_path:
+            QTimer.singleShot(300, lambda: self._refresh_thumbnail(jpg_path))
 
         self.update_selection_count()
 
