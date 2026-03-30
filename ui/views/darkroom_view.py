@@ -264,8 +264,6 @@ class DarkroomView(QWidget):
         row_image.setSpacing(0)
         row_image.addWidget(self.preview.control_bar)
 
-        groups_row.addWidget(grp_image)
-
         # ── Grupa Edit ───────────────────────────────────────────────────────
         grp_edit = QGroupBox(self.tr("Edit"))
         grp_edit.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
@@ -314,8 +312,6 @@ class DarkroomView(QWidget):
                   self.btn_copy_folder, self.btn_move_folder]:
             row_edit.addWidget(w)
 
-        groups_row.addWidget(grp_edit)
-
         # ── Grupa Dir ────────────────────────────────────────────────────────
         grp_dir = QGroupBox(self.tr("Dir"))
         grp_dir.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
@@ -338,8 +334,6 @@ class DarkroomView(QWidget):
 
         for w in [self.btn_make_dir, self.btn_delete_dir, self.btn_format_card]:
             row_dir.addWidget(w)
-
-        groups_row.addWidget(grp_dir)
 
         # ── Grupa External ───────────────────────────────────────────────────
         grp_external = QGroupBox(self.tr("External"))
