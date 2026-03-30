@@ -185,6 +185,7 @@ class MainWindow(QMainWindow):
         self.camera_view.status_message.connect(self.status_bar.showMessage)
         # WB picker z DarkroomView → przełącz na Camera + aplikuj temperaturę
         self.darkroom_view.wb_apply_requested.connect(self._on_darkroom_wb_apply)
+        self.darkroom_view.develop_requested.connect(self._show_develop_dialog)
 
 
         self.read_settings()
