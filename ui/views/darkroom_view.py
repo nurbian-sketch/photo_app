@@ -1477,9 +1477,9 @@ class DarkroomView(QWidget):
     # ─────────────────────────── Edycja w GIMP
 
     def _edit_in_gimp(self) -> None:
-        """Otwiera wybrany JPG bezpośrednio w GIMP.
-        Script-Fu quit-hook automatycznie eksportuje do JPG przy zamknięciu GIMP.
-        QFileSystemWatcher na JPG odświeża miniaturę przy File > Export w trakcie sesji.
+        """Otwiera wybrany JPG w GIMP (tryb interaktywny).
+        User zapisuje przez File > Export As / Overwrite.
+        QFileSystemWatcher na JPG odświeża miniaturę przy każdym eksporcie.
         """
         if self._sd_mode:
             return
@@ -1493,30 +1493,13 @@ class DarkroomView(QWidget):
             return
 
         jpg_path = jpgs[0]
-
-        # Escaping ścieżki dla Script-Fu (cudzysłów i backslash)
-        p = jpg_path.replace('\\', '\\\\').replace('"', '\\"')
-
-        # Script-Fu: załaduj JPG, pokaż display, zarejestruj quit-hook → auto-eksport
-        # quit-hook odpala się przy każdym zamknięciu GIMP niezależnie od odpowiedzi
-        # na dialog "Save As / Discard Changes" (który dotyczy formatu XCF, nie JPG)
-        script = (
-            f'(let* ((image (car (gimp-file-load RUN-NONINTERACTIVE "{p}" "{p}"))))'
-            f'  (gimp-display-new image)'
-            f'  (gimp-image-clean-all image)'
-            f'  (add-hook! (quote quit-hook)'
-            f'    (lambda ()'
-            f'      (let* ((drawable (car (gimp-image-get-active-drawable image))))'
-            f'        (file-jpeg-save RUN-NONINTERACTIVE image drawable'
-            f'          "{p}" "{p}" 0.95 0 0 0 "" 0 1 0 2 0)))))'
-        )
-
         self._gimp_jpg_path = jpg_path
         self.btn_edit_gimp.setEnabled(False)
 
         self._gimp_process = QProcess(self)
         self._gimp_process.finished.connect(self._on_gimp_finished)
-        self._gimp_process.start('gimp', ['--new-instance', '--no-splash', '-b', script])
+        # Otwórz JPG bezpośrednio — user zapisuje przez File > Export As / Overwrite
+        self._gimp_process.start('gimp', ['--new-instance', '--no-splash', jpg_path])
 
         if not self._gimp_process.waitForStarted(3000):
             self._show_status(self.tr("⚠ Cannot start GIMP"), 6000)
@@ -1552,7 +1535,7 @@ class DarkroomView(QWidget):
         self._gimp_export_timer.start(500)
 
     def _on_gimp_finished(self, exit_code: int, exit_status) -> None:
-        """Proces GIMP zakończony — Script-Fu quit-hook zapisał JPG, odśwież miniaturę."""
+        """Proces GIMP zakończony — odśwież miniaturę jeśli plik był eksportowany."""
         jpg_path = self._gimp_jpg_path
 
         # Cleanup watchera i timera przed odświeżeniem
