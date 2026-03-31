@@ -1147,20 +1147,14 @@ class DarkroomView(QWidget):
                          bold_val=(sync_status == "done")))
 
         # QR kod — lewa kolumna: dane sesji, prawa: kod QR
-        import base64 as _b64
         qr_path = os.path.join(os.path.dirname(json_path), "qr_code.png")
         qr_col = ""
         if os.path.exists(qr_path):
-            try:
-                with open(qr_path, "rb") as _f:
-                    _b64data = _b64.b64encode(_f.read()).decode()
-                qr_col = (
-                    "<td style='vertical-align:top; text-align:center; width:260px; padding-left:16px'>"
-                    f"<img src='data:image/png;base64,{_b64data}' width='240' height='240'/>"
-                    "</td>"
-                )
-            except Exception:
-                pass
+            qr_col = (
+                "<td style='vertical-align:top; text-align:center; width:260px; padding-left:16px'>"
+                f"<img src='file://{qr_path}' width='240' height='240'/>"
+                "</td>"
+            )
 
         data_col = (
             "<td style='vertical-align:top'>"
