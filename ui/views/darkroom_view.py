@@ -318,9 +318,14 @@ class DarkroomView(QWidget):
         self.btn_move_folder.setEnabled(False)
         self.btn_move_folder.clicked.connect(lambda: self._copy_or_move_selected(move=True))
 
+        self.btn_session_from_files = QPushButton(self.tr("Session from selected…"))
+        self.btn_session_from_files.setMinimumHeight(BTN_H)
+        self.btn_session_from_files.setShortcut(QKeySequence("F11"))
+
         for w in [self.btn_select, self.btn_delete,
                   self.btn_copy_to_disk,
-                  self.btn_copy_folder, self.btn_move_folder]:
+                  self.btn_copy_folder, self.btn_move_folder,
+                  self.btn_session_from_files]:
             row_edit.addWidget(w)
 
         # ── Grupa File ───────────────────────────────────────────────────────
@@ -343,12 +348,7 @@ class DarkroomView(QWidget):
         self.btn_format_card.setStyleSheet(BTN_STYLE_RED)
         self.btn_format_card.setVisible(False)
 
-        self.btn_session_from_files = QPushButton(self.tr("Session from selected…"))
-        self.btn_session_from_files.setMinimumHeight(BTN_H)
-        self.btn_session_from_files.setShortcut(QKeySequence("F11"))
-
-        for w in [self.btn_make_dir, self.btn_delete_dir, self.btn_format_card,
-                  self.btn_session_from_files]:
+        for w in [self.btn_make_dir, self.btn_format_card]:
             row_dir.addWidget(w)
 
         # ── Grupa External ───────────────────────────────────────────────────
@@ -762,7 +762,6 @@ class DarkroomView(QWidget):
         self.btn_edit_gimp.setVisible(False)
         self.btn_make_dir.setVisible(False)
         self.btn_delete_dir.setVisible(False)
-        self.btn_session_from_files.setVisible(False)
         # Pokaż przyciski SD-only
         self.btn_copy_to_disk.setVisible(True)
         self.btn_format_card.setVisible(True)
@@ -852,7 +851,6 @@ class DarkroomView(QWidget):
         self.btn_edit_gimp.setVisible(True)
         self.btn_make_dir.setVisible(True)
         self.btn_delete_dir.setVisible(True)
-        self.btn_session_from_files.setVisible(True)
         CameraCardBrowserWorker.cleanup_temp()
 
     # ─────────────────────────── Selekcja
@@ -1939,7 +1937,13 @@ class DarkroomView(QWidget):
                 except OSError:
                     imported.append(src)
         else:
-            imported = list(dlg.files)
+            for src in dlg.files:
+                try:
+                    dst = os.path.join(session_path, os.path.basename(src))
+                    shutil.copy2(src, dst)
+                    imported.append(dst)
+                except OSError:
+                    imported.append(src)
 
         # Zapisz session.json
         ctx = SessionContext(

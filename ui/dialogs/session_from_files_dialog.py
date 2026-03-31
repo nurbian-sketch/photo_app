@@ -61,11 +61,11 @@ class SessionFromFilesDialog(QDialog):
         # Pliki
         grp_files = QGroupBox(self.tr("Files"))
         col_files = QVBoxLayout(grp_files)
-        self.rb_move  = QRadioButton(self.tr("Move to session folder"))
-        self.rb_leave = QRadioButton(self.tr("Leave in current directory"))
+        self.rb_move = QRadioButton(self.tr("Move to session folder"))
+        self.rb_copy = QRadioButton(self.tr("Copy to session folder"))
         self.rb_move.setChecked(True)
         col_files.addWidget(self.rb_move)
-        col_files.addWidget(self.rb_leave)
+        col_files.addWidget(self.rb_copy)
         layout.addWidget(grp_files)
 
         # Przyciski

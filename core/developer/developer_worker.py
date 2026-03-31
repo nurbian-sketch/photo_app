@@ -264,10 +264,13 @@ def _process_session(entry: dict) -> None:
         processed = 0
         _update_entry(session_path, total=total, processed=0)
 
+        developed_dir = session_dir / "developed"
+        developed_dir.mkdir(exist_ok=True)
+
         errors = []
         t_start = time.time()
         for raw in raw_files:
-            out_jpeg = session_dir / (raw.stem + ".jpg")
+            out_jpeg = developed_dir / (raw.stem + ".jpg")
             ok = _develop_file(raw, preset, out_jpeg, kelvin)
             if ok:
                 processed += 1

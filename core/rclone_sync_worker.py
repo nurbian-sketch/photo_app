@@ -77,6 +77,11 @@ def _has_jpeg_files(session_path: str) -> bool:
             for f in os.scandir(jpg_subdir):
                 if f.is_file() and f.name.lower().endswith(jpg_extensions):
                     return True
+        developed_subdir = os.path.join(session_path, "developed")
+        if os.path.isdir(developed_subdir):
+            for f in os.scandir(developed_subdir):
+                if f.is_file() and f.name.lower().endswith(jpg_extensions):
+                    return True
     except OSError:
         pass
     return False
