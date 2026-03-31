@@ -1152,8 +1152,8 @@ class DarkroomView(QWidget):
         if os.path.exists(qr_path):
             qr_col = (
                 "<td style='vertical-align:top; text-align:center;"
-                " width:260px; padding-left:16px'>"
-                f"<img src='file://{qr_path}' width='240' height='240'/>"
+                " width:500px; padding-left:16px'>"
+                f"<img src='file://{qr_path}' width='480' height='480'/>"
                 "</td>"
             )
 
