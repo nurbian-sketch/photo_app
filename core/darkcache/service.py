@@ -36,7 +36,18 @@ class DarkCacheService:
             return pixmap
 
         pixmap = self.preview_generator.generate(path)
-        if pixmap:
+        if pixmap is None:
+            # Fallback dla JPEG i innych bez embedded PreviewImage:
+            # próbuj EXIF thumbnail, potem bezpośrednie wczytanie
+            pixmap = self.thumbnail_reader.read(path)
+            if pixmap and not pixmap.isNull():
+                pixmap = self._to_square(pixmap, 240)
+            else:
+                direct = QPixmap(str(path))
+                if direct and not direct.isNull():
+                    pixmap = self._to_square(direct, 240)
+
+        if pixmap and not pixmap.isNull():
             self.cache.put(path, pixmap)
 
         return pixmap
