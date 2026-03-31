@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QSplitter, QStyledItemDelegate, QStyle, QStyleOptionButton, QApplication,
     QMenu, QGroupBox, QToolButton
 )
-from PyQt6.QtGui import QPixmap, QIcon
+from PyQt6.QtGui import QPixmap, QIcon, QKeySequence
 from PyQt6.QtCore import Qt, QSize, QTimer, QRect, QProcess, QFileSystemWatcher, pyqtSignal
 
 import os
@@ -232,14 +232,14 @@ class DarkroomView(QWidget):
         self._action_filter_all  = filter_menu.addAction(self.tr("All"))
         self._action_filter_jpeg = filter_menu.addAction(self.tr("JPEG"))
         self._action_filter_raw  = filter_menu.addAction(self.tr("RAW"))
-        _filter_group = QActionGroup(self)
-        _filter_group.setExclusive(True)
+        self._filter_group = QActionGroup(self)
+        self._filter_group.setExclusive(True)
         for a in [self._action_filter_all, self._action_filter_jpeg, self._action_filter_raw]:
             a.setCheckable(True)
-            _filter_group.addAction(a)
+            self._filter_group.addAction(a)
         self._action_filter_all.setChecked(True)
         self.btn_filter.setMenu(filter_menu)
-        self.btn_filter.setText(self.tr("All"))
+        self.btn_filter.setText(self.tr("Show"))
         self.btn_filter.clicked.connect(self._cycle_filter)
         self._action_filter_all.triggered.connect(lambda: self._set_filter('all'))
         self._action_filter_jpeg.triggered.connect(lambda: self._set_filter('jpeg'))
@@ -323,8 +323,8 @@ class DarkroomView(QWidget):
                   self.btn_copy_folder, self.btn_move_folder]:
             row_edit.addWidget(w)
 
-        # ── Grupa Dir ────────────────────────────────────────────────────────
-        grp_dir = QGroupBox(self.tr("Dir"))
+        # ── Grupa File ───────────────────────────────────────────────────────
+        grp_dir = QGroupBox(self.tr("File"))
         grp_dir.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         row_dir = QHBoxLayout(grp_dir)
         row_dir.setContentsMargins(6, 4, 6, 4)
@@ -343,7 +343,12 @@ class DarkroomView(QWidget):
         self.btn_format_card.setStyleSheet(BTN_STYLE_RED)
         self.btn_format_card.setVisible(False)
 
-        for w in [self.btn_make_dir, self.btn_delete_dir, self.btn_format_card]:
+        self.btn_session_from_files = QPushButton(self.tr("Session from selected…"))
+        self.btn_session_from_files.setMinimumHeight(BTN_H)
+        self.btn_session_from_files.setShortcut(QKeySequence("F11"))
+
+        for w in [self.btn_make_dir, self.btn_delete_dir, self.btn_format_card,
+                  self.btn_session_from_files]:
             row_dir.addWidget(w)
 
         # ── Grupa External ───────────────────────────────────────────────────
@@ -423,6 +428,7 @@ class DarkroomView(QWidget):
         self.btn_format_card.clicked.connect(self._format_card)
         self.btn_make_dir.clicked.connect(self._make_dir)
         self.btn_delete_dir.clicked.connect(self._delete_dir)
+        self.btn_session_from_files.clicked.connect(self._session_from_selected)
 
         self.preview.wb_applied.connect(self._on_wb_applied)
 
@@ -430,7 +436,7 @@ class DarkroomView(QWidget):
 
     # Stany filtru: 'all' → 'jpeg' → 'raw' → 'all'
     _FILTER_STATES = ('all', 'jpeg', 'raw')
-    _FILTER_LABELS = {'all': 'All', 'jpeg': 'JPEG', 'raw': 'RAW'}
+    _FILTER_LABELS = {'all': 'Show', 'jpeg': 'JPEG', 'raw': 'RAW'}
 
     def _cycle_filter(self):
         """Klik na główny obszar — przełącza cyklicznie."""
@@ -756,6 +762,7 @@ class DarkroomView(QWidget):
         self.btn_edit_gimp.setVisible(False)
         self.btn_make_dir.setVisible(False)
         self.btn_delete_dir.setVisible(False)
+        self.btn_session_from_files.setVisible(False)
         # Pokaż przyciski SD-only
         self.btn_copy_to_disk.setVisible(True)
         self.btn_format_card.setVisible(True)
@@ -845,6 +852,7 @@ class DarkroomView(QWidget):
         self.btn_edit_gimp.setVisible(True)
         self.btn_make_dir.setVisible(True)
         self.btn_delete_dir.setVisible(True)
+        self.btn_session_from_files.setVisible(True)
         CameraCardBrowserWorker.cleanup_temp()
 
     # ─────────────────────────── Selekcja
@@ -1862,6 +1870,98 @@ class DarkroomView(QWidget):
             )
         except Exception as e:
             QMessageBox.warning(self, self.tr("Delete Directory"), str(e))
+
+    def _session_from_selected(self):
+        """Tworzy sesję z zaznaczonych plików (fallback: wszystkie w current_dir)."""
+        from ui.dialogs.session_from_files_dialog import SessionFromFilesDialog
+        import shutil, json
+        from datetime import datetime
+        from core.session_context import SessionContext, SessionMode, EndReason
+        import core.session_codes as session_codes
+        from ui.dialogs.preferences_dialog import PreferencesDialog
+
+        # Zbierz pliki
+        files = [p for p in self._effective_files() if os.path.isfile(p)]
+        if not files and self.current_dir:
+            files = sorted(
+                os.path.join(self.current_dir, f)
+                for f in os.listdir(self.current_dir)
+                if os.path.isfile(os.path.join(self.current_dir, f))
+                and f.lower().endswith(self.JPEG_EXTENSIONS + self.RAW_EXTENSIONS_TUPLE)
+            )
+        if not files:
+            QMessageBox.information(
+                self, self.tr("Session from selected…"),
+                self.tr("No files to create session from.")
+            )
+            return
+
+        dlg = SessionFromFilesDialog(files, parent=self)
+        if not dlg.exec():
+            return
+
+        now      = datetime.now()
+        date_str = now.strftime("%Y-%m-%d")
+        base_dir = PreferencesDialog.get_session_directory()
+        code     = session_codes.generate_code()
+
+        if dlg.mode == SessionMode.CLIENT:
+            folder_name  = f"{dlg.email}_{date_str}_code{code}"
+            session_path = os.path.join(base_dir, "cloud", folder_name)
+        else:
+            folder_name  = f"nosend_{date_str}_code{code}"
+            session_path = os.path.join(base_dir, "home", folder_name)
+
+        try:
+            os.makedirs(session_path, exist_ok=True)
+        except OSError as e:
+            QMessageBox.critical(self, self.tr("Session from selected…"),
+                                 self.tr(f"Cannot create folder:\n{e}"))
+            return
+
+        # QR i rejestracja kodu
+        if dlg.mode == SessionMode.CLIENT:
+            try:
+                from core.session_runner import _save_qr_code
+                _save_qr_code(session_path, code)
+            except Exception:
+                pass
+            session_codes.register(code, session_path)
+
+        # Przenieś lub zostaw pliki
+        imported = []
+        if dlg.move_files:
+            for src in dlg.files:
+                try:
+                    dst = os.path.join(session_path, os.path.basename(src))
+                    shutil.move(src, dst)
+                    imported.append(dst)
+                except OSError:
+                    imported.append(src)
+        else:
+            imported = list(dlg.files)
+
+        # Zapisz session.json
+        ctx = SessionContext(
+            session_id   = folder_name,
+            mode         = dlg.mode,
+            email        = dlg.email if dlg.mode == SessionMode.CLIENT else "",
+            duration_min = 0,
+            started_at   = now,
+            ended_at     = now,
+            session_path = session_path,
+            captures_path= session_path,
+            share_code   = code,
+        )
+        ctx.imported_files = imported
+        ctx.sync_status    = "pending" if dlg.mode == SessionMode.CLIENT else "skipped"
+        try:
+            with open(os.path.join(session_path, "session.json"), "w", encoding="utf-8") as f:
+                json.dump(ctx.to_dict(), f, indent=2, ensure_ascii=False)
+        except OSError:
+            pass
+
+        self.load_images(session_path)
 
     def _on_develop_requested(self):
         """Emituje sygnał develop_requested z katalogiem bieżącym."""
