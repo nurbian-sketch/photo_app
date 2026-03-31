@@ -1146,33 +1146,30 @@ class DarkroomView(QWidget):
         rows.append(_row("synced_at:", synced_at,
                          bold_val=(sync_status == "done")))
 
-        # QR jako główny obraz, dane sesji w pasku EXIF
+        # Dwie kolumny: dane sesji po lewej, QR po prawej
         qr_path = os.path.join(os.path.dirname(json_path), "qr_code.png")
+        qr_col = ""
         if os.path.exists(qr_path):
-            qr_pixmap = QPixmap(qr_path)
-            if not qr_pixmap.isNull():
-                self.preview.set_pixmap(qr_pixmap, 0)
-                share_code = data.get("share_code", "")
-                email      = data.get("email", "")
-                started    = data.get("started_at", "")
-                sync       = data.get("sync_status", "")
-                parts = []
-                if share_code: parts.append(f"Code: {share_code}")
-                if email:      parts.append(email)
-                if started:    parts.append(started)
-                if sync:       parts.append(f"sync: {sync}")
-                self.preview.set_exif({"camera": "   •   ".join(parts)})
-                self.current_image_path    = None
-                self._current_summary_path = json_path
-                self.update_selection_count()
-                return
+            qr_col = (
+                "<td style='vertical-align:top; text-align:center;"
+                " width:260px; padding-left:16px'>"
+                f"<img src='file://{qr_path}' width='240' height='240'/>"
+                "</td>"
+            )
 
-        # Fallback: HOME bez QR
-        html = (
-            "<div style='font-family:monospace; font-size:12px; padding:8px'>"
+        data_col = (
+            "<td style='vertical-align:top'>"
             "<table cellspacing='4'>"
             + "".join(rows)
-            + "</table></div>"
+            + "</table></td>"
+        )
+
+        html = (
+            "<div style='font-family:monospace; font-size:12px; padding:8px'>"
+            "<table width='100%' cellspacing='0' cellpadding='0'><tr>"
+            + data_col
+            + qr_col
+            + "</tr></table></div>"
         )
         self.preview.set_message(html)
         if self._loader and self._loader.isRunning():

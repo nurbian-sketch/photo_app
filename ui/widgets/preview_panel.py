@@ -5,7 +5,8 @@ Wbudowany WB picker z podglądem korekcji w miejscu.
 """
 import os
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSizePolicy
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
+    QTextBrowser,
 )
 from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
 from PyQt6.QtGui import QPixmap, QTransform, QCursor
@@ -169,6 +170,16 @@ class PreviewPanel(QWidget):
         self._label.setMinimumSize(1, 1)
         layout.addWidget(self._label, 1)
 
+        # Browser HTML — rendering treści z obrazami (session summary)
+        self._text_browser = QTextBrowser()
+        self._text_browser.setStyleSheet(
+            "QTextBrowser { background: #3d3d3d; color: #ccc;"
+            " border: none; font-family: monospace; font-size: 12px; }"
+        )
+        self._text_browser.setOpenExternalLinks(False)
+        self._text_browser.hide()
+        layout.addWidget(self._text_browser, 1)
+
         # EXIF bar
         self._exif_bar = QLabel(self.tr("No image"))
         self._exif_bar.setStyleSheet(
@@ -268,6 +279,8 @@ class PreviewPanel(QWidget):
     def set_pixmap(self, pixmap: QPixmap, orientation: int = 0):
         """Załaduj obraz z opcjonalną orientacją EXIF."""
         self._cancel_wb()
+        self._text_browser.hide()
+        self._label.show()
         self._original_pixmap = pixmap
         self._rotation = orientation
         self._apply_rotation()
@@ -283,13 +296,23 @@ class PreviewPanel(QWidget):
         self._exif_bar.setText("   •   ".join(parts) if parts else self.tr("No EXIF data"))
 
     def set_message(self, text: str):
-        """Pokaż komunikat (loading/error) zamiast obrazu."""
-        self._label.setPixmap(QPixmap())
-        self._label.setText(text)
+        """Pokaż komunikat lub HTML zamiast obrazu."""
+        self._cancel_wb()
+        if text.lstrip().startswith("<"):
+            self._label.hide()
+            self._text_browser.setHtml(text)
+            self._text_browser.show()
+        else:
+            self._text_browser.hide()
+            self._label.setPixmap(QPixmap())
+            self._label.setText(text)
+            self._label.show()
         self._exif_bar.setText("")
 
     def clear(self):
         self._cancel_wb()
+        self._text_browser.hide()
+        self._label.show()
         self._original_pixmap = QPixmap()
         self._pixmap = QPixmap()
         self._label.clear()
