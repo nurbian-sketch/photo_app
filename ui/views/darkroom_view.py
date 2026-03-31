@@ -182,9 +182,7 @@ class DarkroomView(QWidget):
         )
         self.list_widget.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
         self.list_widget.itemClicked.connect(self.show_image)
-        self.list_widget.currentItemChanged.connect(
-            lambda cur, prev: self.show_image(cur) if cur else None
-        )
+        self.list_widget.currentItemChanged.connect(self._on_current_item_changed)
         self.list_widget.itemDoubleClicked.connect(self._open_preview_dialog)
         self.list_widget.setItemDelegate(CheckboxDelegate(self.list_widget))
         self.list_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -196,8 +194,8 @@ class DarkroomView(QWidget):
         left_bottom.setSpacing(6)
         left_bottom.setContentsMargins(4, 4, 4, 4)
 
-        # ── Grupa File (dawniej Location) ────────────────────────────────────
-        grp_file = QGroupBox(self.tr("File"))
+        # ── Grupa Browse ─────────────────────────────────────────────────────
+        grp_file = QGroupBox(self.tr("Browse"))
         grp_file.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         row_file = QHBoxLayout(grp_file)
         row_file.setContentsMargins(6, 4, 6, 4)
@@ -231,9 +229,9 @@ class DarkroomView(QWidget):
         self.btn_filter.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         from PyQt6.QtGui import QActionGroup
         filter_menu = QMenu(self)
-        self._action_filter_all  = filter_menu.addAction(self.tr("All Files"))
-        self._action_filter_jpeg = filter_menu.addAction(self.tr("JPEG Only"))
-        self._action_filter_raw  = filter_menu.addAction(self.tr("RAW Only"))
+        self._action_filter_all  = filter_menu.addAction(self.tr("All"))
+        self._action_filter_jpeg = filter_menu.addAction(self.tr("JPEG"))
+        self._action_filter_raw  = filter_menu.addAction(self.tr("RAW"))
         _filter_group = QActionGroup(self)
         _filter_group.setExclusive(True)
         for a in [self._action_filter_all, self._action_filter_jpeg, self._action_filter_raw]:
@@ -241,7 +239,7 @@ class DarkroomView(QWidget):
             _filter_group.addAction(a)
         self._action_filter_all.setChecked(True)
         self.btn_filter.setMenu(filter_menu)
-        self.btn_filter.setText(self.tr("All Files"))
+        self.btn_filter.setText(self.tr("All"))
         self.btn_filter.clicked.connect(self._cycle_filter)
         self._action_filter_all.triggered.connect(lambda: self._set_filter('all'))
         self._action_filter_jpeg.triggered.connect(lambda: self._set_filter('jpeg'))
@@ -432,7 +430,7 @@ class DarkroomView(QWidget):
 
     # Stany filtru: 'all' → 'jpeg' → 'raw' → 'all'
     _FILTER_STATES = ('all', 'jpeg', 'raw')
-    _FILTER_LABELS = {'all': 'All Files', 'jpeg': 'JPEG Only', 'raw': 'RAW Only'}
+    _FILTER_LABELS = {'all': 'All', 'jpeg': 'JPEG', 'raw': 'RAW'}
 
     def _cycle_filter(self):
         """Klik na główny obszar — przełącza cyklicznie."""
@@ -983,6 +981,13 @@ class DarkroomView(QWidget):
             )
 
     # ─────────────────────────── Podgląd / nawigacja
+
+    def _on_current_item_changed(self, cur, prev):
+        """Zmiana zaznaczenia — preview tylko dla pliku, bez nawigacji."""
+        if cur is None:
+            return
+        if cur.data(_ITEM_TYPE_ROLE) == 'file':
+            self.show_image(cur)
 
     def show_image(self, item):
         if item is None:
