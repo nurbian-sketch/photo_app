@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QMessageBox, QApplication,
     QDialog,
 )
-from PyQt6.QtGui import QAction, QIcon, QKeySequence, QShortcut, QKeyEvent, QPixmap, QImage, QPainter
+from PyQt6.QtGui import QAction, QActionGroup, QIcon, QKeySequence, QShortcut, QKeyEvent, QPixmap, QImage, QPainter
 from PyQt6.QtCore import Qt, QTimer, QTranslator, QSettings, QSize, QEvent
 import json
 import os
@@ -541,10 +541,13 @@ class MainWindow(QMainWindow):
         self._action_view_filter_all  = QAction(self.tr("All Files"),  self)
         self._action_view_filter_jpeg = QAction(self.tr("JPEG Only"),  self)
         self._action_view_filter_raw  = QAction(self.tr("RAW Only"),   self)
+        self._filter_action_group = QActionGroup(self)
+        self._filter_action_group.setExclusive(True)
         for a in [self._action_view_filter_all,
                   self._action_view_filter_jpeg,
                   self._action_view_filter_raw]:
             a.setCheckable(True)
+            self._filter_action_group.addAction(a)
             self._filter_menu.addAction(a)
         self._action_view_filter_all.setChecked(True)
         self._action_view_filter_all.triggered.connect(
