@@ -338,8 +338,6 @@ class DarkroomView(QWidget):
         self.btn_make_dir = QPushButton(self.tr("Make Dir"))
         self.btn_make_dir.setMinimumHeight(BTN_H)
 
-        self.btn_delete_dir = QPushButton(self.tr("Delete Dir"))
-        self.btn_delete_dir.setMinimumHeight(BTN_H)
 
         # SD card only — domyślnie ukryty; zastępuje Make/Delete Dir w trybie SD
         self.btn_format_card = QPushButton(self.tr("Format Card"))
@@ -426,7 +424,6 @@ class DarkroomView(QWidget):
         self.btn_copy_to_disk.clicked.connect(self._copy_to_disk)
         self.btn_format_card.clicked.connect(self._format_card)
         self.btn_make_dir.clicked.connect(self._make_dir)
-        self.btn_delete_dir.clicked.connect(self._delete_dir)
         self.btn_session_from_files.clicked.connect(self._session_from_selected)
 
         self.preview.wb_applied.connect(self._on_wb_applied)
@@ -760,7 +757,6 @@ class DarkroomView(QWidget):
         self.btn_develop.setVisible(False)
         self.btn_edit_gimp.setVisible(False)
         self.btn_make_dir.setVisible(False)
-        self.btn_delete_dir.setVisible(False)
         # Pokaż przyciski SD-only
         self.btn_copy_to_disk.setVisible(True)
         self.btn_format_card.setVisible(True)
@@ -849,7 +845,6 @@ class DarkroomView(QWidget):
         self.btn_develop.setVisible(True)
         self.btn_edit_gimp.setVisible(True)
         self.btn_make_dir.setVisible(True)
-        self.btn_delete_dir.setVisible(True)
         CameraCardBrowserWorker.cleanup_temp()
 
     # ─────────────────────────── Selekcja
@@ -1828,45 +1823,6 @@ class DarkroomView(QWidget):
             )
         except Exception as e:
             QMessageBox.warning(self, self.tr("Make Directory"), str(e))
-
-    def _delete_dir(self) -> None:
-        """Usuwa wybrany podkatalog bieżącego folderu."""
-        if not self.current_dir or self._sd_mode:
-            return
-        target = QFileDialog.getExistingDirectory(
-            self, self.tr("Delete Directory"), self.current_dir
-        )
-        if not target:
-            return
-        # Tylko podkatalogi bieżącego folderu — zabezpieczenie przed usunięciem roota
-        real_current = os.path.realpath(self.current_dir)
-        real_target  = os.path.realpath(target)
-        if not real_target.startswith(real_current + os.sep):
-            QMessageBox.warning(
-                self, self.tr("Delete Directory"),
-                self.tr("Only subdirectories of the current folder can be deleted.")
-            )
-            return
-        reply = QMessageBox.question(
-            self,
-            self.tr("Delete Directory"),
-            self.tr(
-                "Delete '{}' and all its contents?".format(
-                    os.path.basename(target)
-                )
-            ),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        if reply != QMessageBox.StandardButton.Yes:
-            return
-        try:
-            import shutil
-            shutil.rmtree(real_target)
-            self._show_status(
-                self.tr(f"Deleted: {os.path.basename(target)}"), 4000
-            )
-        except Exception as e:
-            QMessageBox.warning(self, self.tr("Delete Directory"), str(e))
 
     def _session_from_selected(self):
         """Tworzy sesję z zaznaczonych plików (fallback: wszystkie w current_dir)."""
