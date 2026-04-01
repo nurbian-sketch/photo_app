@@ -429,6 +429,11 @@ class MainWindow(QMainWindow):
 
         file_menu.addSeparator()
 
+        toggle_fs_action = QAction(self.tr("Toggle Fullscreen"), self)
+        toggle_fs_action.setShortcut(QKeySequence("F11"))
+        toggle_fs_action.triggered.connect(self._toggle_fullscreen)
+        file_menu.addAction(toggle_fs_action)
+
         exit_action = QAction(self.tr("Exit"), self)
         exit_action.setShortcut(QKeySequence("Ctrl+Q"))
         exit_action.triggered.connect(self.close)
@@ -693,6 +698,13 @@ class MainWindow(QMainWindow):
             self.darkroom_view.update_selection_count()
 
         self._probe_camera(enforce_fv=(name == "Camera"))
+
+    def _toggle_fullscreen(self):
+        """Przełącza tryb pełnoekranowy / okienkowy (F11)."""
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()
 
     def _probe_camera(self, enforce_fv=False):
         """Uruchamia CameraProbe w tle — nie blokuje UI.

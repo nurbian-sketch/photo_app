@@ -320,7 +320,6 @@ class DarkroomView(QWidget):
 
         self.btn_session_from_files = QPushButton(self.tr("Session from selected…"))
         self.btn_session_from_files.setMinimumHeight(BTN_H)
-        self.btn_session_from_files.setShortcut(QKeySequence("F11"))
 
         for w in [self.btn_select, self.btn_delete,
                   self.btn_copy_to_disk,
